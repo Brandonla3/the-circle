@@ -175,7 +175,7 @@ export default function Page() {
         {tab === 'stats' && <StatsView />}
       </main>
 
-      {selectedGame && <GameModal game={selectedGame} detail={gameDetail} onRefresh={() => fetchGameDetail(selectedGame.id)} onClose={() => { setSelectedGame(null); setGameDetail(null); }} />}
+      {selectedGame && <GameModal game={selectedGame} detail={gameDetail} rankings={rankings} onRefresh={() => fetchGameDetail(selectedGame.id)} onClose={() => { setSelectedGame(null); setGameDetail(null); }} />}
       {selectedPlayer && <PlayerModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />}
 
       <footer className="border-t border-white/5 mt-16 py-6 px-6 text-center text-[10px] mono tracking-widest uppercase text-white/20">
@@ -324,14 +324,57 @@ function GameCard({ game, index, onClick }) {
   );
 }
 
+// Normalize a team name for cross-source lookups (NCAA standings vs ESPN
+// rankings vs scoreboard display names). Strips diacritics, punctuation,
+// and common suffixes like "Aggies" / "Tigers" that vary between feeds.
+function normalizeTeamName(name) {
+  if (!name) return '';
+  return name
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function RankingsView({ rankings, lastUpdate }) {
-  if (!rankings) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading rankings…</div>;
-  const polls = rankings.rankings || [];
-  if (polls.length === 0) return <div className="text-center py-20 text-white/30">No rankings available (off-season).</div>;
-  const formatUpdated = (poll) => {
-    // ESPN's rankings payload puts the publish date in a few different shapes
-    // depending on the poll; try each and fall back to our own fetch time.
-    const raw = poll?.date || poll?.lastUpdated || poll?.publishDate || poll?.headline;
+  const [standings, setStandings] = useState(null);
+  const [standingsErr, setStandingsErr] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/standings?flat=1')
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) { if (d.error) setStandingsErr(d.error); else setStandings(d); } })
+      .catch((e) => { if (!cancelled) setStandingsErr(e.message); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Pick the first poll (ESPN returns AP/USA/etc); we only display the flat
+  // list now, so we just need rank/previous/points per team from whichever
+  // poll is listed first.
+  const poll = rankings?.rankings?.[0] || null;
+
+  // Build a map keyed by normalized team name so we can merge poll data
+  // into the full standings list below.
+  const rankByTeam = new Map();
+  if (poll) {
+    for (const r of poll.ranks || []) {
+      const name = r.team?.name || r.team?.displayName;
+      const key = normalizeTeamName(name);
+      if (!key) continue;
+      rankByTeam.set(key, {
+        current: r.current,
+        previous: typeof r.previous === 'number' ? r.previous : null,
+        points: r.points,
+        logo: r.team?.logos?.[0]?.href || null,
+      });
+    }
+  }
+
+  const formatUpdated = (p) => {
+    const raw = p?.date || p?.lastUpdated || p?.publishDate || p?.headline;
     const d = raw ? new Date(raw) : lastUpdate;
     if (!d || isNaN(d.getTime?.() ?? NaN)) return null;
     return d.toLocaleString('en-US', {
@@ -339,68 +382,116 @@ function RankingsView({ rankings, lastUpdate }) {
       hour: 'numeric', minute: '2-digit',
     });
   };
+
+  if (standingsErr) {
+    return (
+      <div className="max-w-xl mx-auto text-center py-16">
+        <div className="display text-white/30 text-3xl mb-3">Rankings unavailable</div>
+        <div className="text-white/50 text-sm">{standingsErr}</div>
+      </div>
+    );
+  }
+  if (!standings) {
+    return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading D1 teams…</div>;
+  }
+
+  // Merge poll info into each team row from flat standings.
+  const rows = (standings.teams || []).map((t) => {
+    const key = normalizeTeamName(t.name);
+    const rank = rankByTeam.get(key) || null;
+    return { ...t, rank };
+  });
+
+  // Ranked teams first (ordered by rank), then unranked by win % descending.
+  rows.sort((a, b) => {
+    if (a.rank && b.rank) return a.rank.current - b.rank.current;
+    if (a.rank) return -1;
+    if (b.rank) return 1;
+    if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+    if (b.w !== a.w) return b.w - a.w;
+    return a.name.localeCompare(b.name);
+  });
+
+  const rankedCount = rows.filter((r) => r.rank).length;
+  const updated = formatUpdated(poll);
+  const pctStr = (n) => (n ? n.toFixed(3).replace(/^0/, '') : '.000');
+
   return (
-    <div className="space-y-12">
-      {polls.map((poll) => {
-        const updated = formatUpdated(poll);
-        return (
-        <div key={poll.id || poll.name}>
-          <div className="mb-6 flex items-end justify-between border-b border-white/10 pb-3">
-            <div>
-              <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">Poll</div>
-              <h2 className="display text-white text-3xl font-bold">D1 Softball Top 25</h2>
-              {updated && <div className="text-white/40 text-xs mono mt-1">Last updated {updated}</div>}
-            </div>
-            {poll.shortName && <div className="text-white/30 text-xs mono">{poll.shortName}</div>}
-          </div>
-          <div className="overflow-x-auto rounded-lg border border-white/10">
-            <table className="w-full mono text-xs">
-              <thead>
-                <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
-                  <th className="text-left py-2 px-3 font-normal w-12">#</th>
-                  <th className="text-left py-2 px-3 font-normal">Team</th>
-                  <th className="text-center py-2 px-2 font-normal">Record</th>
-                  <th className="text-center py-2 px-2 font-normal">Points</th>
-                  <th className="text-center py-2 px-2 font-normal">Prev</th>
-                  <th className="text-center py-2 px-2 font-normal">Trend</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(poll.ranks || []).slice(0, 25).map((r, i) => {
-                  const moved = typeof r.previous === 'number' && r.previous !== r.current;
-                  const up = moved && r.previous > r.current;
-                  return (
-                    <tr key={r.team?.id || i} className="card-enter border-t border-white/5 hover:bg-white/[0.02]" style={{ animationDelay: `${i * 15}ms` }}>
-                      <td className="py-2 px-3">
-                        <span className={`display text-2xl font-black ${r.current <= 5 ? '' : 'text-white/40'}`} style={r.current <= 5 ? { color: '#ff6b1a' } : {}}>{r.current}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {r.team?.logos?.[0]?.href && <img src={r.team.logos[0].href} alt="" className="h-5 w-5 object-contain" />}
-                          <span className="text-white truncate">{r.team?.name || r.team?.displayName}</span>
-                        </div>
-                      </td>
-                      <td className="text-center py-2 px-2 text-white/70 tabular-nums whitespace-nowrap">{r.recordSummary || '—'}</td>
-                      <td className="text-center py-2 px-2 text-white/80 tabular-nums">{r.points?.toFixed?.(0) || r.points || '—'}</td>
-                      <td className="text-center py-2 px-2 text-white/50 tabular-nums">{typeof r.previous === 'number' ? r.previous : '—'}</td>
-                      <td className="text-center py-2 px-2 tabular-nums">
-                        {moved ? (
-                          <span className={`mono text-[11px] ${up ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {up ? '▲' : '▼'}{Math.abs(r.previous - r.current)}
-                          </span>
-                        ) : (
-                          <span className="text-white/20">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+    <div>
+      <div className="mb-6 flex items-end justify-between border-b border-white/10 pb-3 flex-wrap gap-3">
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">Season</div>
+          <h2 className="display text-white text-3xl font-bold">D1 Softball Top 25</h2>
+          {updated && <div className="text-white/40 text-xs mono mt-1">Poll last updated {updated}</div>}
         </div>
-        );
-      })}
+        <div className="text-[10px] mono uppercase text-white/30 text-right">
+          <div>{rows.length} teams</div>
+          <div>{rankedCount} ranked · {rows.length - rankedCount} unranked</div>
+        </div>
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-white/10">
+        <table className="w-full mono text-xs">
+          <thead>
+            <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
+              <th className="text-left py-2 px-3 font-normal w-12">#</th>
+              <th className="text-left py-2 px-3 font-normal">Team</th>
+              <th className="text-left py-2 px-3 font-normal">Conf</th>
+              <th className="text-center py-2 px-2 font-normal">Record</th>
+              <th className="text-center py-2 px-2 font-normal">Pct</th>
+              <th className="text-center py-2 px-2 font-normal">Streak</th>
+              <th className="text-center py-2 px-2 font-normal">L10</th>
+              <th className="text-center py-2 px-2 font-normal">Trend</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((t, i) => {
+              const rank = t.rank;
+              const isTop5 = rank && rank.current <= 5;
+              const moved = rank && typeof rank.previous === 'number' && rank.previous !== rank.current;
+              const up = moved && rank.previous > rank.current;
+              const logo = rank?.logo || t.logo;
+              return (
+                <tr key={`${t.name}-${i}`} className="border-t border-white/5 hover:bg-white/[0.02]">
+                  <td className="py-2 px-3">
+                    {rank ? (
+                      <span className={`display text-2xl font-black ${isTop5 ? '' : 'text-white/60'}`} style={isTop5 ? { color: '#ff6b1a' } : {}}>{rank.current}</span>
+                    ) : (
+                      <span className="text-white/20 text-[10px] tracking-widest uppercase">NR</span>
+                    )}
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {logo && (
+                        <img
+                          src={logo}
+                          alt=""
+                          className="h-5 w-5 object-contain"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
+                      <span className="text-white truncate">{t.name}</span>
+                    </div>
+                  </td>
+                  <td className="py-2 px-3 text-white/50 truncate max-w-[180px]">{t.conferenceDisplay || t.conference || '—'}</td>
+                  <td className="text-center py-2 px-2 text-white tabular-nums whitespace-nowrap">{t.w}-{t.l}</td>
+                  <td className="text-center py-2 px-2 text-white/70 tabular-nums">{pctStr(t.winPct)}</td>
+                  <td className="text-center py-2 px-2 text-white/70 tabular-nums">{t.streak || '—'}</td>
+                  <td className="text-center py-2 px-2 text-white/70 tabular-nums">{t.last10 || '—'}</td>
+                  <td className="text-center py-2 px-2 tabular-nums">
+                    {moved ? (
+                      <span className={`mono text-[11px] ${up ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {up ? '▲' : '▼'}{Math.abs(rank.previous - rank.current)}
+                      </span>
+                    ) : (
+                      <span className="text-white/20">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -444,7 +535,7 @@ function StatsView() {
   );
 }
 
-function GameModal({ game, detail, onRefresh, onClose }) {
+function GameModal({ game, detail, rankings, onRefresh, onClose }) {
   const isLive = game.status?.type?.state === 'in';
   const [modalTab, setModalTab] = useState(isLive ? 'live' : 'linescore');
   const comp = game.competitions?.[0];
@@ -466,7 +557,6 @@ function GameModal({ game, detail, onRefresh, onClose }) {
   const hasPlays = (detail?.plays || []).length > 0;
   const hasScoring = (detail?.scoringPlays || (detail?.plays || []).filter((p) => p.scoringPlay)).length > 0;
   const hasWinProb = (detail?.winprobability || []).length > 0;
-  const hasCompare = (detail?.boxscore?.teams || []).some((t) => (t.statistics || []).length);
   const hasInfo = !!(detail?.gameInfo || detail?.pickcenter);
   // If the summary hasn't loaded yet, optimistically show all tabs so they don't flicker.
   const loaded = !!detail && !detail.error;
@@ -478,7 +568,7 @@ function GameModal({ game, detail, onRefresh, onClose }) {
     ...(!loaded || hasPlays ? [{ id: 'pbp', label: 'Play-by-Play' }] : []),
     ...(!loaded || hasScoring ? [{ id: 'scoring', label: 'Scoring Plays' }] : []),
     ...(!loaded || hasWinProb ? [{ id: 'winprob', label: 'Win Probability' }] : []),
-    ...(!loaded || hasCompare ? [{ id: 'compare', label: 'Team Compare' }] : []),
+    { id: 'compare', label: 'Team Compare' },
     ...(!loaded || hasInfo ? [{ id: 'info', label: 'Game Info' }] : []),
   ];
 
@@ -535,7 +625,7 @@ function GameModal({ game, detail, onRefresh, onClose }) {
               {modalTab === 'pbp' && <PlayByPlayTab detail={detail} />}
               {modalTab === 'scoring' && <ScoringPlaysTab detail={detail} />}
               {modalTab === 'winprob' && <WinProbabilityTab detail={detail} />}
-              {modalTab === 'compare' && <TeamCompareTab detail={detail} />}
+              {modalTab === 'compare' && <TeamCompareTab home={home} away={away} rankings={rankings} />}
               {modalTab === 'info' && <GameInfoTab detail={detail} />}
             </>
           )}
@@ -744,39 +834,219 @@ function WinProbabilityTab({ detail }) {
   );
 }
 
-function TeamCompareTab({ detail }) {
-  const teams = detail?.boxscore?.teams || [];
-  if (teams.length < 2) return <EmptyState text="Team comparison data not available." />;
-  const statKeys = new Set();
-  teams.forEach((t) => (t.statistics || []).forEach((s) => statKeys.add(s.label || s.name)));
-  const rows = Array.from(statKeys);
-  const get = (team, key) => {
-    const s = (team.statistics || []).find((x) => (x.label || x.name) === key);
-    return s?.displayValue ?? s?.value ?? '—';
+// Curated categories the Team Compare tab scouts. Must stay in sync with the
+// slugs the player-stats route actually matches — these are the same slugs
+// surfaced in the Players tab.
+const COMPARE_BATTING = [
+  { slug: 'batting-avg',  short: 'BA'  },
+  { slug: 'home-runs',    short: 'HR'  },
+  { slug: 'rbi',          short: 'RBI' },
+  { slug: 'hits',         short: 'H'   },
+  { slug: 'runs-scored',  short: 'R'   },
+  { slug: 'stolen-bases', short: 'SB'  },
+  { slug: 'on-base-pct',  short: 'OBP' },
+  { slug: 'slugging-pct', short: 'SLG' },
+  { slug: 'doubles',      short: '2B'  },
+  { slug: 'triples',      short: '3B'  },
+];
+const COMPARE_PITCHING = [
+  { slug: 'era',             short: 'ERA'  },
+  { slug: 'wins',            short: 'W'    },
+  { slug: 'strikeouts',      short: 'K'    },
+  { slug: 'saves',           short: 'SV'   },
+  { slug: 'whip',            short: 'WHIP' },
+  { slug: 'k-per-7',         short: 'K/7'  },
+  { slug: 'innings-pitched', short: 'IP'   },
+  { slug: 'shutouts',        short: 'SHO'  },
+];
+
+function TeamCompareTab({ home, away, rankings }) {
+  const [standings, setStandings] = useState(null);
+  const [leaders, setLeaders] = useState(null); // { [slug]: { rows, short, label } }
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+
+  const homeName = home?.team?.displayName || home?.team?.name || '';
+  const awayName = away?.team?.displayName || away?.team?.name || '';
+
+  useEffect(() => {
+    let cancelled = false;
+    const allSlugs = [...COMPARE_BATTING, ...COMPARE_PITCHING].map((c) => c.slug);
+    setLoading(true); setErr(null);
+    Promise.all([
+      fetch('/api/standings?flat=1').then((r) => r.json()).catch((e) => ({ error: e.message })),
+      ...allSlugs.map((slug) =>
+        fetch(`/api/player-stats?category=${encodeURIComponent(slug)}`)
+          .then((r) => r.json())
+          .then((d) => ({ slug, data: d }))
+          .catch((e) => ({ slug, data: { error: e.message } }))
+      ),
+    ])
+      .then(([standingsRes, ...catResults]) => {
+        if (cancelled) return;
+        if (standingsRes?.error) setErr(standingsRes.error);
+        else setStandings(standingsRes);
+        const map = {};
+        for (const { slug, data } of catResults) {
+          if (data && !data.error) map[slug] = data;
+        }
+        setLeaders(map);
+      })
+      .catch((e) => { if (!cancelled) setErr(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [homeName, awayName]);
+
+  // Look up a team in the flat standings by normalized name, with a substring
+  // fallback for minor punctuation/aliasing differences (rare but possible).
+  const findTeam = (name) => {
+    if (!standings?.teams || !name) return null;
+    const key = normalizeTeamName(name);
+    if (!key) return null;
+    const exact = standings.teams.find((t) => normalizeTeamName(t.name) === key);
+    if (exact) return exact;
+    return standings.teams.find((t) => {
+      const n = normalizeTeamName(t.name);
+      return n.includes(key) || key.includes(n);
+    }) || null;
   };
-  const away = teams.find((t) => t.homeAway === 'away') || teams[0];
-  const home = teams.find((t) => t.homeAway === 'home') || teams[1];
-  return (
-    <div>
-      <div className="grid grid-cols-3 gap-4 items-center mb-4 pb-3 border-b border-white/10">
-        <div className="text-right">
-          <div className="text-white font-semibold text-sm">{away.team?.abbreviation}</div>
-          <div className="text-[10px] text-white/40 mono uppercase">Away</div>
+
+  // The top player on a given team in a given category, matched by normalized
+  // team name. The leaderboard is already rank-sorted, so .find() gives us #1.
+  const findLeader = (slug, teamName) => {
+    const data = leaders?.[slug];
+    if (!data?.rows || !teamName) return null;
+    const key = normalizeTeamName(teamName);
+    if (!key) return null;
+    return data.rows.find((r) => normalizeTeamName(r.team) === key)
+      || data.rows.find((r) => {
+        const n = normalizeTeamName(r.team);
+        return n.includes(key) || key.includes(n);
+      }) || null;
+  };
+
+  // Pull poll rank/trend for a team out of the rankings prop.
+  const pollRank = (teamName) => {
+    const poll = rankings?.rankings?.[0];
+    if (!poll || !teamName) return null;
+    const key = normalizeTeamName(teamName);
+    const r = (poll.ranks || []).find((x) => {
+      const n = normalizeTeamName(x.team?.name || x.team?.displayName);
+      return n === key;
+    });
+    if (!r) return null;
+    return {
+      current: r.current,
+      previous: typeof r.previous === 'number' ? r.previous : null,
+    };
+  };
+
+  if (loading) {
+    return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading scouting card…</div>;
+  }
+  if (err) {
+    return <EmptyState text={`Error loading team compare: ${err}`} />;
+  }
+
+  const awayStats = findTeam(awayName);
+  const homeStats = findTeam(homeName);
+  const awayRank = pollRank(awayName);
+  const homeRank = pollRank(homeName);
+
+  const pctStr = (n) => (n ? n.toFixed(3).replace(/^0/, '') : '.000');
+
+  const TeamHeader = ({ rawTeam, stats, rank, align }) => {
+    const espnTeam = rawTeam?.team || {};
+    const displayName = espnTeam.displayName || espnTeam.name || stats?.name || '—';
+    const logo = espnTeam.logo || espnTeam.logos?.[0]?.href || stats?.logo;
+    return (
+      <div className={`${align === 'right' ? 'text-right' : 'text-left'} min-w-0`}>
+        <div className={`flex items-center gap-3 mb-2 ${align === 'right' ? 'flex-row-reverse' : ''}`}>
+          {logo && (
+            <img
+              src={logo}
+              alt=""
+              className="h-10 w-10 object-contain flex-shrink-0"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          )}
+          <div className="min-w-0">
+            <div className="display text-white text-xl font-bold truncate">{displayName}</div>
+            {stats?.conferenceDisplay && (
+              <div className="text-[10px] mono uppercase tracking-widest text-white/40">{stats.conferenceDisplay}</div>
+            )}
+          </div>
         </div>
-        <div className="text-center text-[10px] mono tracking-[0.3em] uppercase text-white/40">vs</div>
-        <div>
-          <div className="text-white font-semibold text-sm">{home.team?.abbreviation}</div>
-          <div className="text-[10px] text-white/40 mono uppercase">Home</div>
+        <div className={`flex gap-3 text-[11px] mono ${align === 'right' ? 'justify-end' : ''}`}>
+          {rank && (
+            <span className="tabular-nums" style={{ color: '#ff6b1a' }}>#{rank.current}</span>
+          )}
+          {stats ? (
+            <>
+              <span className="text-white tabular-nums">{stats.w}-{stats.l}</span>
+              <span className="text-white/60 tabular-nums">{pctStr(stats.winPct)}</span>
+              {stats.streak && <span className="text-white/60">{stats.streak}</span>}
+              {stats.last10 && <span className="text-white/40">L10 {stats.last10}</span>}
+            </>
+          ) : (
+            <span className="text-white/30">no season data</span>
+          )}
         </div>
       </div>
-      <div className="space-y-1">
-        {rows.map((key) => (
-          <div key={key} className="grid grid-cols-3 gap-4 items-center py-2 border-b border-white/5 text-sm">
-            <div className="text-right mono text-white tabular-nums">{get(away, key)}</div>
-            <div className="text-center text-[10px] mono uppercase tracking-wider text-white/40">{key}</div>
-            <div className="mono text-white tabular-nums">{get(home, key)}</div>
-          </div>
-        ))}
+    );
+  };
+
+  const LeaderCell = ({ leader, align }) => {
+    if (!leader) {
+      return <div className={`text-white/20 text-xs mono ${align === 'right' ? 'text-right' : 'text-left'}`}>—</div>;
+    }
+    return (
+      <div className={`min-w-0 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+        <div className="text-white text-sm font-semibold truncate">
+          <span className="text-white/40 mono text-[10px] mr-1.5">#{leader.rank}</span>
+          {leader.name}
+        </div>
+        <div className="text-white/50 text-[10px] mono tabular-nums">{leader.primary}</div>
+      </div>
+    );
+  };
+
+  const StatRow = ({ slug, short }) => {
+    const awayLeader = findLeader(slug, awayName);
+    const homeLeader = findLeader(slug, homeName);
+    return (
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center py-2.5 border-b border-white/5">
+        <LeaderCell leader={awayLeader} align="right" />
+        <div className="text-center text-[10px] mono uppercase tracking-widest text-white/40 w-14">{short}</div>
+        <LeaderCell leader={homeLeader} align="left" />
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-5 border-b border-white/10">
+        <TeamHeader rawTeam={away} stats={awayStats} rank={awayRank} align="right" />
+        <div className="text-white/30 mono text-[10px] uppercase tracking-[0.3em]">vs</div>
+        <TeamHeader rawTeam={home} stats={homeStats} rank={homeRank} align="left" />
+      </div>
+
+      <div>
+        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Top Hitters</div>
+        <div>
+          {COMPARE_BATTING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} />)}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Ace Pitchers</div>
+        <div>
+          {COMPARE_PITCHING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} />)}
+        </div>
+      </div>
+
+      <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center">
+        Synthesized from NCAA standings + season leaderboards · Top player per category
       </div>
     </div>
   );

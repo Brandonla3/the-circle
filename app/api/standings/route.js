@@ -96,7 +96,9 @@ function bucketConference(name) {
   return name || 'Other';
 }
 
-export async function GET() {
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const flat = searchParams.get('flat');
   try {
     const now = new Date();
     const year = now.getUTCFullYear();
@@ -179,6 +181,47 @@ export async function GET() {
       return `${w}-${slice.length - w}`;
     };
 
+    const pct = (w, l) => (w + l > 0 ? w / (w + l) : 0);
+
+    // Flat mode: return every team we've seen (not just major confs) as one
+    // big list, keyed by name for easy client-side lookup in Team Compare.
+    if (flat) {
+      const flatTeams = Array.from(teams.values())
+        .filter((t) => t.w + t.l > 0)
+        .map((t) => ({
+          name: t.name,
+          logo: t.logo,
+          conference: t.conf || '',
+          conferenceDisplay: bucketConference(t.conf || ''),
+          w: t.w,
+          l: t.l,
+          cw: t.cw,
+          cl: t.cl,
+          winPct: pct(t.w, t.l),
+          streak: streak(t.recent),
+          last10: last10(t.recent),
+        }))
+        .sort((a, b) => {
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          if (b.w !== a.w) return b.w - a.w;
+          return a.name.localeCompare(b.name);
+        });
+
+      return Response.json(
+        {
+          teams: flatTeams,
+          meta: {
+            source: 'data.ncaa.com',
+            datesScanned: dates.length,
+            gamesParsed: allGames.length,
+            teamsFound: flatTeams.length,
+            generatedAt: now.toISOString(),
+          },
+        },
+        { headers: { 'Cache-Control': 'public, max-age=600, s-maxage=600' } }
+      );
+    }
+
     // Group teams by display conference, filtering out non-major buckets
     const buckets = new Map();
     for (const t of teams.values()) {
@@ -190,7 +233,6 @@ export async function GET() {
     }
 
     // Sort teams within each conference: conference wins desc, then conf pct, then overall pct
-    const pct = (w, l) => (w + l > 0 ? w / (w + l) : 0);
     for (const arr of buckets.values()) {
       arr.sort((a, b) => {
         if (b.cw !== a.cw) return b.cw - a.cw;
