@@ -535,6 +535,8 @@ async function computeTeamStatsDebug(teamId) {
   let gamesMatchedById = 0;
   let gamesMatchedByName = 0;
   let timeExhausted = false;
+  let firstEventFullSnapshot = null;
+  let firstEventWithAthletes = null;
 
   for (let i = 0; i < completed.length; i += BATCH_SIZE) {
     if (Date.now() - startTime > SCAN_BUDGET_MS) {
@@ -583,6 +585,57 @@ async function computeTeamStatsDebug(teamId) {
         if (extractedPitching > 0) gamesWithPitching++;
       }
 
+      // Capture full structural snapshot of the FIRST event so we can see
+      // exactly what other fields ESPN ships besides boxscore.players. Most
+      // importantly: does boxscore.teams[] have stats data even when the
+      // per-player breakdown is empty?
+      if (!firstEventFullSnapshot) {
+        const bs = s.boxscore || {};
+        firstEventFullSnapshot = {
+          eventId: String(ev.id),
+          name: ev.shortName || ev.name,
+          date: ev.date,
+          summaryTopLevelKeys: Object.keys(s).slice(0, 30),
+          boxscoreTopLevelKeys: Object.keys(bs).slice(0, 30),
+          // boxscore.teams[] is per-team rollups; this is where some sports
+          // ship team-level totals separate from per-player rows.
+          boxscoreTeams: (bs.teams || []).map((t) => ({
+            teamId: String(t.team?.id ?? ''),
+            teamName: t.team?.displayName || t.team?.name || '',
+            homeAway: t.homeAway || null,
+            statisticsCount: Array.isArray(t.statistics) ? t.statistics.length : null,
+            statisticsKeys: Array.isArray(t.statistics)
+              ? t.statistics.slice(0, 50).map((st) => ({
+                  name: st.name || null,
+                  abbreviation: st.abbreviation || null,
+                  displayValue: st.displayValue || null,
+                  value: st.value ?? null,
+                  label: st.label || null,
+                }))
+              : null,
+          })),
+          // Linescore innings and totals — sometimes lives at root or in boxscore
+          linescore: bs.linescore || s.linescore || null,
+          // Anything else interesting?
+          hasLeaders: !!s.leaders,
+          hasLeadersData: Array.isArray(s.leaders) ? s.leaders.length : null,
+          hasGameInfo: !!s.gameInfo,
+        };
+      }
+      // Also capture the first event we find that DOES have player athletes,
+      // so we can compare its shape side-by-side.
+      if (!firstEventWithAthletes && extracted && (extractedBatting > 0 || extractedPitching > 0)) {
+        const bs = s.boxscore || {};
+        firstEventWithAthletes = {
+          eventId: String(ev.id),
+          name: ev.shortName || ev.name,
+          date: ev.date,
+          extractedBatting,
+          extractedPitching,
+          boxscoreTeamsHaveStats: (bs.teams || []).some((t) => Array.isArray(t.statistics) && t.statistics.length > 0),
+        };
+      }
+
       eventDiagnostics.push({
         eventId: String(ev.id),
         name: ev.shortName || ev.name,
@@ -628,7 +681,9 @@ async function computeTeamStatsDebug(teamId) {
       competitorIds: ev.competitions?.[0]?.competitors?.map((c) => String(c.team?.id || c.id || '')) || [],
       statusState: ev.competitions?.[0]?.status?.type?.state || null,
     })),
-    eventDiagnostics: eventDiagnostics.slice(0, 25),
+    firstEventFullSnapshot,
+    firstEventWithAthletes,
+    eventDiagnostics: eventDiagnostics.slice(0, 10),
   };
 }
 
