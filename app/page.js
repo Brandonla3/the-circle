@@ -786,7 +786,6 @@ const COMPARE_PITCHING = [
 ];
 
 function TeamCompareTab({ home, away, rankings }) {
-  const [standings, setStandings] = useState(null);
   const [leaders, setLeaders] = useState(null); // { [slug]: { rows, short, label } }
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
@@ -798,19 +797,16 @@ function TeamCompareTab({ home, away, rankings }) {
     let cancelled = false;
     const allSlugs = [...COMPARE_BATTING, ...COMPARE_PITCHING].map((c) => c.slug);
     setLoading(true); setErr(null);
-    Promise.all([
-      fetch('/api/standings?flat=1').then((r) => r.json()).catch((e) => ({ error: e.message })),
-      ...allSlugs.map((slug) =>
+    Promise.all(
+      allSlugs.map((slug) =>
         fetch(`/api/player-stats?category=${encodeURIComponent(slug)}`)
           .then((r) => r.json())
           .then((d) => ({ slug, data: d }))
           .catch((e) => ({ slug, data: { error: e.message } }))
-      ),
-    ])
-      .then(([standingsRes, ...catResults]) => {
+      )
+    )
+      .then((catResults) => {
         if (cancelled) return;
-        if (standingsRes?.error) setErr(standingsRes.error);
-        else setStandings(standingsRes);
         const map = {};
         for (const { slug, data } of catResults) {
           if (data && !data.error) map[slug] = data;
@@ -822,18 +818,46 @@ function TeamCompareTab({ home, away, rankings }) {
     return () => { cancelled = true; };
   }, [homeName, awayName]);
 
-  // Look up a team in the flat standings by normalized name, with a substring
-  // fallback for minor punctuation/aliasing differences (rare but possible).
-  const findTeam = (name) => {
-    if (!standings?.teams || !name) return null;
-    const key = normalizeTeamName(name);
-    if (!key) return null;
-    const exact = standings.teams.find((t) => normalizeTeamName(t.name) === key);
-    if (exact) return exact;
-    return standings.teams.find((t) => {
-      const n = normalizeTeamName(t.name);
-      return n.includes(key) || key.includes(n);
-    }) || null;
+  // ESPN already attaches season records, rank, and conference metadata to the
+  // scoreboard competitor objects, so we read straight off `home`/`away` rather
+  // than going through /api/standings (which depends on an unreliable upstream
+  // and was returning stale data).
+  const extractEspn = (competitor) => {
+    if (!competitor) return null;
+    const t = competitor.team || {};
+    const records = Array.isArray(competitor.records) ? competitor.records : [];
+    const byType = (type) =>
+      records.find((r) => (r.type || r.name || '').toLowerCase() === type) ||
+      records.find((r) => (r.type || r.name || '').toLowerCase().includes(type));
+    const total = byType('total') || records[0] || null;
+    const conf = byType('vsconf') || byType('conf');
+    const home = byType('home');
+    const road = byType('road') || byType('away');
+    const streak = byType('streak');
+    // Parse "W-L" summary into numbers so we can show a pct.
+    const parseWL = (summary) => {
+      if (!summary) return { w: null, l: null };
+      const m = String(summary).match(/^(\d+)-(\d+)/);
+      return m ? { w: parseInt(m[1], 10), l: parseInt(m[2], 10) } : { w: null, l: null };
+    };
+    const totalWL = parseWL(total?.summary);
+    const pct = totalWL.w != null && (totalWL.w + totalWL.l) > 0
+      ? totalWL.w / (totalWL.w + totalWL.l)
+      : null;
+    return {
+      name: t.displayName || t.name || '',
+      logo: t.logo || t.logos?.[0]?.href || null,
+      conference: competitor.conference?.name || t.conferenceAbbreviation || '',
+      total: total?.summary || '',
+      totalW: totalWL.w,
+      totalL: totalWL.l,
+      pct,
+      conf: conf?.summary || '',
+      home: home?.summary || '',
+      road: road?.summary || '',
+      streak: streak?.summary || streak?.displayValue || '',
+      curatedRank: competitor?.curatedRank?.current || null,
+    };
   };
 
   // The top player on a given team in a given category, matched by normalized
@@ -850,7 +874,8 @@ function TeamCompareTab({ home, away, rankings }) {
       }) || null;
   };
 
-  // Pull poll rank/trend for a team out of the rankings prop.
+  // Pull poll rank/trend for a team out of the rankings prop (fallback if the
+  // scoreboard's curatedRank isn't set on this competitor).
   const pollRank = (teamName) => {
     const poll = rankings?.rankings?.[0];
     if (!poll || !teamName) return null;
@@ -866,52 +891,53 @@ function TeamCompareTab({ home, away, rankings }) {
     };
   };
 
-  if (loading) {
-    return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading scouting card…</div>;
-  }
+  const awayEspn = extractEspn(away);
+  const homeEspn = extractEspn(home);
+  const awayRank = awayEspn?.curatedRank
+    ? { current: awayEspn.curatedRank, previous: null }
+    : pollRank(awayName);
+  const homeRank = homeEspn?.curatedRank
+    ? { current: homeEspn.curatedRank, previous: null }
+    : pollRank(homeName);
+
+  const pctStr = (n) => (n != null ? n.toFixed(3).replace(/^0/, '') : '—');
+
   if (err) {
     return <EmptyState text={`Error loading team compare: ${err}`} />;
   }
 
-  const awayStats = findTeam(awayName);
-  const homeStats = findTeam(homeName);
-  const awayRank = pollRank(awayName);
-  const homeRank = pollRank(homeName);
-
-  const pctStr = (n) => (n ? n.toFixed(3).replace(/^0/, '') : '.000');
-
-  const TeamHeader = ({ rawTeam, stats, rank, align }) => {
-    const espnTeam = rawTeam?.team || {};
-    const displayName = espnTeam.displayName || espnTeam.name || stats?.name || '—';
-    const logo = espnTeam.logo || espnTeam.logos?.[0]?.href || stats?.logo;
+  const TeamHeader = ({ data, rank, align }) => {
+    if (!data) return null;
     return (
       <div className={`${align === 'right' ? 'text-right' : 'text-left'} min-w-0`}>
         <div className={`flex items-center gap-3 mb-2 ${align === 'right' ? 'flex-row-reverse' : ''}`}>
-          {logo && (
+          {data.logo && (
             <img
-              src={logo}
+              src={data.logo}
               alt=""
               className="h-10 w-10 object-contain flex-shrink-0"
               onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
           )}
           <div className="min-w-0">
-            <div className="display text-white text-xl font-bold truncate">{displayName}</div>
-            {stats?.conferenceDisplay && (
-              <div className="text-[10px] mono uppercase tracking-widest text-white/40">{stats.conferenceDisplay}</div>
+            <div className="display text-white text-xl font-bold truncate">{data.name}</div>
+            {data.conference && (
+              <div className="text-[10px] mono uppercase tracking-widest text-white/40">{data.conference}</div>
             )}
           </div>
         </div>
-        <div className={`flex gap-3 text-[11px] mono ${align === 'right' ? 'justify-end' : ''}`}>
+        <div className={`flex flex-wrap gap-x-3 gap-y-1 text-[11px] mono ${align === 'right' ? 'justify-end' : ''}`}>
           {rank && (
-            <span className="tabular-nums" style={{ color: '#ff6b1a' }}>#{rank.current}</span>
+            <span className="tabular-nums font-bold" style={{ color: '#ff6b1a' }}>#{rank.current}</span>
           )}
-          {stats ? (
+          {data.total ? (
             <>
-              <span className="text-white tabular-nums">{stats.w}-{stats.l}</span>
-              <span className="text-white/60 tabular-nums">{pctStr(stats.winPct)}</span>
-              {stats.streak && <span className="text-white/60">{stats.streak}</span>}
-              {stats.last10 && <span className="text-white/40">L10 {stats.last10}</span>}
+              <span className="text-white tabular-nums">{data.total}</span>
+              {data.pct != null && <span className="text-white/60 tabular-nums">{pctStr(data.pct)}</span>}
+              {data.streak && <span className="text-white/60">{data.streak}</span>}
+              {data.conf && <span className="text-white/40">Conf {data.conf}</span>}
+              {data.home && <span className="text-white/40">Home {data.home}</span>}
+              {data.road && <span className="text-white/40">Away {data.road}</span>}
             </>
           ) : (
             <span className="text-white/30">no season data</span>
@@ -951,27 +977,35 @@ function TeamCompareTab({ home, away, rankings }) {
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-5 border-b border-white/10">
-        <TeamHeader rawTeam={away} stats={awayStats} rank={awayRank} align="right" />
+        <TeamHeader data={awayEspn} rank={awayRank} align="right" />
         <div className="text-white/30 mono text-[10px] uppercase tracking-[0.3em]">vs</div>
-        <TeamHeader rawTeam={home} stats={homeStats} rank={homeRank} align="left" />
+        <TeamHeader data={homeEspn} rank={homeRank} align="left" />
       </div>
 
       <div>
         <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Top Hitters</div>
-        <div>
-          {COMPARE_BATTING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} />)}
-        </div>
+        {loading && !leaders ? (
+          <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-6">Loading leaders…</div>
+        ) : (
+          <div>
+            {COMPARE_BATTING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} />)}
+          </div>
+        )}
       </div>
 
       <div>
         <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Ace Pitchers</div>
-        <div>
-          {COMPARE_PITCHING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} />)}
-        </div>
+        {loading && !leaders ? (
+          <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-6">Loading leaders…</div>
+        ) : (
+          <div>
+            {COMPARE_PITCHING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} />)}
+          </div>
+        )}
       </div>
 
       <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center">
-        Synthesized from NCAA standings + season leaderboards · Top player per category
+        Records via ESPN · Leaders from NCAA season stats
       </div>
     </div>
   );
