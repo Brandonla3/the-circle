@@ -91,6 +91,7 @@ async function probeUrl(label, url) {
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamName = searchParams.get('team') || DEFAULT_TEAM_NAME;
+  const dive = searchParams.get('dive');
   let teamId = searchParams.get('teamId');
   let athleteId = searchParams.get('athleteId');
 
@@ -114,6 +115,119 @@ export async function GET(request) {
       const dir = await getTeamDirectory();
       resolvedTeam = findTeamById(dir, teamId);
       if (resolvedTeam) resolution.teamDisplayName = resolvedTeam.displayName;
+    }
+
+    // --- Drill-in mode: skip the shallow candidate sweep and follow the two
+    // promising leads: the core.v2 record items[0] (19 inline stats), and a
+    // recent completed game's box score (for aggregation feasibility).
+    if (dive) {
+      const dives = {};
+
+      // 1. core.v2 overall record with expanded stats. We follow the $ref so
+      // we get the uncompressed response and can see the full 19 stat items.
+      const recordUrl = `https://sports.core.api.espn.com/v2/sports/baseball/leagues/college-softball/seasons/${SEASON}/types/2/teams/${teamId}/records/0?lang=en&region=us`;
+      try {
+        const r = await fetch(recordUrl, { headers: ESPN_HEADERS, cache: 'no-store' });
+        const raw = r.ok ? await r.json() : null;
+        dives.coreRecordOverall = {
+          url: recordUrl,
+          status: r.status,
+          // Return the full stats array (not trimmed) so we can see the
+          // actual stat names and values. Capped for safety.
+          stats: raw?.stats ? raw.stats.slice(0, 30) : null,
+          topKeys: raw ? Object.keys(raw).slice(0, 20) : null,
+        };
+      } catch (e) {
+        dives.coreRecordOverall = { url: recordUrl, status: 'error', error: String(e.message || e) };
+      }
+
+      // 2. Fetch the team schedule, pick the most recent completed event,
+      // then pull its summary and return the boxscore.players shape.
+      const scheduleUrl = `${ESPN_SITE}/teams/${teamId}/schedule`;
+      let pickedEvent = null;
+      try {
+        const r = await fetch(scheduleUrl, { headers: ESPN_HEADERS, cache: 'no-store' });
+        if (r.ok) {
+          const sch = await r.json();
+          const events = Array.isArray(sch.events) ? sch.events : [];
+          // Walk from the end to find a completed game (status.type.state === 'post')
+          for (let i = events.length - 1; i >= 0; i--) {
+            const ev = events[i];
+            const state = ev.competitions?.[0]?.status?.type?.state
+              || ev.status?.type?.state
+              || ev.competitions?.[0]?.status?.type?.completed
+              || null;
+            if (state === 'post' || ev.competitions?.[0]?.status?.type?.completed === true) {
+              pickedEvent = ev;
+              break;
+            }
+          }
+          // Fallback: just take the last event we saw.
+          if (!pickedEvent && events.length) pickedEvent = events[events.length - 1];
+          dives.scheduleMeta = {
+            url: scheduleUrl,
+            status: r.status,
+            eventCount: events.length,
+            pickedEventId: pickedEvent?.id || null,
+            pickedEventName: pickedEvent?.shortName || null,
+          };
+        } else {
+          dives.scheduleMeta = { url: scheduleUrl, status: r.status };
+        }
+      } catch (e) {
+        dives.scheduleMeta = { url: scheduleUrl, status: 'error', error: String(e.message || e) };
+      }
+
+      // 3. Pull that event's summary and return the boxscore structure.
+      if (pickedEvent?.id) {
+        const summaryUrl = `https://site.web.api.espn.com/apis/site/v2/sports/baseball/college-softball/summary?event=${pickedEvent.id}`;
+        try {
+          const r = await fetch(summaryUrl, { headers: ESPN_HEADERS, cache: 'no-store' });
+          if (r.ok) {
+            const raw = await r.json();
+            const boxscore = raw.boxscore || null;
+            // Return a focused view: which teams, what stat groups, all labels,
+            // and the first athlete of each group to see raw stat shape.
+            const teams = (boxscore?.players || []).map((tp) => ({
+              teamId: tp.team?.id,
+              teamName: tp.team?.displayName,
+              statGroups: (tp.statistics || []).map((sg) => ({
+                name: sg.name,
+                text: sg.text,
+                labels: sg.labels || null,
+                descriptions: sg.descriptions || null,
+                athleteCount: sg.athletes?.length || 0,
+                firstAthlete: sg.athletes?.[0]
+                  ? {
+                      id: sg.athletes[0].athlete?.id,
+                      displayName: sg.athletes[0].athlete?.displayName,
+                      position: sg.athletes[0].athlete?.position?.abbreviation,
+                      stats: sg.athletes[0].stats,
+                    }
+                  : null,
+              })),
+            }));
+            dives.summaryBoxscore = {
+              url: summaryUrl,
+              status: r.status,
+              eventId: pickedEvent.id,
+              shortName: pickedEvent.shortName,
+              teams,
+              boxscoreTopKeys: boxscore ? Object.keys(boxscore) : null,
+              hasPlayers: Array.isArray(boxscore?.players) && boxscore.players.length > 0,
+            };
+          } else {
+            dives.summaryBoxscore = { url: summaryUrl, status: r.status };
+          }
+        } catch (e) {
+          dives.summaryBoxscore = { url: summaryUrl, status: 'error', error: String(e.message || e) };
+        }
+      }
+
+      return Response.json(
+        { resolution, teamId, athleteId, season: SEASON, dives },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
     }
 
     if (!athleteId) {
