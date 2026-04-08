@@ -51,6 +51,263 @@ const eventSummaryCache = new Map(); // eventId -> { fetchedAt, summary, eventDa
 const teamStatsCache = new Map();    // teamId  -> { fetchedAt, data }
 const inFlight = new Map();          // teamId  -> Promise
 
+// NCAA team-leaderboard caches (parallel to the individual leaderboard cache
+// that lives in /api/player-stats — we don't share the cache because the two
+// routes run in different module scopes on Vercel, but they both use the same
+// upstream wrapper and the same cache TTLs).
+let ncaaTeamCatMap = null;            // Map<curated slug, { id, label }>
+let ncaaTeamCatMapPromise = null;     // dedupe in-flight discovery
+const ncaaTeamLbCache = new Map();    // slug -> { fetchedAt, data }
+const NCAA_TEAM_LB_TTL_MS = 10 * 60 * 1000;
+
+const NCAA_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/json',
+};
+
+// Curated NCAA TEAM-level stat categories. Same approach as the individual
+// curated list in /api/player-stats: tolerant alias matching against whatever
+// labels NCAA's category sidebar currently exposes.
+const NCAA_TEAM_BATTING = [
+  { slug: 'team-batting-avg',  short: 'BA',  labels: ['Team Batting Average', 'Batting Average', 'Batting Avg'] },
+  { slug: 'team-on-base-pct',  short: 'OBP', labels: ['Team On Base Percentage', 'On Base Percentage', 'OBP'] },
+  { slug: 'team-slugging-pct', short: 'SLG', labels: ['Team Slugging Percentage', 'Slugging Percentage', 'SLG'] },
+  { slug: 'team-home-runs',    short: 'HR',  labels: ['Team Home Runs Per Game', 'Home Runs Per Game', 'Home Runs', 'HR'] },
+  { slug: 'team-rbi',          short: 'RBI', labels: ['Team Runs Batted In Per Game', 'Runs Batted In Per Game', 'RBIs', 'Runs Batted In'] },
+  { slug: 'team-runs-scored',  short: 'R',   labels: ['Scoring', 'Team Scoring', 'Runs Per Game', 'Runs Scored Per Game', 'Runs'] },
+  { slug: 'team-hits',         short: 'H',   labels: ['Team Hits Per Game', 'Hits Per Game', 'Hits'] },
+  { slug: 'team-stolen-bases', short: 'SB',  labels: ['Team Stolen Bases Per Game', 'Stolen Bases Per Game', 'Stolen Bases'] },
+  { slug: 'team-doubles',      short: '2B',  labels: ['Team Doubles Per Game', 'Doubles Per Game', 'Doubles'] },
+  { slug: 'team-triples',      short: '3B',  labels: ['Team Triples Per Game', 'Triples Per Game', 'Triples'] },
+];
+
+const NCAA_TEAM_PITCHING = [
+  { slug: 'team-era',          short: 'ERA',  labels: ['Team Earned Run Average', 'Earned Run Average', 'ERA'], lower: true },
+  { slug: 'team-whip',         short: 'WHIP', labels: ['Team WHIP', 'WHIP', 'Walks Hits Per Innings Pitched'], lower: true },
+  { slug: 'team-k-per-7',      short: 'K/7',  labels: ['Team Strikeouts Per Seven Innings', 'Strikeouts Per Seven Innings', 'Strikeouts Per 7 Innings'] },
+  { slug: 'team-strikeouts',   short: 'K',    labels: ['Team Strikeouts', 'Strikeouts'] },
+  { slug: 'team-shutouts',     short: 'SHO',  labels: ['Team Shutouts', 'Shutouts'] },
+  { slug: 'team-saves',        short: 'SV',   labels: ['Team Saves', 'Saves'] },
+  { slug: 'team-opponent-ba',  short: 'OBA',  labels: ['Opponent Batting Average', 'Team Opponent Batting Average'], lower: true },
+];
+
+const NCAA_ALL_TEAM_CATS = [
+  ...NCAA_TEAM_BATTING.map((c) => ({ ...c, side: 'batting' })),
+  ...NCAA_TEAM_PITCHING.map((c) => ({ ...c, side: 'pitching' })),
+];
+
+function normalizeNcaaLabel(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// Scrape NCAA's category sidebar for /team/(\d+) URLs the same way the
+// individual discovery does for /individual/(\d+). Returns Map<slug, {id, label}>
+// for whichever curated entries we successfully matched.
+async function discoverNcaaTeamCategoryIds() {
+  if (ncaaTeamCatMap) return ncaaTeamCatMap;
+  if (ncaaTeamCatMapPromise) return ncaaTeamCatMapPromise;
+
+  ncaaTeamCatMapPromise = (async () => {
+    const sources = [
+      'https://www.ncaa.com/stats/softball/d1',
+      'https://www.ncaa.com/stats/softball/d1/current/team/200',
+    ];
+    const merged = new Map(); // id -> longest label
+    const addMatch = (id, rawLabel) => {
+      if (!id || !rawLabel) return;
+      const label = rawLabel
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&#\d+;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!label || label.length < 2) return;
+      const prev = merged.get(id);
+      if (!prev || label.length > prev.length) merged.set(id, label);
+    };
+
+    for (const url of sources) {
+      try {
+        const r = await fetch(url, { headers: NCAA_HEADERS, cache: 'no-store' });
+        if (!r.ok) continue;
+        const html = await r.text();
+        const patterns = [
+          /href="[^"]*?\/team\/(\d+)[^"]*"[^>]*>([\s\S]*?)<\/a>/gi,
+          /<option[^>]*\bvalue="(\d+)"[^>]*>([\s\S]*?)<\/option>/gi,
+        ];
+        for (const re of patterns) {
+          let m;
+          while ((m = re.exec(html)) !== null) addMatch(m[1], m[2]);
+        }
+        if (merged.size >= 10) break;
+      } catch (e) {
+        // try next source
+      }
+    }
+
+    if (merged.size === 0) {
+      throw new Error('Failed to discover any NCAA team-stat categories');
+    }
+
+    // Index normalized labels -> id
+    const normToId = new Map();
+    const byId = {};
+    for (const [id, label] of merged) {
+      byId[id] = label;
+      const norm = normalizeNcaaLabel(label);
+      if (!normToId.has(norm)) normToId.set(norm, id);
+    }
+
+    // Two-pass exact-then-substring with id uniqueness, same logic as
+    // /api/player-stats so we don't accidentally claim the same id twice.
+    const MIN_SUBSTR_LEN = 6;
+    const map = new Map();
+    const usedIds = new Set();
+
+    const claim = (slug, cat, id) => {
+      usedIds.add(id);
+      map.set(slug, { id, label: byId[id] || cat.labels[0], short: cat.short, side: cat.side, lower: !!cat.lower });
+    };
+
+    for (const cat of NCAA_ALL_TEAM_CATS) {
+      for (const alias of cat.labels) {
+        const a = normalizeNcaaLabel(alias);
+        if (!a) continue;
+        const id = normToId.get(a);
+        if (id && !usedIds.has(id)) { claim(cat.slug, cat, id); break; }
+      }
+    }
+    for (const cat of NCAA_ALL_TEAM_CATS) {
+      if (map.has(cat.slug)) continue;
+      let hit = null;
+      for (const alias of cat.labels) {
+        const a = normalizeNcaaLabel(alias);
+        if (!a || a.length < MIN_SUBSTR_LEN) continue;
+        for (const [nLabel, id] of normToId) {
+          if (usedIds.has(id)) continue;
+          if (nLabel.length < MIN_SUBSTR_LEN) continue;
+          if (nLabel.includes(a) || a.includes(nLabel)) { hit = id; break; }
+        }
+        if (hit) break;
+      }
+      if (hit) claim(cat.slug, NCAA_ALL_TEAM_CATS.find((c) => c.slug.startsWith('team-') && map.get(c.slug) === undefined && c.slug === c.slug) || NCAA_ALL_TEAM_CATS[0], hit);
+    }
+
+    ncaaTeamCatMap = map;
+    return map;
+  })();
+
+  try {
+    return await ncaaTeamCatMapPromise;
+  } finally {
+    ncaaTeamCatMapPromise = null;
+  }
+}
+
+async function fetchNcaaTeamLeaderboard(slug) {
+  const cached = ncaaTeamLbCache.get(slug);
+  if (cached && Date.now() - cached.fetchedAt < NCAA_TEAM_LB_TTL_MS) return cached.data;
+
+  const map = await discoverNcaaTeamCategoryIds();
+  const cat = map.get(slug);
+  if (!cat) return null;
+
+  const url = `https://ncaa-api.henrygd.me/stats/softball/d1/current/team/${cat.id}`;
+  try {
+    const r = await fetch(url, { headers: NCAA_HEADERS, cache: 'no-store' });
+    if (!r.ok) return null;
+    const json = await r.json();
+    const data = {
+      slug,
+      id: cat.id,
+      label: cat.label,
+      short: cat.short,
+      side: cat.side,
+      lower: cat.lower,
+      rows: json.data || [],
+    };
+    ncaaTeamLbCache.set(slug, { fetchedAt: Date.now(), data });
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Find a team's row in a single NCAA leaderboard by normalized name match.
+function findNcaaTeamRow(rows, nameVariantSet) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  for (const row of rows) {
+    const candidates = [row.School, row.school, row.Team, row.team, row.Name];
+    for (const c of candidates) {
+      if (!c) continue;
+      if (nameVariantSet.has(normalize(c))) return row;
+    }
+  }
+  return null;
+}
+
+// Pluck the most-likely "primary" stat value out of a leaderboard row.
+// NCAA team-leaderboard rows include the sort column under various column
+// names depending on the stat — we try a handful in order.
+function pickNcaaPrimaryValue(row, cat) {
+  if (!row) return null;
+  const candidates = [
+    cat.short,
+    cat.label,
+    'BA', 'AVG', 'OBP', 'SLG',
+    'HR', 'RBI', 'R', 'H', 'SB', '2B', '3B',
+    'ERA', 'WHIP', 'SO', 'K', 'SHO', 'SV',
+    'RPG', 'HRPG',
+  ];
+  for (const k of candidates) {
+    if (row[k] != null && row[k] !== '') return row[k];
+  }
+  // Last resort: first non-meta key
+  const META = new Set(['Rank', 'RANK', 'rank', 'Team', 'TEAM', 'team', 'School', 'school', 'Conference', 'Conf', 'Cl', 'CL', 'G', 'GP']);
+  for (const [k, v] of Object.entries(row)) {
+    if (META.has(k)) continue;
+    if (v != null && v !== '') return v;
+  }
+  return null;
+}
+
+// Aggregate NCAA team-level totals for one team. Fetches every curated team
+// leaderboard in parallel (cached, so warm calls are essentially free), finds
+// this team's row in each, and returns a normalized totals object.
+async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
+  if (!nameVariantSet || nameVariantSet.size === 0) {
+    return { batting: {}, pitching: {}, found: 0, attempted: 0, error: 'no team name variants' };
+  }
+  const cats = NCAA_ALL_TEAM_CATS;
+  const results = await Promise.all(cats.map((c) => fetchNcaaTeamLeaderboard(c.slug)));
+
+  const batting = {};
+  const pitching = {};
+  let found = 0;
+
+  for (let i = 0; i < cats.length; i++) {
+    const cat = cats[i];
+    const lb = results[i];
+    if (!lb || !lb.rows) continue;
+    const row = findNcaaTeamRow(lb.rows, nameVariantSet);
+    if (!row) continue;
+    const value = pickNcaaPrimaryValue(row, cat);
+    if (value == null || value === '') continue;
+    found++;
+    const target = cat.side === 'batting' ? batting : pitching;
+    target[cat.short] = value;
+    // Also stash a "rank" field per stat so the UI can show how this team
+    // ranks nationally for each stat — useful context for a comparison view.
+    if (row.Rank || row.RANK || row.rank) {
+      target[`${cat.short}_rank`] = row.Rank || row.RANK || row.rank;
+    }
+  }
+
+  return { batting, pitching, found, attempted: cats.length };
+}
+
 const EVENT_TTL_OLD_MS = 24 * 60 * 60 * 1000;
 const EVENT_TTL_RECENT_MS = 10 * 60 * 1000;
 const EVENT_RECENT_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
@@ -397,9 +654,14 @@ async function getTeamNameVariantSet(teamId) {
 async function computeTeamStats(teamId) {
   const startTime = Date.now();
   const scheduleUrl = `${ESPN_SITE}/teams/${teamId}/schedule`;
-  const [schedule, nameVariantSet] = await Promise.all([
+  // Kick off the NCAA team-stat fetch in parallel with the ESPN schedule
+  // fetch — they're completely independent and the NCAA leaderboards are
+  // cached for 10 min so warm calls are essentially free.
+  const [schedule, nameVariantSet, ncaaTeamStatsP] = await Promise.all([
     fetchWithRetry(scheduleUrl),
     getTeamNameVariantSet(teamId),
+    // Resolved later, after we have the variant set:
+    getTeamNameVariantSet(teamId).then((vs) => aggregateNcaaTeamStats(teamId, vs)).catch(() => null),
   ]);
   const events = schedule?.events || [];
 
@@ -460,11 +722,25 @@ async function computeTeamStats(teamId) {
 
   const finalized = finalize(aggregated, recordStats);
 
+  // Merge NCAA team-leaderboard values into totals. NCAA values are season
+  // totals computed by NCAA themselves and cover every D1 team — they're
+  // strictly better than ESPN box-score sums for the team-totals view, so
+  // we OVERWRITE any ESPN-derived stat that NCAA also publishes.
+  const ncaaTeamStats = await ncaaTeamStatsP;
+  if (ncaaTeamStats) {
+    if (ncaaTeamStats.batting && Object.keys(ncaaTeamStats.batting).length > 0) {
+      finalized.totals.batting = { ...finalized.totals.batting, ...ncaaTeamStats.batting };
+    }
+    if (ncaaTeamStats.pitching && Object.keys(ncaaTeamStats.pitching).length > 0) {
+      finalized.totals.pitching = { ...finalized.totals.pitching, ...ncaaTeamStats.pitching };
+    }
+  }
+
   return {
     teamId: String(teamId),
     ...finalized,
     meta: {
-      source: 'espn-boxscore',
+      source: 'espn-boxscore+ncaa-team',
       scheduleEvents: events.length,
       completedEvents: completed.length,
       gamesProcessed,
@@ -476,6 +752,9 @@ async function computeTeamStats(teamId) {
       gamesMatchedByName,
       timeExhausted,
       elapsedMs: Date.now() - startTime,
+      ncaaTeamStats: ncaaTeamStats
+        ? { found: ncaaTeamStats.found, attempted: ncaaTeamStats.attempted }
+        : null,
     },
   };
 }
