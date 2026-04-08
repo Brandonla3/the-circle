@@ -32,16 +32,15 @@ const HEADERS = {
 // header we expect henrygd to surface for the primary stat.
 const CATEGORY_BATTING = [
   { slug: 'batting-avg',   short: 'BA',   labels: ['Batting Average', 'Batting Avg', 'Batting Pct', 'Avg'] },
-  { slug: 'home-runs',     short: 'HR',   labels: ['Home Runs Per Game', 'Home Runs', 'HR'] },
-  { slug: 'rbi',           short: 'RBI',  labels: ['Runs Batted In Per Game', 'Runs Batted In', 'RBI Per Game', 'RBI'] },
-  { slug: 'hits',          short: 'H',    labels: ['Hits Per Game', 'Hits'] },
+  { slug: 'home-runs',     short: 'HR',   labels: ['Home Runs', 'Home Runs Per Game', 'HR'] },
+  { slug: 'rbi',           short: 'RBI',  labels: ['RBIs', 'Runs Batted In', 'Runs Batted In Per Game', 'RBI Per Game', 'RBI'] },
+  { slug: 'hits',          short: 'H',    labels: ['Hits', 'Hits Per Game'] },
   { slug: 'runs-scored',   short: 'R',    labels: ['Runs', 'Runs Scored', 'Runs Scored Per Game', 'Runs Per Game'] },
-  { slug: 'stolen-bases',  short: 'SB',   labels: ['Stolen Bases Per Game', 'Stolen Bases', 'Stolen Base Pct'] },
+  { slug: 'stolen-bases',  short: 'SB',   labels: ['Stolen Bases', 'Stolen Bases Per Game', 'Stolen Base Pct'] },
   { slug: 'on-base-pct',   short: 'OBP',  labels: ['On Base Percentage', 'On Base Pct', 'OBP'] },
   { slug: 'slugging-pct',  short: 'SLG',  labels: ['Slugging Percentage', 'Slugging Pct', 'SLG'] },
-  { slug: 'doubles',       short: '2B',   labels: ['Doubles Per Game', 'Doubles'] },
-  { slug: 'triples',       short: '3B',   labels: ['Triples Per Game', 'Triples'] },
-  { slug: 'walks',         short: 'BB',   labels: ['Walks Drawn Per Game', 'Walks Per Game', 'Walks'] },
+  { slug: 'doubles',       short: '2B',   labels: ['Doubles', 'Doubles Per Game'] },
+  { slug: 'triples',       short: '3B',   labels: ['Triples', 'Triples Per Game'] },
 ];
 
 const CATEGORY_PITCHING = [

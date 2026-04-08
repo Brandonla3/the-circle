@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, BarChart3, Activity, Users } from 'lucide-react';
+import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, Activity, Users } from 'lucide-react';
 
 const ESPN_SITE = 'https://site.api.espn.com/apis/site/v2/sports/baseball/college-softball';
 const ESPN_WEBAPI = 'https://site.web.api.espn.com/apis/site/v2/sports/baseball/college-softball';
@@ -102,8 +102,7 @@ export default function Page() {
           <nav className="flex gap-1 mt-10 border-b border-white/5 -mb-px overflow-x-auto">
             {[
               {id:'scores',label:'Scoreboard',icon:Zap},
-              {id:'rankings',label:'ESPN Rankings',icon:Trophy},
-              {id:'ncaa',label:'NCAA RPI',icon:BarChart3, suffix:'*Weekly'},
+              {id:'rankings',label:'Rankings',icon:Trophy},
               {id:'standings',label:'Standings',icon:Activity},
               {id:'leaders',label:'Players',icon:Users},
               {id:'stats',label:'Teams',icon:TrendingUp},
@@ -113,7 +112,6 @@ export default function Page() {
                 <button key={t.id} onClick={() => setTab(t.id)} className={`relative px-5 py-3 flex items-center gap-2 text-sm transition-colors whitespace-nowrap ${active ? 'text-white' : 'text-white/40 hover:text-white/70'}`}>
                   <Icon className="h-3.5 w-3.5" />
                   <span className="tracking-wide uppercase text-xs font-semibold">{t.label}</span>
-                  {t.suffix && <span className="text-[9px] mono text-white/30 normal-case tracking-normal">{t.suffix}</span>}
                   {active && <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: '#ff6b1a' }}></div>}
                 </button>
               );
@@ -171,9 +169,7 @@ export default function Page() {
           </div>
         )}
 
-        {tab === 'rankings' && <RankingsView rankings={rankings} />}
-        {tab === 'nolan' && <RpiView source="nolan" />}
-        {tab === 'ncaa' && <RpiView source="ncaa" />}
+        {tab === 'rankings' && <RankingsView rankings={rankings} lastUpdate={lastUpdate} />}
         {tab === 'standings' && <StandingsView />}
         {tab === 'leaders' && <LeadersView onSelectPlayer={setSelectedPlayer} />}
         {tab === 'stats' && <StatsView />}
@@ -183,7 +179,7 @@ export default function Page() {
       {selectedPlayer && <PlayerModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />}
 
       <footer className="border-t border-white/5 mt-16 py-6 px-6 text-center text-[10px] mono tracking-widest uppercase text-white/20">
-        Data via ESPN, NCAA.com & WarrenNolan.com · Built for Daladier
+        Data via ESPN & NCAA.com · Built for Daladier
       </footer>
     </div>
   );
@@ -328,18 +324,32 @@ function GameCard({ game, index, onClick }) {
   );
 }
 
-function RankingsView({ rankings }) {
+function RankingsView({ rankings, lastUpdate }) {
   if (!rankings) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading rankings…</div>;
   const polls = rankings.rankings || [];
   if (polls.length === 0) return <div className="text-center py-20 text-white/30">No rankings available (off-season).</div>;
+  const formatUpdated = (poll) => {
+    // ESPN's rankings payload puts the publish date in a few different shapes
+    // depending on the poll; try each and fall back to our own fetch time.
+    const raw = poll?.date || poll?.lastUpdated || poll?.publishDate || poll?.headline;
+    const d = raw ? new Date(raw) : lastUpdate;
+    if (!d || isNaN(d.getTime?.() ?? NaN)) return null;
+    return d.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
+  };
   return (
     <div className="space-y-12">
-      {polls.map((poll) => (
+      {polls.map((poll) => {
+        const updated = formatUpdated(poll);
+        return (
         <div key={poll.id || poll.name}>
           <div className="mb-6 flex items-end justify-between border-b border-white/10 pb-3">
             <div>
               <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">Poll</div>
-              <h2 className="display text-white text-3xl font-bold">{poll.name}</h2>
+              <h2 className="display text-white text-3xl font-bold">D1 Softball Top 25</h2>
+              {updated && <div className="text-white/40 text-xs mono mt-1">Last updated {updated}</div>}
             </div>
             {poll.shortName && <div className="text-white/30 text-xs mono">{poll.shortName}</div>}
           </div>
@@ -389,91 +399,8 @@ function RankingsView({ rankings }) {
             </table>
           </div>
         </div>
-      ))}
-    </div>
-  );
-}
-
-function RpiView({ source }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true); setErr(null); setData(null);
-    fetch(`/api/rpi?source=${source}`)
-      .then((r) => r.json())
-      .then((d) => { if (!cancelled) { if (d.error) setErr(d.error); else setData(d); } })
-      .catch((e) => { if (!cancelled) setErr(e.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [source]);
-
-  if (loading) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading {source === 'ncaa' ? 'NCAA' : 'Nolan'} RPI…</div>;
-  if (err) return (
-    <div className="max-w-xl mx-auto text-center py-16">
-      <div className="display text-white/30 text-3xl mb-3">RPI unavailable</div>
-      <div className="text-white/50 text-sm mb-2">{err}</div>
-      {source === 'nolan' && (
-        <div className="text-white/40 text-xs mt-4">
-          Warren Nolan has noted he may not cover softball every season.<br />
-          Check <a href="https://www.warrennolan.com/softball/2026/index" target="_blank" rel="noreferrer" className="underline" style={{ color: '#ff6b1a' }}>warrennolan.com</a> directly.
-        </div>
-      )}
-    </div>
-  );
-  if (!data || !data.rows || data.rows.length === 0) {
-    return (
-      <div className="max-w-xl mx-auto text-center py-16">
-        <div className="display text-white/30 text-3xl mb-3">No RPI data yet</div>
-        <div className="text-white/50 text-sm">The source returned no rows. Likely off-season or coverage paused for this year.</div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="mb-6 flex items-end justify-between border-b border-white/10 pb-3 flex-wrap gap-3">
-        <div>
-          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">{data.cadence || ''}</div>
-          <h2 className="display text-white text-3xl font-bold">{data.title}</h2>
-          <div className="text-white/40 text-xs mono mt-1">{data.source}{data.updated ? ` · Updated ${data.updated}` : ''}</div>
-        </div>
-        <div className="text-[10px] mono uppercase text-white/30">{data.rows.length} teams</div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {data.rows.slice(0, 100).map((row, i) => {
-          const isTop5 = Number(row.rank) <= 5;
-          return (
-            <div
-              key={`${row.rank}-${row.team}-${i}`}
-              className="card-enter flex items-center gap-4 py-3 px-4 rounded-lg border border-white/5 hover:border-white/20 hover:bg-white/[0.03] transition"
-              style={{ animationDelay: `${Math.min(i * 15, 600)}ms` }}
-            >
-              <div className={`display text-3xl font-black w-12 ${isTop5 ? '' : 'text-white/40'}`} style={isTop5 ? { color: '#ff6b1a' } : {}}>
-                {row.rank}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-white font-semibold text-sm truncate">{row.team}</div>
-                <div className="text-[10px] mono text-white/40 uppercase truncate">
-                  {row.conference && <span>{row.conference}</span>}
-                  {row.conference && row.record && <span className="mx-1">·</span>}
-                  {row.record && <span>{row.record}</span>}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="mono text-white text-sm font-bold tabular-nums">{row.rpi}</div>
-                {row.previous && row.previous !== row.rank && (
-                  <div className={`text-[10px] mono ${Number(row.previous) > Number(row.rank) ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {Number(row.previous) > Number(row.rank) ? '▲' : '▼'}{Math.abs(Number(row.previous) - Number(row.rank))}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+        );
+      })}
     </div>
   );
 }
@@ -1243,23 +1170,29 @@ function LeadersView({ onSelectPlayer }) {
         </div>
       </div>
 
-      <div className="mb-6 -mx-1 flex gap-1 overflow-x-auto pb-1">
-        {sideCats.map((c) => {
-          const active = c.slug === slug;
-          return (
-            <button
-              key={c.slug}
-              onClick={() => setSlug(c.slug)}
-              className={`px-3 py-1.5 rounded-full text-[10px] mono uppercase tracking-widest whitespace-nowrap border transition ${active ? 'text-white border-transparent' : 'text-white/50 border-white/10 hover:border-white/30 hover:text-white/80'}`}
-              style={active ? { background: 'rgba(255,107,26,0.18)', borderColor: 'rgba(255,107,26,0.45)', color: '#ffb88a' } : {}}
-            >
-              {c.label}
-            </button>
-          );
-        })}
-        {!categories && (
-          <div className="text-white/30 mono text-[10px] tracking-widest uppercase px-3 py-1.5">Loading categories…</div>
-        )}
+      <div className="mb-6 flex items-center gap-3">
+        <label htmlFor="leaders-category" className="text-[10px] mono tracking-[0.25em] uppercase text-white/40">Stat</label>
+        <div className="relative">
+          <select
+            id="leaders-category"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            disabled={!categories || sideCats.length === 0}
+            className="appearance-none pl-4 pr-10 py-2 rounded-lg border border-white/10 bg-white/[0.03] hover:border-white/30 focus:border-white/40 focus:outline-none text-white text-sm mono tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            style={{ colorScheme: 'dark' }}
+          >
+            {!categories && <option>Loading categories…</option>}
+            {categories && sideCats.length === 0 && <option>No {side} categories available</option>}
+            {sideCats.map((c) => (
+              <option key={c.slug} value={c.slug}>{c.label}</option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-white/50">
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       {err && (
