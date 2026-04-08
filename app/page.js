@@ -1623,6 +1623,8 @@ function LeadersView({ onSelectPlayer }) {
 function PlayerModal({ player, onClose }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  const [photo, setPhoto] = useState(null);      // ESPN headshot lookup result
+  const [photoBroken, setPhotoBroken] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1638,6 +1640,19 @@ function PlayerModal({ player, onClose }) {
       .catch((e) => { if (!cancelled) setErr(e.message); });
     return () => { cancelled = true; };
   }, [player.name, player.team, player.side]);
+
+  // ESPN headshot lookup (separate from profile fetch so it doesn't block stats).
+  useEffect(() => {
+    let cancelled = false;
+    setPhoto(null); setPhotoBroken(false);
+    if (!player.name || !player.team) return;
+    const url = `/api/player-photo?name=${encodeURIComponent(player.name)}&team=${encodeURIComponent(player.team)}`;
+    fetch(url)
+      .then((r) => r.json())
+      .then((j) => { if (!cancelled && j && !j.error) setPhoto(j); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [player.name, player.team]);
 
   // Esc closes
   useEffect(() => {
@@ -1655,21 +1670,43 @@ function PlayerModal({ player, onClose }) {
 
         <div className="px-6 pt-6 pb-4">
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">{player.side === 'pitching' ? 'Pitching Profile' : 'Batting Profile'}</div>
-          <div className="flex items-center gap-4">
-            {data?.player?.teamLogo && (
+          <div className="flex items-center gap-5">
+            {/* Headshot column: ESPN photo if we matched, else team logo, else nothing. */}
+            {photo?.matched && photo.photoUrl && !photoBroken ? (
+              <div className="relative flex-shrink-0">
+                <img
+                  src={photo.photoUrl}
+                  alt={data?.player?.name || player.name}
+                  className="h-20 w-20 rounded-full object-cover border-2 border-white/10"
+                  style={{ background: '#1f1d1a' }}
+                  onError={() => setPhotoBroken(true)}
+                />
+                {(photo?.teamLogo || data?.player?.teamLogo) && (
+                  <img
+                    src={photo.teamLogo || data.player.teamLogo}
+                    alt=""
+                    className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full object-contain p-0.5 border border-white/20"
+                    style={{ background: '#0a0908' }}
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                )}
+              </div>
+            ) : (data?.player?.teamLogo || photo?.teamLogo) ? (
               <img
-                src={data.player.teamLogo}
+                src={data?.player?.teamLogo || photo.teamLogo}
                 alt=""
-                className="h-12 w-12 object-contain"
+                className="h-16 w-16 object-contain flex-shrink-0"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
-            )}
+            ) : null}
+
             <div className="min-w-0">
               <div className="display text-white text-3xl font-bold leading-tight truncate">{data?.player?.name || player.name}</div>
               <div className="text-white/50 text-sm mono truncate">
                 {data?.player?.team || player.team}
-                {data?.player?.position && <span className="text-white/30"> · {data.player.position}</span>}
+                {(data?.player?.position || photo?.position) && <span className="text-white/30"> · {data?.player?.position || photo.position}</span>}
                 {data?.player?.cls && <span className="text-white/30"> · {data.player.cls}</span>}
+                {photo?.jersey && <span className="text-white/30"> · #{photo.jersey}</span>}
                 {data?.player?.gp && <span className="text-white/30"> · {data.player.gp} G</span>}
               </div>
             </div>
