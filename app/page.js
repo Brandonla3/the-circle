@@ -1019,16 +1019,23 @@ function fullStatName(short, side) {
 
 function TeamCompareTab({ home, away, rankings }) {
   const [leaders, setLeaders] = useState(null); // { [slug]: { rows, short, label } }
+  const [homeStats, setHomeStats] = useState(null);  // /api/team-stats payload for home
+  const [awayStats, setAwayStats] = useState(null);  // /api/team-stats payload for away
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const [subTab, setSubTab] = useState('totals'); // 'totals' | 'leaders' | 'players'
 
   const homeName = home?.team?.displayName || home?.team?.name || '';
   const awayName = away?.team?.displayName || away?.team?.name || '';
+  const homeId = home?.team?.id ? String(home.team.id) : null;
+  const awayId = away?.team?.id ? String(away.team.id) : null;
 
+  // Fetch NCAA leaders (existing) + team box-score aggregates for both teams.
   useEffect(() => {
     let cancelled = false;
     const allSlugs = [...COMPARE_BATTING, ...COMPARE_PITCHING].map((c) => c.slug);
     setLoading(true); setErr(null);
+    setHomeStats(null); setAwayStats(null);
     Promise.all(
       allSlugs.map((slug) =>
         fetch(`/api/player-stats?category=${encodeURIComponent(slug)}`)
@@ -1047,8 +1054,23 @@ function TeamCompareTab({ home, away, rankings }) {
       })
       .catch((e) => { if (!cancelled) setErr(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
+
+    // Fire team-stats independently so slow box-score aggregation doesn't
+    // block the leaders section from rendering.
+    if (homeId) {
+      fetch(`/api/team-stats?teamId=${encodeURIComponent(homeId)}`)
+        .then((r) => r.json())
+        .then((d) => { if (!cancelled && d && !d.error) setHomeStats(d); })
+        .catch(() => {});
+    }
+    if (awayId) {
+      fetch(`/api/team-stats?teamId=${encodeURIComponent(awayId)}`)
+        .then((r) => r.json())
+        .then((d) => { if (!cancelled && d && !d.error) setAwayStats(d); })
+        .catch(() => {});
+    }
     return () => { cancelled = true; };
-  }, [homeName, awayName]);
+  }, [homeName, awayName, homeId, awayId]);
 
   // ESPN already attaches season records, rank, and conference metadata to the
   // scoreboard competitor objects, so we read straight off `home`/`away` rather
@@ -1221,14 +1243,111 @@ function TeamCompareTab({ home, away, rankings }) {
     );
   };
 
-  return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-5 border-b border-white/10">
-        <TeamHeader data={awayEspn} rank={awayRank} align="right" />
-        <div className="text-white/30 mono text-[10px] uppercase tracking-[0.3em]">vs</div>
-        <TeamHeader data={homeEspn} rank={homeRank} align="left" />
-      </div>
+  // Pick winner on a numeric team total stat. Handles lower-is-better (ERA, WHIP).
+  const pickNumericWinner = (awayVal, homeVal, lowerIsBetter) => {
+    const a = parseFloat(awayVal);
+    const h = parseFloat(homeVal);
+    if (!Number.isFinite(a) && !Number.isFinite(h)) return null;
+    if (!Number.isFinite(a)) return 'home';
+    if (!Number.isFinite(h)) return 'away';
+    if (a === h) return null;
+    return (lowerIsBetter ? a < h : a > h) ? 'away' : 'home';
+  };
 
+  // A single total-stat row inside the Totals sub-tab. Pulls values off the
+  // team-stats payload via accessor `get` and highlights the better team.
+  const TotalRow = ({ label, short, get, lowerIsBetter, format }) => {
+    const av = awayStats ? get(awayStats) : null;
+    const hv = homeStats ? get(homeStats) : null;
+    const winner = pickNumericWinner(av, hv, lowerIsBetter);
+    const fmt = (v) => (v == null || v === '' ? '—' : (format ? format(v) : v));
+    const cls = (side) =>
+      winner === side
+        ? 'text-sm font-bold tabular-nums'
+        : 'text-sm tabular-nums text-white/70';
+    const style = (side) => (winner === side ? { color: '#ff6b1a' } : {});
+    return (
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center py-2 border-b border-white/5">
+        <div className={`text-right ${cls('away')}`} style={style('away')}>{fmt(av)}</div>
+        <div className="text-center">
+          <div className="text-[10px] mono uppercase tracking-widest text-white/40">{short}</div>
+          <div className="text-[9px] mono uppercase text-white/30">{label}</div>
+        </div>
+        <div className={`text-left ${cls('home')}`} style={style('home')}>{fmt(hv)}</div>
+      </div>
+    );
+  };
+
+  // ---------------- Totals sub-tab ----------------
+  const TotalsSection = () => {
+    if (!homeStats && !awayStats) {
+      return <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-10">Loading team totals…</div>;
+    }
+
+    const coverageLine = (s) => {
+      if (!s?.meta) return null;
+      const wb = s.meta.gamesWithBatting ?? 0;
+      const wp = s.meta.gamesWithPitching ?? 0;
+      const total = s.meta.completedEvents ?? 0;
+      return `${wb}/${total} batting · ${wp}/${total} pitching`;
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Authoritative team meta row — pulled from core.v2 records endpoint
+            so these numbers match ESPN's team page exactly. */}
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Season</div>
+          <TotalRow label="Record"       short="W-L"  get={(s) => s.teamMeta ? `${s.teamMeta.wins}-${s.teamMeta.losses}` : null} />
+          <TotalRow label="Runs Scored"  short="RS"   get={(s) => s.teamMeta?.runsFor ?? null} />
+          <TotalRow label="Runs Allowed" short="RA"   get={(s) => s.teamMeta?.runsAgainst ?? null} lowerIsBetter />
+          <TotalRow label="Run Diff"     short="DIFF" get={(s) => {
+            const rf = s.teamMeta?.runsFor;
+            const ra = s.teamMeta?.runsAgainst;
+            if (rf == null || ra == null) return null;
+            const d = rf - ra;
+            return d > 0 ? `+${d}` : String(d);
+          }} />
+          <TotalRow label="Streak"       short="STRK" get={(s) => s.teamMeta?.streak ?? null} />
+        </div>
+
+        {/* Derived batting rates — from summed box-score counting stats, so
+            mathematically accurate even when coverage is partial. */}
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Team Batting</div>
+          <TotalRow label="Batting Avg"  short="BA"  get={(s) => s.totals?.batting?.BA}  />
+          <TotalRow label="On-Base Pct"  short="OBP" get={(s) => s.totals?.batting?.OBP} />
+          <TotalRow label="Box HR"       short="HR"  get={(s) => s.totals?.batting?.HR}  />
+          <TotalRow label="Box RBI"      short="RBI" get={(s) => s.totals?.batting?.RBI} />
+          <TotalRow label="Box BB"       short="BB"  get={(s) => s.totals?.batting?.BB}  />
+          <TotalRow label="Box K"        short="K"   get={(s) => s.totals?.batting?.K}   lowerIsBetter />
+        </div>
+
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Team Pitching</div>
+          <TotalRow label="Earned Run Avg"   short="ERA"  get={(s) => s.totals?.pitching?.ERA}   lowerIsBetter />
+          <TotalRow label="WHIP"             short="WHIP" get={(s) => s.totals?.pitching?.WHIP}  lowerIsBetter />
+          <TotalRow label="K per 7 Innings"  short="K/7"  get={(s) => s.totals?.pitching?.['K/7']} />
+          <TotalRow label="Innings Pitched"  short="IP"   get={(s) => s.totals?.pitching?.IP}    />
+          <TotalRow label="Total Strikeouts" short="SO"   get={(s) => s.totals?.pitching?.K}     />
+          <TotalRow label="Box Earned Runs"  short="ER"   get={(s) => s.totals?.pitching?.ER}    lowerIsBetter />
+        </div>
+
+        <div className="text-[10px] mono text-white/30 text-center leading-relaxed">
+          Season / run totals are authoritative from ESPN. Batting and pitching rates
+          (BA, OBP, ERA, WHIP, K/7) are computed from summed box-score counting stats —
+          mathematically accurate even when box-score coverage is partial.<br />
+          <span className="text-white/20">
+            Box-score coverage — {awayName}: {coverageLine(awayStats) || '…'} · {homeName}: {coverageLine(homeStats) || '…'}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  // ---------------- Leaders sub-tab ----------------
+  const LeadersSection = () => (
+    <div className="space-y-8">
       <div>
         <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Top Hitters</div>
         {loading && !leaders ? (
@@ -1250,9 +1369,147 @@ function TeamCompareTab({ home, away, rankings }) {
           </div>
         )}
       </div>
+    </div>
+  );
 
-      <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center">
-        Records via ESPN · Leaders from NCAA season stats
+  // ---------------- Players sub-tab ----------------
+  const PlayersSection = () => {
+    if (!homeStats && !awayStats) {
+      return <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-10">Loading player stats…</div>;
+    }
+
+    const RosterTable = ({ stats, side, group }) => {
+      const rows = stats?.players?.[group] || [];
+      if (rows.length === 0) return <div className="text-white/30 text-xs text-center py-4">No data</div>;
+      const isBatting = group === 'batting';
+      return (
+        <div className="overflow-x-auto rounded-lg border border-white/5">
+          <table className="w-full mono text-[11px]">
+            <thead>
+              <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
+                <th className="text-left py-1.5 px-2 font-normal">Player</th>
+                <th className="text-center py-1.5 px-1 font-normal">G</th>
+                {isBatting ? (
+                  <>
+                    <th className="text-center py-1.5 px-1 font-normal">AB</th>
+                    <th className="text-center py-1.5 px-1 font-normal">H</th>
+                    <th className="text-center py-1.5 px-1 font-normal">HR</th>
+                    <th className="text-center py-1.5 px-1 font-normal">RBI</th>
+                    <th className="text-center py-1.5 px-1 font-normal">BA</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="text-center py-1.5 px-1 font-normal">IP</th>
+                    <th className="text-center py-1.5 px-1 font-normal">K</th>
+                    <th className="text-center py-1.5 px-1 font-normal">BB</th>
+                    <th className="text-center py-1.5 px-1 font-normal">ERA</th>
+                    <th className="text-center py-1.5 px-1 font-normal">WHIP</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p.id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                  <td className="py-1.5 px-2 text-white whitespace-nowrap truncate max-w-[140px]">{p.name}</td>
+                  <td className="text-center py-1.5 px-1 text-white/50 tabular-nums">{p.games}</td>
+                  {isBatting ? (
+                    <>
+                      <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.AB}</td>
+                      <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.H}</td>
+                      <td className="text-center py-1.5 px-1 text-white tabular-nums">{p.HR}</td>
+                      <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.RBI}</td>
+                      <td className="text-center py-1.5 px-1 text-white font-bold tabular-nums">{p.BA}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.IP}</td>
+                      <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.K}</td>
+                      <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.BB}</td>
+                      <td className="text-center py-1.5 px-1 text-white font-bold tabular-nums">{p.ERA}</td>
+                      <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.WHIP}</td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-8">
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Batters</div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{awayName}</div>
+              <RosterTable stats={awayStats} side="away" group="batting" />
+            </div>
+            <div>
+              <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{homeName}</div>
+              <RosterTable stats={homeStats} side="home" group="batting" />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Pitchers</div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{awayName}</div>
+              <RosterTable stats={awayStats} side="away" group="pitching" />
+            </div>
+            <div>
+              <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{homeName}</div>
+              <RosterTable stats={homeStats} side="home" group="pitching" />
+            </div>
+          </div>
+        </div>
+
+        <div className="text-[10px] mono text-white/30 text-center">
+          Per-player stats from ESPN box scores. Each player's G column is the number
+          of box-scored games they appear in, which may be fewer than their actual
+          games played if ESPN only shipped a linescore for that game.
+        </div>
+      </div>
+    );
+  };
+
+  const SUB_TABS = [
+    { id: 'totals',  label: 'Team Totals' },
+    { id: 'leaders', label: 'NCAA Leaders' },
+    { id: 'players', label: 'Player Compare' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-5 border-b border-white/10">
+        <TeamHeader data={awayEspn} rank={awayRank} align="right" />
+        <div className="text-white/30 mono text-[10px] uppercase tracking-[0.3em]">vs</div>
+        <TeamHeader data={homeEspn} rank={homeRank} align="left" />
+      </div>
+
+      <div className="flex gap-1 p-1 rounded-full border border-white/10 bg-white/[0.02] w-fit mx-auto">
+        {SUB_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setSubTab(t.id)}
+            className={`px-4 py-1.5 rounded-full text-[10px] mono uppercase tracking-widest transition ${subTab === t.id ? 'text-white' : 'text-white/40 hover:text-white/70'}`}
+            style={subTab === t.id ? { background: '#ff6b1a' } : {}}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'totals' && <TotalsSection />}
+      {subTab === 'leaders' && <LeadersSection />}
+      {subTab === 'players' && <PlayersSection />}
+
+      <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center pt-4 border-t border-white/5">
+        Records via ESPN · Leaders from NCAA · Box scores via ESPN
       </div>
     </div>
   );

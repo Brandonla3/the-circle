@@ -343,6 +343,8 @@ async function computeTeamStats(teamId) {
   let gamesProcessed = 0;
   let gamesFailed = 0;
   let gamesSkipped = 0;
+  let gamesWithBatting = 0;   // games that had at least one batter stat line for this team
+  let gamesWithPitching = 0;  // games that had at least one pitcher stat line
   let timeExhausted = false;
 
   for (let i = 0; i < completed.length; i += BATCH_SIZE) {
@@ -362,6 +364,8 @@ async function computeTeamStats(teamId) {
       if (extracted) {
         mergePlayerMaps(aggregated, extracted);
         gamesProcessed++;
+        if (extracted.batting.size > 0) gamesWithBatting++;
+        if (extracted.pitching.size > 0) gamesWithPitching++;
       } else {
         gamesFailed++;
       }
@@ -387,6 +391,8 @@ async function computeTeamStats(teamId) {
       scheduleEvents: events.length,
       completedEvents: completed.length,
       gamesProcessed,
+      gamesWithBatting,
+      gamesWithPitching,
       gamesFailed,
       gamesSkipped,
       timeExhausted,
