@@ -44,15 +44,92 @@ function dateRange(startY, startM, startD, end) {
   return dates;
 }
 
+// --- Module-scope caches ---------------------------------------------------
+//
+// ncaa-api.henrygd.me rate-limits with HTTP 428 after ~5-6 parallel requests
+// in a short window. A cold scan of 67 season dates at 20-way parallelism
+// was losing ~60% of dates every request. We fix that on three levels:
+//
+//   1. Per-date memoization. Past dates never change, so once successfully
+//      fetched we cache them for 24 hours. Recent dates (within 7 days) get
+//      a short 10-minute TTL so in-progress games eventually roll in.
+//   2. Aggregated-response cache. We cache the fully-tallied teams Map so
+//      back-to-back requests skip all fetching and parsing work.
+//   3. In-flight dedupe. If two requests arrive during a cold scan, they
+//      share one promise instead of each running their own 67-day sweep.
+//
+// All state is per-Vercel-instance (module scope) and warm invocations
+// reuse it. Cold starts re-populate incrementally; the time budget below
+// ensures a slow cold start returns partial data rather than hitting
+// Vercel's 10s hobby timeout.
+const dayCache = new Map();              // 'YYYY-MM-DD' -> { fetchedAt, games }
+const PAST_DAY_TTL_MS = 24 * 60 * 60 * 1000;
+const RECENT_DAY_TTL_MS = 10 * 60 * 1000;
+const RECENT_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
+
+let teamsCache = null;                   // { fetchedAt, teams, allGamesCount, meta }
+const TEAMS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let teamsCachePromise = null;            // in-flight dedupe
+
+// Total wall-clock budget for a cold scan so Vercel doesn't kill us mid-sweep.
+// Anything not fetched within this window is skipped; subsequent requests will
+// pick up the slack from the warm per-date cache.
+const SCAN_BUDGET_MS = 7000;
+
+// Retry policy for transient failures (428, 429, 5xx, network errors).
+const RETRY_DELAYS_MS = [500, 1000, 2000];
+
+function dayKey(date) {
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
+function dayCacheValid(entry, date) {
+  if (!entry) return false;
+  const age = Date.now() - entry.fetchedAt;
+  const isRecent = Date.now() - date.getTime() < RECENT_THRESHOLD_MS;
+  return age < (isRecent ? RECENT_DAY_TTL_MS : PAST_DAY_TTL_MS);
+}
+
 async function fetchDay(date) {
-  const url = `https://ncaa-api.henrygd.me/scoreboard/softball/d1/${date.getUTCFullYear()}/${pad(date.getUTCMonth() + 1)}/${pad(date.getUTCDate())}`;
-  try {
-    const r = await fetch(url, { headers: HEADERS, cache: 'no-store' });
-    if (!r.ok) return { games: [] };
-    return await r.json();
-  } catch (e) {
-    return { games: [] };
+  const key = dayKey(date);
+  const cached = dayCache.get(key);
+  if (dayCacheValid(cached, date)) {
+    return { games: cached.games, fromCache: true };
   }
+
+  const url = `https://ncaa-api.henrygd.me/scoreboard/softball/d1/${date.getUTCFullYear()}/${pad(date.getUTCMonth() + 1)}/${pad(date.getUTCDate())}`;
+
+  let lastStatus = null;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt - 1]));
+    }
+    try {
+      const r = await fetch(url, { headers: HEADERS, cache: 'no-store' });
+      lastStatus = r.status;
+      if (r.ok) {
+        const raw = await r.json();
+        const list = raw.games || raw.data || raw.scoreboard?.games || [];
+        dayCache.set(key, { fetchedAt: Date.now(), games: list });
+        return { games: list, fromCache: false };
+      }
+      // 404 → nothing scheduled that day, cache as empty so we don't retry.
+      if (r.status === 404) {
+        dayCache.set(key, { fetchedAt: Date.now(), games: [] });
+        return { games: [], fromCache: false };
+      }
+      // 428/429/5xx → fall through to retry.
+      if (r.status !== 428 && r.status !== 429 && r.status < 500) {
+        // 4xx other than 428/429 — don't retry, treat as empty.
+        return { games: [], fromCache: false, status: r.status };
+      }
+    } catch (e) {
+      lastStatus = 'network';
+    }
+  }
+  // All retries exhausted — return empty without caching so we try again next request.
+  return { games: [], fromCache: false, status: lastStatus };
 }
 
 // Pull the team's conference name out of whatever shape NCAA used.
@@ -94,6 +171,147 @@ function bucketConference(name) {
     if (c.match.some((m) => lower.includes(m))) return c.display;
   }
   return name || 'Other';
+}
+
+// --- Aggregation helpers (hoisted so they're usable anywhere) -------------
+const streak = (rec) => {
+  if (!rec.length) return '';
+  const last = rec[rec.length - 1];
+  let n = 0;
+  for (let i = rec.length - 1; i >= 0 && rec[i] === last; i--) n++;
+  return `${last}${n}`;
+};
+const last10 = (rec) => {
+  const slice = rec.slice(-10);
+  const w = slice.filter((x) => x === 'W').length;
+  return `${w}-${slice.length - w}`;
+};
+const pct = (w, l) => (w + l > 0 ? w / (w + l) : 0);
+
+// Walk every season date, fetching in throttled batches with a wall-clock
+// budget so Vercel's hobby-plan 10s timeout can't kill us mid-sweep. Dates
+// not reached in this invocation will be picked up on subsequent requests
+// because fetchDay's day-level cache accumulates across invocations.
+async function doFullScan() {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const dates = dateRange(year, SEASON_START.month, SEASON_START.day, now);
+
+  const startTime = Date.now();
+  const allGames = [];
+  let datesFetched = 0;
+  let datesFromCache = 0;
+  let datesSkipped = 0;
+  let timeExhausted = false;
+
+  const batchSize = 4;         // well under the wrapper's rate-limit threshold
+  const batchDelayMs = 150;
+
+  for (let i = 0; i < dates.length; i += batchSize) {
+    if (Date.now() - startTime > SCAN_BUDGET_MS) {
+      timeExhausted = true;
+      datesSkipped = dates.length - i;
+      break;
+    }
+    const batch = dates.slice(i, i + batchSize);
+    const results = await Promise.all(batch.map(fetchDay));
+    for (const d of results) {
+      if (d.fromCache) datesFromCache++;
+      else datesFetched++;
+      for (const g of d.games || []) {
+        const game = g.game || g;
+        if (isFinal(game)) allGames.push(game);
+      }
+    }
+    if (i + batchSize < dates.length) {
+      await new Promise((r) => setTimeout(r, batchDelayMs));
+    }
+  }
+
+  // Tally W/L per team from the accumulated final games.
+  const teams = new Map();
+  const ensure = (side) => {
+    const name = getTeamName(side);
+    if (!name) return null;
+    if (!teams.has(name)) {
+      teams.set(name, {
+        name,
+        logo: getTeamLogo(side),
+        conf: getConf(side),
+        w: 0, l: 0, cw: 0, cl: 0,
+        recent: [],
+      });
+    } else {
+      const t = teams.get(name);
+      if (!t.conf) t.conf = getConf(side);
+      if (!t.logo) t.logo = getTeamLogo(side);
+    }
+    return teams.get(name);
+  };
+
+  for (const g of allGames) {
+    const home = g.home || g.homeTeam;
+    const away = g.away || g.awayTeam;
+    if (!home || !away) continue;
+    const ht = ensure(home);
+    const at = ensure(away);
+    if (!ht || !at) continue;
+
+    const homeScore = parseInt(home.score, 10);
+    const awayScore = parseInt(away.score, 10);
+    if (Number.isNaN(homeScore) || Number.isNaN(awayScore)) continue;
+
+    const homeWon = home.winner === true || home.winner === 'true' || homeScore > awayScore;
+    const sameConf = ht.conf && at.conf && ht.conf === at.conf;
+
+    if (homeWon) {
+      ht.w++; at.l++;
+      if (sameConf) { ht.cw++; at.cl++; }
+      ht.recent.push('W'); at.recent.push('L');
+    } else {
+      at.w++; ht.l++;
+      if (sameConf) { at.cw++; ht.cl++; }
+      at.recent.push('W'); ht.recent.push('L');
+    }
+  }
+
+  return {
+    teams,
+    allGamesCount: allGames.length,
+    meta: {
+      totalDates: dates.length,
+      datesFetched,
+      datesFromCache,
+      datesSkipped,
+      timeExhausted,
+      elapsedMs: Date.now() - startTime,
+    },
+  };
+}
+
+// Cache-aware entry point. Returns the most recent aggregated teams map, doing
+// a fresh scan only if the cache is stale, and deduping concurrent cold scans.
+// Partial scans (hit the time budget) are NOT cached — the next request will
+// re-run doFullScan and pick up where we left off via the accumulating dayCache.
+async function getAggregatedTeams() {
+  if (teamsCache && Date.now() - teamsCache.fetchedAt < TEAMS_CACHE_TTL_MS) {
+    return teamsCache;
+  }
+  if (teamsCachePromise) return teamsCachePromise;
+
+  teamsCachePromise = (async () => {
+    const result = await doFullScan();
+    const payload = { fetchedAt: Date.now(), ...result };
+    if (!result.meta.timeExhausted) {
+      teamsCache = payload;
+    }
+    return payload;
+  })();
+  try {
+    return await teamsCachePromise;
+  } finally {
+    teamsCachePromise = null;
+  }
 }
 
 // Fetch one date and return a rich metadata object. Used by both the
@@ -204,91 +422,9 @@ export async function GET(request) {
   }
 
   try {
+    const { teams, allGamesCount, meta: scanMeta } = await getAggregatedTeams();
     const now = new Date();
-    const year = now.getUTCFullYear();
-    const dates = dateRange(year, SEASON_START.month, SEASON_START.day, now);
 
-    // Cap parallelism a bit to be polite to NCAA
-    const batchSize = 20;
-    const allGames = [];
-    for (let i = 0; i < dates.length; i += batchSize) {
-      const batch = dates.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map(fetchDay));
-      results.forEach((d) => {
-        const list = d.games || d.data || d.scoreboard?.games || [];
-        list.forEach((g) => {
-          const game = g.game || g;
-          if (isFinal(game)) allGames.push(game);
-        });
-      });
-    }
-
-    // Tally W/L per team
-    const teams = new Map(); // key: team name, value: { name, logo, conf, w, l, cw, cl, lastResults: [] }
-    const ensure = (side) => {
-      const name = getTeamName(side);
-      if (!name) return null;
-      if (!teams.has(name)) {
-        teams.set(name, {
-          name,
-          logo: getTeamLogo(side),
-          conf: getConf(side),
-          w: 0, l: 0, cw: 0, cl: 0,
-          recent: [], // 'W' or 'L', most recent appended last
-        });
-      } else {
-        // refresh conf/logo if missing
-        const t = teams.get(name);
-        if (!t.conf) t.conf = getConf(side);
-        if (!t.logo) t.logo = getTeamLogo(side);
-      }
-      return teams.get(name);
-    };
-
-    for (const g of allGames) {
-      const home = g.home || g.homeTeam;
-      const away = g.away || g.awayTeam;
-      if (!home || !away) continue;
-      const ht = ensure(home);
-      const at = ensure(away);
-      if (!ht || !at) continue;
-
-      const homeScore = parseInt(home.score, 10);
-      const awayScore = parseInt(away.score, 10);
-      if (Number.isNaN(homeScore) || Number.isNaN(awayScore)) continue;
-
-      const homeWon = home.winner === true || home.winner === 'true' || homeScore > awayScore;
-      const sameConf = ht.conf && at.conf && ht.conf === at.conf;
-
-      if (homeWon) {
-        ht.w++; at.l++;
-        if (sameConf) { ht.cw++; at.cl++; }
-        ht.recent.push('W'); at.recent.push('L');
-      } else {
-        at.w++; ht.l++;
-        if (sameConf) { at.cw++; ht.cl++; }
-        at.recent.push('W'); ht.recent.push('L');
-      }
-    }
-
-    // Compute streaks from recent results
-    const streak = (rec) => {
-      if (!rec.length) return '';
-      const last = rec[rec.length - 1];
-      let n = 0;
-      for (let i = rec.length - 1; i >= 0 && rec[i] === last; i--) n++;
-      return `${last}${n}`;
-    };
-    const last10 = (rec) => {
-      const slice = rec.slice(-10);
-      const w = slice.filter((x) => x === 'W').length;
-      return `${w}-${slice.length - w}`;
-    };
-
-    const pct = (w, l) => (w + l > 0 ? w / (w + l) : 0);
-
-    // Flat mode: return every team we've seen (not just major confs) as one
-    // big list, keyed by name for easy client-side lookup in Team Compare.
     if (flat) {
       const flatTeams = Array.from(teams.values())
         .filter((t) => t.w + t.l > 0)
@@ -316,10 +452,10 @@ export async function GET(request) {
           teams: flatTeams,
           meta: {
             source: 'data.ncaa.com',
-            datesScanned: dates.length,
-            gamesParsed: allGames.length,
+            gamesParsed: allGamesCount,
             teamsFound: flatTeams.length,
             generatedAt: now.toISOString(),
+            scan: scanMeta,
           },
         },
         { headers: { 'Cache-Control': 'public, max-age=600, s-maxage=600' } }
@@ -336,7 +472,6 @@ export async function GET(request) {
       buckets.get(display).push(t);
     }
 
-    // Sort teams within each conference: conference wins desc, then conf pct, then overall pct
     for (const arr of buckets.values()) {
       arr.sort((a, b) => {
         if (b.cw !== a.cw) return b.cw - a.cw;
@@ -347,7 +482,6 @@ export async function GET(request) {
       });
     }
 
-    // Order conferences in MAJOR_CONFS order
     const conferences = MAJOR_CONFS
       .map((c) => ({ display: c.display, teams: buckets.get(c.display) || [] }))
       .filter((c) => c.teams.length > 0)
@@ -375,7 +509,7 @@ export async function GET(request) {
 
     if (conferences.length === 0) {
       return Response.json(
-        { error: 'No standings could be aggregated from NCAA.com', debug: { datesScanned: dates.length, gamesParsed: allGames.length, teamsFound: teams.size } },
+        { error: 'No standings could be aggregated from NCAA.com', debug: { gamesParsed: allGamesCount, teamsFound: teams.size, scan: scanMeta } },
         { status: 502 }
       );
     }
@@ -385,10 +519,10 @@ export async function GET(request) {
         conferences,
         meta: {
           source: 'data.ncaa.com',
-          datesScanned: dates.length,
-          gamesParsed: allGames.length,
+          gamesParsed: allGamesCount,
           teamsFound: teams.size,
           generatedAt: now.toISOString(),
+          scan: scanMeta,
         },
       },
       { headers: { 'Cache-Control': 'public, max-age=600, s-maxage=600' } }
