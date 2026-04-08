@@ -66,34 +66,70 @@ const inFlight = new Map();          // teamId  -> Promise
 const NCAA_TEAM_LB_TTL_MS = 10 * 60 * 1000;
 const ncaaTeamLbCache = new Map();    // slug -> { fetchedAt, data }
 
+// ncaa-api.henrygd.me throttles with HTTP 428 after ~5-6 parallel requests,
+// same pattern the standings route documented in commit 5b32d2d. We batch
+// at 4 concurrent with a small delay and retry transient failures.
+const NCAA_BATCH_SIZE = 4;
+const NCAA_BATCH_DELAY_MS = 150;
+const NCAA_RETRY_DELAYS_MS = [500, 1000, 2000];
+const NCAA_SCAN_BUDGET_MS = 7000;
+
 const NCAA_HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Accept': 'application/json',
 };
 
-// Ground-truth slug → {id, title} map. Totals are preferred over per-game
-// variants where both exist because the head-to-head Team Compare view in
-// page.js displays raw string values — totals compare more cleanly.
+// Fetch an NCAA wrapper URL with retries for 428/429/5xx/network errors.
+// Returns parsed JSON on success, null on any non-recoverable failure or
+// after all retries exhausted. Matches standings/route.js fetchDay.
+async function fetchNcaaWithRetry(url) {
+  for (let attempt = 0; attempt <= NCAA_RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, NCAA_RETRY_DELAYS_MS[attempt - 1]));
+    }
+    try {
+      const r = await fetch(url, { headers: NCAA_HEADERS, cache: 'no-store' });
+      if (r.ok) return await r.json();
+      if (r.status === 404) return null;
+      // 428/429/5xx → retry. Any other 4xx → give up, nothing to retry.
+      if (r.status !== 428 && r.status !== 429 && r.status < 500) return null;
+    } catch (e) {
+      // network error — fall through to retry.
+    }
+  }
+  return null;
+}
+
+// Ground-truth slug → { id, title, col } map. Totals are preferred over
+// per-game variants where both exist because the head-to-head Team Compare
+// view in page.js displays raw string values — totals compare more cleanly.
+// `col` is the exact column name the leaderboard uses for the primary stat
+// value, verified by probing each leaderboard's first data row. NCAA names
+// these inconsistently (OBP is under "PCT", SLG is under "SLG PCT" with a
+// space, doubles leaderboard is sorted per-game but we read the "2B" total
+// column), so the generic candidate-list fallback in pickNcaaPrimaryValue
+// would pick the wrong column for several slugs.
+//
 // Additional team stat IDs found during the sweep that we may want to
 // curate later: 283 Fielding%, 284 Scoring (runs/game), 320 WL%, 345 HR/G,
 // 347 3B/G, 348 SB/G, 350 Double Plays/G, 595 Hit Batters, 1188 K/BB Ratio,
 // 1230 Hits Allowed/7, 1234 HBP, 1241 Sac Bunts, 1242 Sac Flies, 1300 RBI/G.
 const NCAA_TEAM_STAT_IDS = {
-  'team-batting-avg':  { id: 281,  title: 'Batting Average' },
-  'team-on-base-pct':  { id: 862,  title: 'On Base Percentage' },
-  'team-slugging-pct': { id: 349,  title: 'Slugging Percentage' },
-  'team-home-runs':    { id: 1228, title: 'Home Runs' },
-  'team-rbi':          { id: 1299, title: 'Runs Batted In' },
-  'team-runs-scored':  { id: 1238, title: 'Total Runs' },
-  'team-hits':         { id: 1229, title: 'Hits' },
-  'team-stolen-bases': { id: 1239, title: 'Total Stolen Bases' },
-  'team-doubles':      { id: 346,  title: 'Doubles per Game' },
-  'team-triples':      { id: 1227, title: 'Triples' },
-  'team-era':          { id: 282,  title: 'Earned Run Average' },
-  'team-whip':         { id: 1236, title: 'WHIP' },
-  'team-k-per-7':      { id: 864,  title: 'Strikeouts Per Seven Innings' },
-  'team-shutouts':     { id: 1084, title: 'Shutouts' },
+  'team-batting-avg':  { id: 281,  title: 'Batting Average',            col: 'BA' },
+  'team-on-base-pct':  { id: 862,  title: 'On Base Percentage',         col: 'PCT' },
+  'team-slugging-pct': { id: 349,  title: 'Slugging Percentage',        col: 'SLG PCT' },
+  'team-home-runs':    { id: 1228, title: 'Home Runs',                  col: 'HR' },
+  'team-rbi':          { id: 1299, title: 'Runs Batted In',             col: 'RBI' },
+  'team-runs-scored':  { id: 1238, title: 'Total Runs',                 col: 'R' },
+  'team-hits':         { id: 1229, title: 'Hits',                       col: 'H' },
+  'team-stolen-bases': { id: 1239, title: 'Total Stolen Bases',         col: 'SB' },
+  'team-doubles':      { id: 346,  title: 'Doubles',                    col: '2B' },
+  'team-triples':      { id: 1227, title: 'Triples',                    col: '3B' },
+  'team-era':          { id: 282,  title: 'Earned Run Average',         col: 'ERA' },
+  'team-whip':         { id: 1236, title: 'WHIP',                       col: 'WHIP' },
+  'team-k-per-7':      { id: 864,  title: 'Strikeouts Per Seven Innings', col: 'K/7' },
+  'team-shutouts':     { id: 1084, title: 'Shutouts',                   col: 'SHO' },
 };
 
 // Curated categories. `lower` marks pitching stats where smaller is better
@@ -127,12 +163,14 @@ const NCAA_ALL_TEAM_CATS = [
     side: 'batting',
     id: NCAA_TEAM_STAT_IDS[c.slug]?.id,
     label: NCAA_TEAM_STAT_IDS[c.slug]?.title,
+    col: NCAA_TEAM_STAT_IDS[c.slug]?.col,
   })),
   ...NCAA_TEAM_PITCHING.map((c) => ({
     ...c,
     side: 'pitching',
     id: NCAA_TEAM_STAT_IDS[c.slug]?.id,
     label: NCAA_TEAM_STAT_IDS[c.slug]?.title,
+    col: NCAA_TEAM_STAT_IDS[c.slug]?.col,
   })),
 ];
 
@@ -142,24 +180,19 @@ async function fetchNcaaTeamLeaderboard(cat) {
 
   if (!cat.id) return null;
   const url = `https://ncaa-api.henrygd.me/stats/softball/d1/current/team/${cat.id}`;
-  try {
-    const r = await fetch(url, { headers: NCAA_HEADERS, cache: 'no-store' });
-    if (!r.ok) return null;
-    const json = await r.json();
-    const data = {
-      slug: cat.slug,
-      id: cat.id,
-      label: cat.label,
-      short: cat.short,
-      side: cat.side,
-      lower: cat.lower,
-      rows: json.data || [],
-    };
-    ncaaTeamLbCache.set(cat.slug, { fetchedAt: Date.now(), data });
-    return data;
-  } catch (e) {
-    return null;
-  }
+  const json = await fetchNcaaWithRetry(url);
+  if (!json) return null;
+  const data = {
+    slug: cat.slug,
+    id: cat.id,
+    label: cat.label,
+    short: cat.short,
+    side: cat.side,
+    lower: cat.lower,
+    rows: json.data || [],
+  };
+  ncaaTeamLbCache.set(cat.slug, { fetchedAt: Date.now(), data });
+  return data;
 }
 
 // Find a team's row in a single NCAA leaderboard. Pass 1 does an exact
@@ -195,11 +228,19 @@ function findNcaaTeamRow(rows, nameVariantSet) {
   return null;
 }
 
-// Pluck the most-likely "primary" stat value out of a leaderboard row.
-// NCAA team-leaderboard rows include the sort column under various column
-// names depending on the stat — we try a handful in order.
+// Pluck the primary stat value out of a leaderboard row. Prefers the
+// explicit column hint from NCAA_TEAM_STAT_IDS (`cat.col`) because NCAA's
+// column naming is inconsistent across leaderboards — OBP is under "PCT",
+// SLG is under "SLG PCT" with a space, etc. Without the hint, the generic
+// candidate list would pick the first matching column (often a counting
+// stat like H or AB), which is why an earlier run showed OBP as "483"
+// (really the hit total) and SLG as "1129" (really the at-bat count).
 function pickNcaaPrimaryValue(row, cat) {
   if (!row) return null;
+  if (cat.col && row[cat.col] != null && row[cat.col] !== '') {
+    return row[cat.col];
+  }
+  // Fallback candidate list for any slug that doesn't have a col hint.
   const candidates = [
     cat.short,
     cat.label,
@@ -211,7 +252,7 @@ function pickNcaaPrimaryValue(row, cat) {
   for (const k of candidates) {
     if (row[k] != null && row[k] !== '') return row[k];
   }
-  // Last resort: first non-meta key
+  // Last resort: first non-meta key.
   const META = new Set(['Rank', 'RANK', 'rank', 'Team', 'TEAM', 'team', 'School', 'school', 'Conference', 'Conf', 'Cl', 'CL', 'G', 'GP']);
   for (const [k, v] of Object.entries(row)) {
     if (META.has(k)) continue;
@@ -220,10 +261,13 @@ function pickNcaaPrimaryValue(row, cat) {
   return null;
 }
 
-// Aggregate NCAA team-level totals for one team. Fetches every curated team
-// leaderboard in parallel (cached per-slug, so warm calls are essentially
-// free), finds this team's row in each, and returns a normalized totals
-// object. No discovery step — the slug → id mapping is hardcoded above.
+// Aggregate NCAA team-level totals for one team. Walks the curated stat
+// list in throttled batches (4 concurrent with a short delay between
+// batches) because the henrygd wrapper throttles with HTTP 428 above that
+// threshold; fetchNcaaWithRetry handles the transient retries inside each
+// batch. Cached results short-circuit the fetch entirely, so warm calls
+// are essentially free. A 7s wall-clock budget matches standings/route.js
+// so slow upstreams can't push this past Vercel's 10s request timeout.
 async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
   if (!nameVariantSet || nameVariantSet.size === 0) {
     return {
@@ -237,7 +281,25 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
   }
 
   const cats = NCAA_ALL_TEAM_CATS;
-  const results = await Promise.all(cats.map((c) => fetchNcaaTeamLeaderboard(c)));
+  const results = new Array(cats.length).fill(null);
+  const startTime = Date.now();
+  let timeExhausted = false;
+
+  for (let i = 0; i < cats.length; i += NCAA_BATCH_SIZE) {
+    if (Date.now() - startTime > NCAA_SCAN_BUDGET_MS) {
+      timeExhausted = true;
+      break;
+    }
+    const batchEnd = Math.min(i + NCAA_BATCH_SIZE, cats.length);
+    const batch = cats.slice(i, batchEnd);
+    const batchResults = await Promise.all(batch.map((c) => fetchNcaaTeamLeaderboard(c)));
+    for (let k = 0; k < batch.length; k++) {
+      results[i + k] = batchResults[k];
+    }
+    if (batchEnd < cats.length) {
+      await new Promise((r) => setTimeout(r, NCAA_BATCH_DELAY_MS));
+    }
+  }
 
   const batting = {};
   const pitching = {};
@@ -248,8 +310,11 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
     const cat = cats[i];
     const lb = results[i];
     if (!lb) {
-      // Upstream fetch failed, 4xx/5xx, or unknown stat id.
-      slugStatus[cat.slug] = cat.id ? 'fetch-failed' : 'no-id';
+      // Upstream fetch failed, 4xx/5xx, unknown stat id, or we ran out
+      // of time before this batch fired.
+      if (!cat.id) slugStatus[cat.slug] = 'no-id';
+      else if (timeExhausted && results[i] == null) slugStatus[cat.slug] = 'time-exhausted';
+      else slugStatus[cat.slug] = 'fetch-failed';
       continue;
     }
     if (!lb.rows || lb.rows.length === 0) {
@@ -280,6 +345,8 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
     pitching,
     found,
     attempted: cats.length,
+    timeExhausted,
+    elapsedMs: Date.now() - startTime,
     slugStatus,
   };
 }
@@ -732,6 +799,8 @@ async function computeTeamStats(teamId) {
         ? {
             found: ncaaTeamStats.found,
             attempted: ncaaTeamStats.attempted,
+            timeExhausted: ncaaTeamStats.timeExhausted,
+            elapsedMs: ncaaTeamStats.elapsedMs,
             slugStatus: ncaaTeamStats.slugStatus,
             error: ncaaTeamStats.error,
           }
