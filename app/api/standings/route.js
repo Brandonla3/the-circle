@@ -1,12 +1,13 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Aggregate D1 softball standings by walking NCAA.com's daily scoreboard JSON
+// Aggregate D1 softball standings by walking NCAA's daily scoreboard JSON
 // from the start of the season to today, tallying W/L per team and grouping
-// by the conference the NCAA feed already attaches to each team.
+// by the conference NCAA already attaches to each team.
 //
-// Endpoint shape (confirmed working for NCAA softball):
-//   https://data.ncaa.com/casablanca/scoreboard/softball-women/d1/YYYY/MM/DD/scoreboard.json
+// We use the free ncaa-api.henrygd.me wrapper which proxies the live NCAA.com
+// scoreboard data (the old data.ncaa.com/casablanca endpoints have been retired).
+//   https://ncaa-api.henrygd.me/scoreboard/softball/d1/YYYY/MM/DD
 
 const SEASON_START = { month: 2, day: 1 }; // Feb 1
 const HEADERS = {
@@ -44,7 +45,7 @@ function dateRange(startY, startM, startD, end) {
 }
 
 async function fetchDay(date) {
-  const url = `https://data.ncaa.com/casablanca/scoreboard/softball-women/d1/${date.getUTCFullYear()}/${pad(date.getUTCMonth() + 1)}/${pad(date.getUTCDate())}/scoreboard.json`;
+  const url = `https://ncaa-api.henrygd.me/scoreboard/softball/d1/${date.getUTCFullYear()}/${pad(date.getUTCMonth() + 1)}/${pad(date.getUTCDate())}`;
   try {
     const r = await fetch(url, { headers: HEADERS, cache: 'no-store' });
     if (!r.ok) return { games: [] };
@@ -61,7 +62,7 @@ function getConf(side) {
     const c = side.conferences[0];
     return c.conferenceName || c.name || '';
   }
-  return side.conference || side.conferenceName || '';
+  return side.conference || side.conferenceName || side.conferenceSeo || '';
 }
 
 function getTeamName(side) {
@@ -71,6 +72,7 @@ function getTeamName(side) {
     side?.names?.seo ||
     side?.nameRaw ||
     side?.name ||
+    side?.school ||
     ''
   );
 }
@@ -107,7 +109,8 @@ export async function GET() {
       const batch = dates.slice(i, i + batchSize);
       const results = await Promise.all(batch.map(fetchDay));
       results.forEach((d) => {
-        (d.games || []).forEach((g) => {
+        const list = d.games || d.data || d.scoreboard?.games || [];
+        list.forEach((g) => {
           const game = g.game || g;
           if (isFinal(game)) allGames.push(game);
         });
