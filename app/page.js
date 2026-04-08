@@ -1413,7 +1413,30 @@ function TeamCompareTab({ home, away, rankings }) {
   // ---------------- Players sub-tab ----------------
   const renderRosterTable = (stats, group) => {
     const rows = stats?.players?.[group] || [];
-    if (rows.length === 0) return <div className="text-white/30 text-xs text-center py-4">No data</div>;
+    if (rows.length === 0) {
+      // Empty roster usually means ESPN had no box-score data for this team
+      // in any of the season's games. Use the response meta to spell out
+      // exactly what was found so the user knows whether the issue is
+      // "schedule had zero completed games" vs "schedule had games but
+      // none had box scores for this team".
+      const m = stats?.meta;
+      let detail = 'ESPN returned no box-score data for this team.';
+      if (m) {
+        if (m.completedEvents === 0) {
+          detail = `ESPN's schedule for this team has 0 completed games (${m.scheduleEvents || 0} total scheduled).`;
+        } else if (group === 'batting' && m.gamesWithBatting === 0) {
+          detail = `0 of ${m.completedEvents} completed games had box-score batting data for this team.`;
+        } else if (group === 'pitching' && m.gamesWithPitching === 0) {
+          detail = `0 of ${m.completedEvents} completed games had box-score pitching data for this team.`;
+        }
+      }
+      return (
+        <div className="rounded-lg border border-white/5 bg-white/[0.01] p-4 text-center">
+          <div className="text-white/40 text-xs mb-1">No box-score data</div>
+          <div className="text-white/30 text-[10px] mono">{detail}</div>
+        </div>
+      );
+    }
     const isBatting = group === 'batting';
     return (
       <div className="overflow-x-auto rounded-lg border border-white/5">

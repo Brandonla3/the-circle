@@ -427,13 +427,134 @@ async function getTeamStats(teamId) {
   }
 }
 
+// Debug-mode scan: same shape as computeTeamStats but captures rich
+// per-event diagnostics so we can see WHY a team is showing up empty.
+// Bypasses the team-stats cache (we want fresh data) but still uses the
+// per-event summary cache so it doesn't re-hit ESPN if we already have it.
+async function computeTeamStatsDebug(teamId) {
+  const startTime = Date.now();
+  const scheduleUrl = `${ESPN_SITE}/teams/${teamId}/schedule`;
+  const schedule = await fetchWithRetry(scheduleUrl);
+  const events = schedule?.events || [];
+
+  const completed = events.filter((ev) => {
+    const comp = ev.competitions?.[0];
+    const st = comp?.status?.type || ev.status?.type;
+    return st?.state === 'post' || st?.completed === true;
+  });
+
+  const eventDiagnostics = [];
+  let gamesWithBatting = 0;
+  let gamesWithPitching = 0;
+  let timeExhausted = false;
+
+  for (let i = 0; i < completed.length; i += BATCH_SIZE) {
+    if (Date.now() - startTime > SCAN_BUDGET_MS) {
+      timeExhausted = true;
+      break;
+    }
+    const batch = completed.slice(i, i + BATCH_SIZE);
+    const summaries = await Promise.all(
+      batch.map((ev) => fetchEventSummary(ev.id, ev.date))
+    );
+    for (let k = 0; k < summaries.length; k++) {
+      const ev = batch[k];
+      const s = summaries[k];
+      if (!s) {
+        eventDiagnostics.push({
+          eventId: String(ev.id),
+          name: ev.shortName || ev.name,
+          date: ev.date,
+          summaryFetched: false,
+          reason: 'fetch returned null',
+        });
+        continue;
+      }
+      // Capture which team IDs ESPN attached to this game's box score
+      // and whether our requested teamId matched any of them.
+      const players = s.boxscore?.players || [];
+      const teamSlots = players.map((p) => ({
+        id: String(p.team?.id ?? ''),
+        name: p.team?.displayName || p.team?.name || '',
+        statsGroups: (p.statistics || []).map((g) => ({
+          name: g.name || g.text || null,
+          labels: g.labels || null,
+          athleteCount: g.athletes?.length || 0,
+        })),
+      }));
+      const matchedSlot = teamSlots.find((t) => t.id === String(teamId));
+
+      // Mirror what extractTeamFromBoxscore would do, but track per-event
+      // outcomes for the debug response.
+      let extractedBatting = 0;
+      let extractedPitching = 0;
+      if (matchedSlot) {
+        const extracted = extractTeamFromBoxscore(s, teamId);
+        if (extracted) {
+          extractedBatting = extracted.batting.size;
+          extractedPitching = extracted.pitching.size;
+          if (extractedBatting > 0) gamesWithBatting++;
+          if (extractedPitching > 0) gamesWithPitching++;
+        }
+      }
+
+      eventDiagnostics.push({
+        eventId: String(ev.id),
+        name: ev.shortName || ev.name,
+        date: ev.date,
+        summaryFetched: true,
+        boxscoreTeamCount: teamSlots.length,
+        teamSlots,
+        teamMatched: !!matchedSlot,
+        extractedBatting,
+        extractedPitching,
+      });
+    }
+    if (i + BATCH_SIZE < completed.length) {
+      await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+    }
+  }
+
+  return {
+    teamId: String(teamId),
+    season: new Date().getUTCFullYear(),
+    scheduleUrl,
+    summary: {
+      scheduleEvents: events.length,
+      completedEvents: completed.length,
+      diagnosed: eventDiagnostics.length,
+      timeExhausted,
+      elapsedMs: Date.now() - startTime,
+      gamesWithBatting,
+      gamesWithPitching,
+      gamesWhereTeamMatched: eventDiagnostics.filter((e) => e.teamMatched).length,
+      gamesWhereTeamMissing: eventDiagnostics.filter((e) => e.summaryFetched && !e.teamMatched).length,
+      gamesWhereSummaryFailed: eventDiagnostics.filter((e) => !e.summaryFetched).length,
+    },
+    // First 5 completed events as raw scheduleEvent samples (for shape verification)
+    scheduleSample: completed.slice(0, 5).map((ev) => ({
+      id: String(ev.id),
+      date: ev.date,
+      shortName: ev.shortName,
+      competitorIds: ev.competitions?.[0]?.competitors?.map((c) => String(c.team?.id || c.id || '')) || [],
+      statusState: ev.competitions?.[0]?.status?.type?.state || null,
+    })),
+    eventDiagnostics: eventDiagnostics.slice(0, 25), // cap response size
+  };
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamId = searchParams.get('teamId');
+  const debug = searchParams.get('debug');
   if (!teamId) {
     return Response.json({ error: 'teamId required' }, { status: 400 });
   }
   try {
+    if (debug) {
+      const data = await computeTeamStatsDebug(teamId);
+      return Response.json(data, { headers: { 'Cache-Control': 'no-store' } });
+    }
     const data = await getTeamStats(teamId);
     return Response.json(data, {
       headers: { 'Cache-Control': 'public, max-age=300, s-maxage=300' },
