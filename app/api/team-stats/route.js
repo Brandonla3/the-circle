@@ -64,7 +64,10 @@ const inFlight = new Map();          // teamId  -> Promise
 // will start reporting `empty-leaderboard` for the affected slug and a
 // quick re-sweep will give us the new id.
 const NCAA_TEAM_LB_TTL_MS = 10 * 60 * 1000;
-const ncaaTeamLbCache = new Map();    // slug -> { fetchedAt, data }
+// Keyed by `${slug}:p${page}`. Each curated slug may end up with multiple
+// cached page entries after a scan walks a leaderboard in search of a
+// specific team.
+const ncaaTeamLbCache = new Map();
 
 // ncaa-api.henrygd.me throttles with HTTP 428 after ~5-6 parallel requests,
 // same pattern the standings route documented in commit 5b32d2d. We batch
@@ -73,6 +76,12 @@ const NCAA_BATCH_SIZE = 4;
 const NCAA_BATCH_DELAY_MS = 150;
 const NCAA_RETRY_DELAYS_MS = [500, 1000, 2000];
 const NCAA_SCAN_BUDGET_MS = 7000;
+
+// Each leaderboard page returns 50 rows. D1 softball has ~290 teams, so 7
+// pages covers everyone; we cap at 8 as a safety margin in case NCAA grows
+// the field. The per-leaderboard `pages` metadata from the wrapper still
+// governs the actual walk — we just never fetch beyond this cap.
+const NCAA_MAX_PAGES = 8;
 
 const NCAA_HEADERS = {
   'User-Agent':
@@ -174,12 +183,16 @@ const NCAA_ALL_TEAM_CATS = [
   })),
 ];
 
-async function fetchNcaaTeamLeaderboard(cat) {
-  const cached = ncaaTeamLbCache.get(cat.slug);
+// Fetch a single page of one NCAA team leaderboard. Cached per-(slug, page)
+// so repeated calls across teams only hit the wrapper once per TTL window.
+async function fetchNcaaTeamLeaderboardPage(cat, page) {
+  if (!cat.id) return null;
+  const key = `${cat.slug}:p${page}`;
+  const cached = ncaaTeamLbCache.get(key);
   if (cached && Date.now() - cached.fetchedAt < NCAA_TEAM_LB_TTL_MS) return cached.data;
 
-  if (!cat.id) return null;
-  const url = `https://ncaa-api.henrygd.me/stats/softball/d1/current/team/${cat.id}`;
+  const suffix = page > 1 ? `/p${page}` : '';
+  const url = `https://ncaa-api.henrygd.me/stats/softball/d1/current/team/${cat.id}${suffix}`;
   const json = await fetchNcaaWithRetry(url);
   if (!json) return null;
   const data = {
@@ -189,10 +202,42 @@ async function fetchNcaaTeamLeaderboard(cat) {
     short: cat.short,
     side: cat.side,
     lower: cat.lower,
+    page: json.page || page,
+    totalPages: json.pages || 1,
     rows: json.data || [],
   };
-  ncaaTeamLbCache.set(cat.slug, { fetchedAt: Date.now(), data });
+  ncaaTeamLbCache.set(key, { fetchedAt: Date.now(), data });
   return data;
+}
+
+// Walk an NCAA team leaderboard starting at page 1, looking for the target
+// team. Stops as soon as the team is found, when we hit the wrapper's
+// reported last page, or when we hit NCAA_MAX_PAGES. Each page is fetched
+// sequentially within this helper — but the CALLER runs multiple slugs in
+// parallel batches, so overall concurrency stays at NCAA_BATCH_SIZE.
+//
+// This is what gets teams like Oklahoma (rank 54 in Doubles per Game)
+// unstuck — they're not in the first 50 rows, so a single-page fetch used
+// to report team-not-in-rows for every leaderboard where the team isn't
+// a leader.
+async function fetchAndFindNcaaRow(cat, nameVariantSet) {
+  let lastLb = null;
+  let pagesFetched = 0;
+  let fetchFailed = false;
+  for (let page = 1; page <= NCAA_MAX_PAGES; page++) {
+    const lb = await fetchNcaaTeamLeaderboardPage(cat, page);
+    if (!lb) {
+      if (page === 1) fetchFailed = true;
+      break;
+    }
+    pagesFetched++;
+    lastLb = lb;
+    if (!lb.rows || lb.rows.length === 0) break;
+    const row = findNcaaTeamRow(lb.rows, nameVariantSet);
+    if (row) return { lb, row, pagesFetched, fetchFailed: false };
+    if (page >= lb.totalPages) break;
+  }
+  return { lb: lastLb, row: null, pagesFetched, fetchFailed };
 }
 
 // Find a team's row in a single NCAA leaderboard. Pass 1 does an exact
@@ -262,12 +307,15 @@ function pickNcaaPrimaryValue(row, cat) {
 }
 
 // Aggregate NCAA team-level totals for one team. Walks the curated stat
-// list in throttled batches (4 concurrent with a short delay between
-// batches) because the henrygd wrapper throttles with HTTP 428 above that
-// threshold; fetchNcaaWithRetry handles the transient retries inside each
-// batch. Cached results short-circuit the fetch entirely, so warm calls
-// are essentially free. A 7s wall-clock budget matches standings/route.js
-// so slow upstreams can't push this past Vercel's 10s request timeout.
+// list in throttled batches (NCAA_BATCH_SIZE concurrent with a short delay
+// between batches) because the henrygd wrapper throttles with HTTP 428
+// above that threshold. Each slug inside a batch may step through multiple
+// leaderboard pages via fetchAndFindNcaaRow — the wrapper returns only 50
+// rows per page and D1 softball has ~290 teams, so teams outside the top
+// 50 of a given stat were previously reporting team-not-in-rows. Cached
+// results short-circuit the fetch entirely, so warm calls are free. A 7s
+// wall-clock budget matches standings/route.js so slow upstreams can't
+// push this past Vercel's 10s request timeout.
 async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
   if (!nameVariantSet || nameVariantSet.size === 0) {
     return {
@@ -281,6 +329,7 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
   }
 
   const cats = NCAA_ALL_TEAM_CATS;
+  // results[i] = { lb, row, pagesFetched, fetchFailed } | null
   const results = new Array(cats.length).fill(null);
   const startTime = Date.now();
   let timeExhausted = false;
@@ -292,7 +341,9 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
     }
     const batchEnd = Math.min(i + NCAA_BATCH_SIZE, cats.length);
     const batch = cats.slice(i, batchEnd);
-    const batchResults = await Promise.all(batch.map((c) => fetchNcaaTeamLeaderboard(c)));
+    const batchResults = await Promise.all(
+      batch.map((c) => fetchAndFindNcaaRow(c, nameVariantSet))
+    );
     for (let k = 0; k < batch.length; k++) {
       results[i + k] = batchResults[k];
     }
@@ -304,29 +355,37 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
   const batting = {};
   const pitching = {};
   let found = 0;
+  let totalPagesFetched = 0;
   const slugStatus = {};
+  const pagesFetchedBySlug = {};
 
   for (let i = 0; i < cats.length; i++) {
     const cat = cats[i];
-    const lb = results[i];
-    if (!lb) {
-      // Upstream fetch failed, 4xx/5xx, unknown stat id, or we ran out
-      // of time before this batch fired.
-      if (!cat.id) slugStatus[cat.slug] = 'no-id';
-      else if (timeExhausted && results[i] == null) slugStatus[cat.slug] = 'time-exhausted';
-      else slugStatus[cat.slug] = 'fetch-failed';
+    const r = results[i];
+    if (!r) {
+      // Scan budget tripped before this slug's batch fired.
+      slugStatus[cat.slug] = cat.id ? 'time-exhausted' : 'no-id';
       continue;
     }
-    if (!lb.rows || lb.rows.length === 0) {
+    totalPagesFetched += r.pagesFetched || 0;
+    if (r.pagesFetched > 0) pagesFetchedBySlug[cat.slug] = r.pagesFetched;
+    if (r.fetchFailed || !r.lb) {
+      slugStatus[cat.slug] = cat.id ? 'fetch-failed' : 'no-id';
+      continue;
+    }
+    if (!r.lb.rows || r.lb.rows.length === 0) {
       slugStatus[cat.slug] = 'empty-leaderboard';
       continue;
     }
-    const row = findNcaaTeamRow(lb.rows, nameVariantSet);
-    if (!row) {
+    if (!r.row) {
+      // Walked every page the wrapper reports and still didn't find this
+      // team — either the team genuinely isn't ranked (possible for some
+      // esoteric stats) or the name-match logic needs another alias for
+      // this particular school.
       slugStatus[cat.slug] = 'team-not-in-rows';
       continue;
     }
-    const value = pickNcaaPrimaryValue(row, cat);
+    const value = pickNcaaPrimaryValue(r.row, cat);
     if (value == null || value === '') {
       slugStatus[cat.slug] = 'no-value';
       continue;
@@ -335,8 +394,8 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
     slugStatus[cat.slug] = 'ok';
     const target = cat.side === 'batting' ? batting : pitching;
     target[cat.short] = value;
-    if (row.Rank || row.RANK || row.rank) {
-      target[`${cat.short}_rank`] = row.Rank || row.RANK || row.rank;
+    if (r.row.Rank || r.row.RANK || r.row.rank) {
+      target[`${cat.short}_rank`] = r.row.Rank || r.row.RANK || r.row.rank;
     }
   }
 
@@ -347,6 +406,8 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
     attempted: cats.length,
     timeExhausted,
     elapsedMs: Date.now() - startTime,
+    totalPagesFetched,
+    pagesFetchedBySlug,
     slugStatus,
   };
 }
@@ -801,6 +862,8 @@ async function computeTeamStats(teamId) {
             attempted: ncaaTeamStats.attempted,
             timeExhausted: ncaaTeamStats.timeExhausted,
             elapsedMs: ncaaTeamStats.elapsedMs,
+            totalPagesFetched: ncaaTeamStats.totalPagesFetched,
+            pagesFetchedBySlug: ncaaTeamStats.pagesFetchedBySlug,
             slugStatus: ncaaTeamStats.slugStatus,
             error: ncaaTeamStats.error,
           }
