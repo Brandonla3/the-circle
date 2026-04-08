@@ -2,10 +2,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, BarChart3, Activity } from 'lucide-react';
 
-// ESPN is inconsistent: scoreboard/teams/rankings live under baseball/college-softball,
-// but the summary endpoint lives under softball/college-softball.
 const ESPN_SITE = 'https://site.api.espn.com/apis/site/v2/sports/baseball/college-softball';
-const ESPN_WEBAPI = 'https://site.web.api.espn.com/apis/site/v2/sports/softball/college-softball';
+const ESPN_WEBAPI = 'https://site.web.api.espn.com/apis/site/v2/sports/baseball/college-softball';
 const proxy = (url) => `/api/espn?url=${encodeURIComponent(url)}`;
 
 const fmtDate = (d) => {
