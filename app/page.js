@@ -1045,19 +1045,31 @@ function StandingsView() {
   const [error, setError] = useState(null);
   const [showAll, setShowAll] = useState(false);
 
+  const [debug, setDebug] = useState(null);
   useEffect(() => {
     (async () => {
       try {
         const r = await fetch('/api/standings');
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const json = await r.json();
-        if (json.error) throw new Error(json.error);
+        const json = await r.json().catch(() => ({}));
+        if (!r.ok || json.error) {
+          setDebug(json.debug || null);
+          throw new Error(json.error || `HTTP ${r.status}`);
+        }
         setData(json);
       } catch (e) { setError(e.message); }
     })();
   }, []);
 
-  if (error) return <div className="text-center py-20 text-red-400 text-sm">Error loading standings: {error}</div>;
+  if (error) return (
+    <div className="py-20 text-center">
+      <div className="text-red-400 text-sm mb-4">Error loading standings: {error}</div>
+      {debug && (
+        <pre className="inline-block text-left text-[10px] mono text-white/40 bg-white/[0.02] border border-white/5 rounded-lg p-4 max-w-2xl overflow-x-auto">
+          {JSON.stringify(debug, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
   if (!data) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading standings…</div>;
 
   const conferences = data.conferences || [];
