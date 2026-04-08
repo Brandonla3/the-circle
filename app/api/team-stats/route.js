@@ -34,7 +34,14 @@
 //     accumulating per-event cache.
 //   - in-flight dedupe so concurrent requests for the same team share one scan
 
-import { ESPN_SITE, ESPN_HEADERS } from '../_espn.js';
+import {
+  ESPN_SITE,
+  ESPN_HEADERS,
+  normalize,
+  getTeamDirectory,
+  findTeam,
+  findTeamById,
+} from '../_espn.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -128,12 +135,61 @@ async function fetchEventSummary(eventId, eventDate) {
 // Pull the batting + pitching stat lines for a single team out of one
 // game's boxscore.players entry. Returns { batting: Map, pitching: Map }
 // keyed by athlete id, each with per-game counting stats.
-function extractTeamFromBoxscore(summary, teamId) {
-  const players = summary?.boxscore?.players || [];
-  const entry = players.find((p) => String(p.team?.id) === String(teamId));
-  if (!entry) return null;
+// Find the box-score entry for our team. Tries ID match first, then falls
+// back to a normalized name match against any of the variants we know for
+// this team. The ID-mismatch fallback exists because ESPN's college softball
+// scoreboard endpoint and box-score endpoint sometimes use DIFFERENT team
+// ids for the same school (Tennessee uses 611 in both, Oklahoma's scoreboard
+// id ≠ its boxscore id, etc). Without the fallback, those teams aggregate
+// to zero box scores. Returns { entry, matchedBy } or null.
+function findTeamEntry(players, teamId, nameVariantSet) {
+  // Pass 1: exact id match — fastest, works for the majority of teams.
+  for (const p of players) {
+    if (String(p.team?.id ?? '') === String(teamId)) {
+      return { entry: p, matchedBy: 'id' };
+    }
+  }
+  // Pass 2: normalized name match against any of the team's known aliases.
+  if (nameVariantSet && nameVariantSet.size > 0) {
+    for (const p of players) {
+      const t = p.team || {};
+      const candidates = [t.displayName, t.name, t.shortDisplayName, t.location, t.abbreviation, t.nickname];
+      for (const c of candidates) {
+        if (!c) continue;
+        if (nameVariantSet.has(normalize(c))) {
+          return { entry: p, matchedBy: 'name' };
+        }
+      }
+    }
+  }
+  return null;
+}
 
-  const out = { batting: new Map(), pitching: new Map() };
+function buildTeamNameVariantSet(espnTeam) {
+  if (!espnTeam) return new Set();
+  const variants = [
+    espnTeam.displayName,
+    espnTeam.name,
+    espnTeam.shortDisplayName,
+    espnTeam.location,
+    espnTeam.nickname,
+    espnTeam.abbreviation,
+  ];
+  const set = new Set();
+  for (const v of variants) {
+    const n = normalize(v || '');
+    if (n) set.add(n);
+  }
+  return set;
+}
+
+function extractTeamFromBoxscore(summary, teamId, nameVariantSet) {
+  const players = summary?.boxscore?.players || [];
+  const matched = findTeamEntry(players, teamId, nameVariantSet);
+  if (!matched) return null;
+  const entry = matched.entry;
+
+  const out = { batting: new Map(), pitching: new Map(), matchedBy: matched.matchedBy };
 
   for (const group of entry.statistics || []) {
     const labels = group.labels || [];
@@ -323,11 +379,28 @@ function finalize(aggregated, recordStats) {
   };
 }
 
+// Look up the ESPN team in the directory by id and return the set of
+// normalized name variants we'll use as a fallback when the box-score
+// team id doesn't match the scoreboard team id (Oklahoma is a known
+// case of this — same team, two different ids across endpoints).
+async function getTeamNameVariantSet(teamId) {
+  try {
+    const dir = await getTeamDirectory();
+    const team = findTeamById(dir, teamId);
+    return buildTeamNameVariantSet(team);
+  } catch (e) {
+    return new Set();
+  }
+}
+
 // --- Main computation -----------------------------------------------------
 async function computeTeamStats(teamId) {
   const startTime = Date.now();
   const scheduleUrl = `${ESPN_SITE}/teams/${teamId}/schedule`;
-  const schedule = await fetchWithRetry(scheduleUrl);
+  const [schedule, nameVariantSet] = await Promise.all([
+    fetchWithRetry(scheduleUrl),
+    getTeamNameVariantSet(teamId),
+  ]);
   const events = schedule?.events || [];
 
   // Only completed regular-season games. ESPN tags these as state=post on the
@@ -345,6 +418,8 @@ async function computeTeamStats(teamId) {
   let gamesSkipped = 0;
   let gamesWithBatting = 0;   // games that had at least one batter stat line for this team
   let gamesWithPitching = 0;  // games that had at least one pitcher stat line
+  let gamesMatchedById = 0;
+  let gamesMatchedByName = 0;
   let timeExhausted = false;
 
   for (let i = 0; i < completed.length; i += BATCH_SIZE) {
@@ -360,10 +435,12 @@ async function computeTeamStats(teamId) {
     for (let k = 0; k < summaries.length; k++) {
       const s = summaries[k];
       if (!s) { gamesFailed++; continue; }
-      const extracted = extractTeamFromBoxscore(s, teamId);
+      const extracted = extractTeamFromBoxscore(s, teamId, nameVariantSet);
       if (extracted) {
         mergePlayerMaps(aggregated, extracted);
         gamesProcessed++;
+        if (extracted.matchedBy === 'id') gamesMatchedById++;
+        else if (extracted.matchedBy === 'name') gamesMatchedByName++;
         if (extracted.batting.size > 0) gamesWithBatting++;
         if (extracted.pitching.size > 0) gamesWithPitching++;
       } else {
@@ -395,6 +472,8 @@ async function computeTeamStats(teamId) {
       gamesWithPitching,
       gamesFailed,
       gamesSkipped,
+      gamesMatchedById,
+      gamesMatchedByName,
       timeExhausted,
       elapsedMs: Date.now() - startTime,
     },
@@ -434,7 +513,14 @@ async function getTeamStats(teamId) {
 async function computeTeamStatsDebug(teamId) {
   const startTime = Date.now();
   const scheduleUrl = `${ESPN_SITE}/teams/${teamId}/schedule`;
-  const schedule = await fetchWithRetry(scheduleUrl);
+  const [schedule, nameVariantSet, dirEntry] = await Promise.all([
+    fetchWithRetry(scheduleUrl),
+    getTeamNameVariantSet(teamId),
+    (async () => {
+      try { const dir = await getTeamDirectory(); return findTeamById(dir, teamId); }
+      catch { return null; }
+    })(),
+  ]);
   const events = schedule?.events || [];
 
   const completed = events.filter((ev) => {
@@ -446,6 +532,8 @@ async function computeTeamStatsDebug(teamId) {
   const eventDiagnostics = [];
   let gamesWithBatting = 0;
   let gamesWithPitching = 0;
+  let gamesMatchedById = 0;
+  let gamesMatchedByName = 0;
   let timeExhausted = false;
 
   for (let i = 0; i < completed.length; i += BATCH_SIZE) {
@@ -470,8 +558,6 @@ async function computeTeamStatsDebug(teamId) {
         });
         continue;
       }
-      // Capture which team IDs ESPN attached to this game's box score
-      // and whether our requested teamId matched any of them.
       const players = s.boxscore?.players || [];
       const teamSlots = players.map((p) => ({
         id: String(p.team?.id ?? ''),
@@ -482,20 +568,19 @@ async function computeTeamStatsDebug(teamId) {
           athleteCount: g.athletes?.length || 0,
         })),
       }));
-      const matchedSlot = teamSlots.find((t) => t.id === String(teamId));
 
-      // Mirror what extractTeamFromBoxscore would do, but track per-event
-      // outcomes for the debug response.
-      let extractedBatting = 0;
-      let extractedPitching = 0;
-      if (matchedSlot) {
-        const extracted = extractTeamFromBoxscore(s, teamId);
-        if (extracted) {
-          extractedBatting = extracted.batting.size;
-          extractedPitching = extracted.pitching.size;
-          if (extractedBatting > 0) gamesWithBatting++;
-          if (extractedPitching > 0) gamesWithPitching++;
-        }
+      // Try the real extraction (id-first, name-fallback) and capture how
+      // it matched (or failed) so we can see in the response which path
+      // was needed for this team.
+      const extracted = extractTeamFromBoxscore(s, teamId, nameVariantSet);
+      const matchedBy = extracted?.matchedBy || null;
+      const extractedBatting = extracted?.batting?.size || 0;
+      const extractedPitching = extracted?.pitching?.size || 0;
+      if (extracted) {
+        if (matchedBy === 'id') gamesMatchedById++;
+        else if (matchedBy === 'name') gamesMatchedByName++;
+        if (extractedBatting > 0) gamesWithBatting++;
+        if (extractedPitching > 0) gamesWithPitching++;
       }
 
       eventDiagnostics.push({
@@ -505,7 +590,8 @@ async function computeTeamStatsDebug(teamId) {
         summaryFetched: true,
         boxscoreTeamCount: teamSlots.length,
         teamSlots,
-        teamMatched: !!matchedSlot,
+        teamMatched: !!extracted,
+        matchedBy,
         extractedBatting,
         extractedPitching,
       });
@@ -517,8 +603,10 @@ async function computeTeamStatsDebug(teamId) {
 
   return {
     teamId: String(teamId),
+    teamDisplayName: dirEntry?.displayName || null,
     season: new Date().getUTCFullYear(),
     scheduleUrl,
+    nameVariants: Array.from(nameVariantSet),
     summary: {
       scheduleEvents: events.length,
       completedEvents: completed.length,
@@ -527,11 +615,12 @@ async function computeTeamStatsDebug(teamId) {
       elapsedMs: Date.now() - startTime,
       gamesWithBatting,
       gamesWithPitching,
+      gamesMatchedById,
+      gamesMatchedByName,
       gamesWhereTeamMatched: eventDiagnostics.filter((e) => e.teamMatched).length,
       gamesWhereTeamMissing: eventDiagnostics.filter((e) => e.summaryFetched && !e.teamMatched).length,
       gamesWhereSummaryFailed: eventDiagnostics.filter((e) => !e.summaryFetched).length,
     },
-    // First 5 completed events as raw scheduleEvent samples (for shape verification)
     scheduleSample: completed.slice(0, 5).map((ev) => ({
       id: String(ev.id),
       date: ev.date,
@@ -539,17 +628,39 @@ async function computeTeamStatsDebug(teamId) {
       competitorIds: ev.competitions?.[0]?.competitors?.map((c) => String(c.team?.id || c.id || '')) || [],
       statusState: ev.competitions?.[0]?.status?.type?.state || null,
     })),
-    eventDiagnostics: eventDiagnostics.slice(0, 25), // cap response size
+    eventDiagnostics: eventDiagnostics.slice(0, 25),
   };
 }
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const teamId = searchParams.get('teamId');
+  let teamId = searchParams.get('teamId');
+  const teamName = searchParams.get('team');
   const debug = searchParams.get('debug');
-  if (!teamId) {
-    return Response.json({ error: 'teamId required' }, { status: 400 });
+
+  // Allow ?team=Oklahoma so callers don't need to know the numeric ESPN id.
+  // Resolves through the shared team directory the same way the player-photo
+  // and team-roster routes do.
+  if (!teamId && teamName) {
+    try {
+      const dir = await getTeamDirectory();
+      const t = findTeam(dir, teamName);
+      if (!t) {
+        return Response.json(
+          { error: `team '${teamName}' not found in ESPN directory` },
+          { status: 404 }
+        );
+      }
+      teamId = String(t.id);
+    } catch (e) {
+      return Response.json({ error: `team directory lookup failed: ${e.message}` }, { status: 500 });
+    }
   }
+
+  if (!teamId) {
+    return Response.json({ error: 'teamId or team query param required' }, { status: 400 });
+  }
+
   try {
     if (debug) {
       const data = await computeTeamStatsDebug(teamId);
