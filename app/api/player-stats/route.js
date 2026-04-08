@@ -35,7 +35,7 @@ const CATEGORY_BATTING = [
   { slug: 'home-runs',     short: 'HR',   labels: ['Home Runs Per Game', 'Home Runs', 'HR'] },
   { slug: 'rbi',           short: 'RBI',  labels: ['Runs Batted In Per Game', 'Runs Batted In', 'RBI Per Game', 'RBI'] },
   { slug: 'hits',          short: 'H',    labels: ['Hits Per Game', 'Hits'] },
-  { slug: 'runs-scored',   short: 'R',    labels: ['Runs Scored Per Game', 'Runs Scored', 'Runs Per Game', 'Runs'] },
+  { slug: 'runs-scored',   short: 'R',    labels: ['Runs', 'Runs Scored', 'Runs Scored Per Game', 'Runs Per Game'] },
   { slug: 'stolen-bases',  short: 'SB',   labels: ['Stolen Bases Per Game', 'Stolen Bases', 'Stolen Base Pct'] },
   { slug: 'on-base-pct',   short: 'OBP',  labels: ['On Base Percentage', 'On Base Pct', 'OBP'] },
   { slug: 'slugging-pct',  short: 'SLG',  labels: ['Slugging Percentage', 'Slugging Pct', 'SLG'] },
@@ -46,14 +46,13 @@ const CATEGORY_BATTING = [
 
 const CATEGORY_PITCHING = [
   { slug: 'era',              short: 'ERA',  labels: ['Earned Run Average', 'Earned Run Avg', 'ERA'] },
-  { slug: 'wins',             short: 'W',    labels: ['Winning Percentage', 'Wins', 'Pitching Wins'] },
-  { slug: 'strikeouts',       short: 'SO',   labels: ['Strikeouts Per Game', 'Total Strikeouts', 'Strikeouts'] },
-  { slug: 'saves',            short: 'SV',   labels: ['Saves Per Game', 'Saves'] },
-  { slug: 'whip',             short: 'WHIP', labels: ['Walks Hits Per Innings Pitched', 'WHIP'] },
+  { slug: 'wins',             short: 'W',    labels: ['Victories', 'Pitching Wins', 'Wins'] },
+  { slug: 'strikeouts',       short: 'SO',   labels: ['Strikeouts', 'Total Strikeouts', 'Strikeouts Per Game'] },
+  { slug: 'saves',            short: 'SV',   labels: ['Saves', 'Saves Per Game'] },
+  { slug: 'whip',             short: 'WHIP', labels: ['WHIP', 'Walks Hits Per Innings Pitched'] },
   { slug: 'k-per-7',          short: 'K/7',  labels: ['Strikeouts Per Seven Innings', 'Strikeouts Per 7 Innings', 'Strikeouts/7', 'K/7'] },
   { slug: 'innings-pitched',  short: 'IP',   labels: ['Innings Pitched', 'Innings'] },
-  { slug: 'shutouts',         short: 'SHO',  labels: ['Shutouts Per Game', 'Shutouts'] },
-  { slug: 'opponent-ba',      short: 'OBA',  labels: ['Opponent Batting Average', 'Opponent Batting Avg', 'Opponent Avg', 'OBA'] },
+  { slug: 'shutouts',         short: 'SHO',  labels: ['Shutouts', 'Shutouts Per Game'] },
 ];
 
 const ALL_CATEGORIES = [
@@ -198,33 +197,63 @@ async function discoverCategoryIds() {
       if (!normToId.has(norm)) normToId.set(norm, id);
     }
 
-    // For each curated category, accept the first alias that matches any NCAA
-    // label either by full equality or by substring (in either direction).
+    // Two-pass matching with ID uniqueness:
+    //   Pass 1 — exact normalized equality. Every curated category gets a shot
+    //   before we fall back to fuzzier logic. This ensures a short unambiguous
+    //   label like "WHIP" claims its ID before a long alias from a different
+    //   category accidentally substring-matches it.
+    //   Pass 2 — substring containment, but with a length guard so short NCAA
+    //   labels (e.g. "Hits") can't be swallowed by a longer curated alias
+    //   (e.g. "Walks Hits Per Innings Pitched").
+    //
+    // `usedIds` enforces that each NCAA stat ID is claimed by at most one
+    // curated slug, so collisions surface as "missing" in debug instead of
+    // silently pointing two slugs at the same wrong leaderboard.
+    const MIN_SUBSTR_LEN = 6;
     const map = new Map();
+    const usedIds = new Set();
+
+    const claim = (slug, cat, id) => {
+      usedIds.add(id);
+      map.set(slug, {
+        id,
+        label: byId[id] || cat.labels[0],
+        short: cat.short,
+        side: cat.side,
+      });
+    };
+
+    // Pass 1: exact match.
     for (const cat of ALL_CATEGORIES) {
-      let hit = null;
       for (const alias of cat.labels) {
         const a = normalizeLabel(alias);
         if (!a) continue;
-        // Exact normalized match first.
-        if (normToId.has(a)) { hit = { id: normToId.get(a), ncaaLabel: byId[normToId.get(a)] }; break; }
-        // Then substring in either direction.
+        const id = normToId.get(a);
+        if (id && !usedIds.has(id)) {
+          claim(cat.slug, cat, id);
+          break;
+        }
+      }
+    }
+
+    // Pass 2: substring match with length guard, only for still-unmatched.
+    for (const cat of ALL_CATEGORIES) {
+      if (map.has(cat.slug)) continue;
+      let hit = null;
+      for (const alias of cat.labels) {
+        const a = normalizeLabel(alias);
+        if (!a || a.length < MIN_SUBSTR_LEN) continue;
         for (const [nLabel, id] of normToId) {
+          if (usedIds.has(id)) continue;
+          if (nLabel.length < MIN_SUBSTR_LEN) continue;
           if (nLabel.includes(a) || a.includes(nLabel)) {
-            hit = { id, ncaaLabel: byId[id] };
+            hit = id;
             break;
           }
         }
         if (hit) break;
       }
-      if (hit) {
-        map.set(cat.slug, {
-          id: hit.id,
-          label: hit.ncaaLabel || cat.labels[0],
-          short: cat.short,
-          side: cat.side,
-        });
-      }
+      if (hit) claim(cat.slug, cat, hit);
     }
 
     if (map.size === 0) {
