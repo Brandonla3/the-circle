@@ -31,7 +31,7 @@ export default function Page() {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const r = await fetch(proxy(`${ESPN_SITE}/scoreboard?dates=${fmtDate(date)}&groups=100&limit=200`));
+      const r = await fetch(proxy(`${ESPN_SITE}/scoreboard?dates=${fmtDate(date)}&limit=200`));
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       setGames(d.events || []);
