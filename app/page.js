@@ -101,8 +101,7 @@ export default function Page() {
           <nav className="flex gap-1 mt-10 border-b border-white/5 -mb-px overflow-x-auto">
             {[
               {id:'scores',label:'Scoreboard',icon:Zap},
-              {id:'rankings',label:'Polls',icon:Trophy},
-              {id:'nolan',label:'Nolan RPI',icon:Activity},
+              {id:'rankings',label:'ESPN Rankings',icon:Trophy},
               {id:'ncaa',label:'NCAA RPI',icon:BarChart3, suffix:'*Weekly'},
               {id:'stats',label:'Teams',icon:TrendingUp},
             ].map((t) => {
