@@ -51,14 +51,20 @@ const eventSummaryCache = new Map(); // eventId -> { fetchedAt, summary, eventDa
 const teamStatsCache = new Map();    // teamId  -> { fetchedAt, data }
 const inFlight = new Map();          // teamId  -> Promise
 
-// NCAA team-leaderboard caches (parallel to the individual leaderboard cache
-// that lives in /api/player-stats — we don't share the cache because the two
-// routes run in different module scopes on Vercel, but they both use the same
-// upstream wrapper and the same cache TTLs).
-let ncaaTeamCatMap = null;            // Map<curated slug, { id, label }>
-let ncaaTeamCatMapPromise = null;     // dedupe in-flight discovery
-const ncaaTeamLbCache = new Map();    // slug -> { fetchedAt, data }
+// --- NCAA team-leaderboard sourcing --------------------------------------
+// The category sidebar on ncaa.com's stats pages is CLIENT-side rendered, so
+// there is nothing to scrape server-side — every previous attempt to
+// auto-discover team-level stat IDs hit the same wall (curl against
+// /stats/softball/d1/current/team/<id> only yields that page's self-link +
+// pagination anchors, and /stats/softball/d1 only has two featured links).
+// The only approach that actually works is maintaining the slug → id map by
+// hand. The IDs below were obtained by sweeping ncaa-api.henrygd.me directly
+// across /stats/softball/d1/current/team/1..3500 on 2026-04-08 and recording
+// every 200 response. If NCAA re-numbers a stat between seasons, `slugStatus`
+// will start reporting `empty-leaderboard` for the affected slug and a
+// quick re-sweep will give us the new id.
 const NCAA_TEAM_LB_TTL_MS = 10 * 60 * 1000;
+const ncaaTeamLbCache = new Map();    // slug -> { fetchedAt, data }
 
 const NCAA_HEADERS = {
   'User-Agent':
@@ -66,174 +72,82 @@ const NCAA_HEADERS = {
   'Accept': 'application/json',
 };
 
-// Curated NCAA TEAM-level stat categories. Same approach as the individual
-// curated list in /api/player-stats: tolerant alias matching against whatever
-// labels NCAA's category sidebar currently exposes.
+// Ground-truth slug → {id, title} map. Totals are preferred over per-game
+// variants where both exist because the head-to-head Team Compare view in
+// page.js displays raw string values — totals compare more cleanly.
+// Additional team stat IDs found during the sweep that we may want to
+// curate later: 283 Fielding%, 284 Scoring (runs/game), 320 WL%, 345 HR/G,
+// 347 3B/G, 348 SB/G, 350 Double Plays/G, 595 Hit Batters, 1188 K/BB Ratio,
+// 1230 Hits Allowed/7, 1234 HBP, 1241 Sac Bunts, 1242 Sac Flies, 1300 RBI/G.
+const NCAA_TEAM_STAT_IDS = {
+  'team-batting-avg':  { id: 281,  title: 'Batting Average' },
+  'team-on-base-pct':  { id: 862,  title: 'On Base Percentage' },
+  'team-slugging-pct': { id: 349,  title: 'Slugging Percentage' },
+  'team-home-runs':    { id: 1228, title: 'Home Runs' },
+  'team-rbi':          { id: 1299, title: 'Runs Batted In' },
+  'team-runs-scored':  { id: 1238, title: 'Total Runs' },
+  'team-hits':         { id: 1229, title: 'Hits' },
+  'team-stolen-bases': { id: 1239, title: 'Total Stolen Bases' },
+  'team-doubles':      { id: 346,  title: 'Doubles per Game' },
+  'team-triples':      { id: 1227, title: 'Triples' },
+  'team-era':          { id: 282,  title: 'Earned Run Average' },
+  'team-whip':         { id: 1236, title: 'WHIP' },
+  'team-k-per-7':      { id: 864,  title: 'Strikeouts Per Seven Innings' },
+  'team-shutouts':     { id: 1084, title: 'Shutouts' },
+};
+
+// Curated categories. `lower` marks pitching stats where smaller is better
+// (used by the compare view to pick a winner). Three slugs from earlier
+// curation lists were dropped because NCAA doesn't publish them at team
+// level: `team-strikeouts` (overlaps functionally with team-k-per-7 at 864),
+// `team-saves`, and `team-opponent-ba`.
 const NCAA_TEAM_BATTING = [
-  { slug: 'team-batting-avg',  short: 'BA',  labels: ['Team Batting Average', 'Batting Average', 'Batting Avg'] },
-  { slug: 'team-on-base-pct',  short: 'OBP', labels: ['Team On Base Percentage', 'On Base Percentage', 'OBP'] },
-  { slug: 'team-slugging-pct', short: 'SLG', labels: ['Team Slugging Percentage', 'Slugging Percentage', 'SLG'] },
-  { slug: 'team-home-runs',    short: 'HR',  labels: ['Team Home Runs Per Game', 'Home Runs Per Game', 'Home Runs', 'HR'] },
-  { slug: 'team-rbi',          short: 'RBI', labels: ['Team Runs Batted In Per Game', 'Runs Batted In Per Game', 'RBIs', 'Runs Batted In'] },
-  { slug: 'team-runs-scored',  short: 'R',   labels: ['Scoring', 'Team Scoring', 'Runs Per Game', 'Runs Scored Per Game', 'Runs'] },
-  { slug: 'team-hits',         short: 'H',   labels: ['Team Hits Per Game', 'Hits Per Game', 'Hits'] },
-  { slug: 'team-stolen-bases', short: 'SB',  labels: ['Team Stolen Bases Per Game', 'Stolen Bases Per Game', 'Stolen Bases'] },
-  { slug: 'team-doubles',      short: '2B',  labels: ['Team Doubles Per Game', 'Doubles Per Game', 'Doubles'] },
-  { slug: 'team-triples',      short: '3B',  labels: ['Team Triples Per Game', 'Triples Per Game', 'Triples'] },
+  { slug: 'team-batting-avg',  short: 'BA'  },
+  { slug: 'team-on-base-pct',  short: 'OBP' },
+  { slug: 'team-slugging-pct', short: 'SLG' },
+  { slug: 'team-home-runs',    short: 'HR'  },
+  { slug: 'team-rbi',          short: 'RBI' },
+  { slug: 'team-runs-scored',  short: 'R'   },
+  { slug: 'team-hits',         short: 'H'   },
+  { slug: 'team-stolen-bases', short: 'SB'  },
+  { slug: 'team-doubles',      short: '2B'  },
+  { slug: 'team-triples',      short: '3B'  },
 ];
 
 const NCAA_TEAM_PITCHING = [
-  { slug: 'team-era',          short: 'ERA',  labels: ['Team Earned Run Average', 'Earned Run Average', 'ERA'], lower: true },
-  { slug: 'team-whip',         short: 'WHIP', labels: ['Team WHIP', 'WHIP', 'Walks Hits Per Innings Pitched'], lower: true },
-  { slug: 'team-k-per-7',      short: 'K/7',  labels: ['Team Strikeouts Per Seven Innings', 'Strikeouts Per Seven Innings', 'Strikeouts Per 7 Innings'] },
-  { slug: 'team-strikeouts',   short: 'K',    labels: ['Team Strikeouts', 'Strikeouts'] },
-  { slug: 'team-shutouts',     short: 'SHO',  labels: ['Team Shutouts', 'Shutouts'] },
-  { slug: 'team-saves',        short: 'SV',   labels: ['Team Saves', 'Saves'] },
-  { slug: 'team-opponent-ba',  short: 'OBA',  labels: ['Opponent Batting Average', 'Team Opponent Batting Average'], lower: true },
+  { slug: 'team-era',     short: 'ERA',  lower: true },
+  { slug: 'team-whip',    short: 'WHIP', lower: true },
+  { slug: 'team-k-per-7', short: 'K/7'  },
+  { slug: 'team-shutouts', short: 'SHO' },
 ];
 
 const NCAA_ALL_TEAM_CATS = [
-  ...NCAA_TEAM_BATTING.map((c) => ({ ...c, side: 'batting' })),
-  ...NCAA_TEAM_PITCHING.map((c) => ({ ...c, side: 'pitching' })),
+  ...NCAA_TEAM_BATTING.map((c) => ({
+    ...c,
+    side: 'batting',
+    id: NCAA_TEAM_STAT_IDS[c.slug]?.id,
+    label: NCAA_TEAM_STAT_IDS[c.slug]?.title,
+  })),
+  ...NCAA_TEAM_PITCHING.map((c) => ({
+    ...c,
+    side: 'pitching',
+    id: NCAA_TEAM_STAT_IDS[c.slug]?.id,
+    label: NCAA_TEAM_STAT_IDS[c.slug]?.title,
+  })),
 ];
 
-function normalizeNcaaLabel(s) {
-  return (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-// Scrape NCAA's category sidebar for /team/(\d+) URLs and return a
-// Map<curated slug, {id, label}> for the team-level leaderboards we care
-// about. Critically does NOT use a generic <option value="..."> pattern
-// because the NCAA stats pages have multiple dropdowns with stat ids in
-// them — the unfiltered options match individual stat ids and pollute
-// the team map (only BA and ERA happened to work because NCAA reuses the
-// same id for those two stats across both levels).
-async function discoverNcaaTeamCategoryIds() {
-  if (ncaaTeamCatMap) return ncaaTeamCatMap;
-  if (ncaaTeamCatMapPromise) return ncaaTeamCatMapPromise;
-
-  ncaaTeamCatMapPromise = (async () => {
-    // Known-good team-stat page IDs from web search. Hitting the index
-    // page may not surface team links if NCAA's index dropdown is JS-
-    // populated; an actual team page's sidebar always has them.
-    const sources = [
-      'https://www.ncaa.com/stats/softball/d1/current/team/281',
-      'https://www.ncaa.com/stats/softball/d1/current/team/282',
-      'https://www.ncaa.com/stats/softball/d1',
-    ];
-    const merged = new Map(); // id -> longest label
-    const addMatch = (id, rawLabel) => {
-      if (!id || !rawLabel) return;
-      const label = rawLabel
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&#\d+;/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (!label || label.length < 2) return;
-      const prev = merged.get(id);
-      if (!prev || label.length > prev.length) merged.set(id, label);
-    };
-
-    for (const url of sources) {
-      try {
-        const r = await fetch(url, { headers: NCAA_HEADERS, cache: 'no-store' });
-        if (!r.ok) continue;
-        const html = await r.text();
-        // ONLY accept anchors whose href contains /team/<id>. No generic
-        // option pattern — that picked up individual stat ids and broke
-        // 15 of 17 categories.
-        const re = /href="[^"]*?\/stats\/softball\/d1\/[^"]*?\/team\/(\d+)[^"]*"[^>]*>([\s\S]*?)<\/a>/gi;
-        let m;
-        while ((m = re.exec(html)) !== null) addMatch(m[1], m[2]);
-        if (merged.size >= 12) break;
-      } catch (e) {
-        // try next source
-      }
-    }
-
-    if (merged.size === 0) {
-      throw new Error('Failed to discover any NCAA team-stat categories');
-    }
-
-    // Index normalized labels -> id
-    const normToId = new Map();
-    const byId = {};
-    for (const [id, label] of merged) {
-      byId[id] = label;
-      const norm = normalizeNcaaLabel(label);
-      if (!normToId.has(norm)) normToId.set(norm, id);
-    }
-
-    // Two-pass exact-then-substring with id uniqueness, same logic as
-    // /api/player-stats so we don't accidentally claim the same id twice.
-    const MIN_SUBSTR_LEN = 6;
-    const map = new Map();
-    const usedIds = new Set();
-
-    const claim = (slug, cat, id) => {
-      usedIds.add(id);
-      map.set(slug, { id, label: byId[id] || cat.labels[0], short: cat.short, side: cat.side, lower: !!cat.lower });
-    };
-
-    for (const cat of NCAA_ALL_TEAM_CATS) {
-      for (const alias of cat.labels) {
-        const a = normalizeNcaaLabel(alias);
-        if (!a) continue;
-        const id = normToId.get(a);
-        if (id && !usedIds.has(id)) { claim(cat.slug, cat, id); break; }
-      }
-    }
-    for (const cat of NCAA_ALL_TEAM_CATS) {
-      if (map.has(cat.slug)) continue;
-      let hit = null;
-      for (const alias of cat.labels) {
-        const a = normalizeNcaaLabel(alias);
-        if (!a || a.length < MIN_SUBSTR_LEN) continue;
-        for (const [nLabel, id] of normToId) {
-          if (usedIds.has(id)) continue;
-          if (nLabel.length < MIN_SUBSTR_LEN) continue;
-          if (nLabel.includes(a) || a.includes(nLabel)) { hit = id; break; }
-        }
-        if (hit) break;
-      }
-      if (hit) claim(cat.slug, cat, hit);
-    }
-
-    // Stash the raw discovered id->label map alongside the curated slug map
-    // so debug responses can surface what was actually scraped vs. what we
-    // managed to match curated slugs against.
-    ncaaTeamCatMap = map;
-    ncaaTeamCatMap._rawDiscovered = Object.fromEntries(merged);
-    ncaaTeamCatMap._curatedMissing = NCAA_ALL_TEAM_CATS
-      .filter((c) => !map.has(c.slug))
-      .map((c) => ({ slug: c.slug, side: c.side, tried: c.labels }));
-    return map;
-  })();
-
-  try {
-    return await ncaaTeamCatMapPromise;
-  } finally {
-    ncaaTeamCatMapPromise = null;
-  }
-}
-
-async function fetchNcaaTeamLeaderboard(slug) {
-  const cached = ncaaTeamLbCache.get(slug);
+async function fetchNcaaTeamLeaderboard(cat) {
+  const cached = ncaaTeamLbCache.get(cat.slug);
   if (cached && Date.now() - cached.fetchedAt < NCAA_TEAM_LB_TTL_MS) return cached.data;
 
-  const map = await discoverNcaaTeamCategoryIds();
-  const cat = map.get(slug);
-  if (!cat) return null;
-
+  if (!cat.id) return null;
   const url = `https://ncaa-api.henrygd.me/stats/softball/d1/current/team/${cat.id}`;
   try {
     const r = await fetch(url, { headers: NCAA_HEADERS, cache: 'no-store' });
     if (!r.ok) return null;
     const json = await r.json();
     const data = {
-      slug,
+      slug: cat.slug,
       id: cat.id,
       label: cat.label,
       short: cat.short,
@@ -241,21 +155,41 @@ async function fetchNcaaTeamLeaderboard(slug) {
       lower: cat.lower,
       rows: json.data || [],
     };
-    ncaaTeamLbCache.set(slug, { fetchedAt: Date.now(), data });
+    ncaaTeamLbCache.set(cat.slug, { fetchedAt: Date.now(), data });
     return data;
   } catch (e) {
     return null;
   }
 }
 
-// Find a team's row in a single NCAA leaderboard by normalized name match.
+// Find a team's row in a single NCAA leaderboard. Pass 1 does an exact
+// normalized match against any candidate column; Pass 2 falls back to
+// substring containment so that suffix-appended leaderboard names (e.g.
+// "Oklahoma Sooners" vs "Oklahoma") still resolve. Modeled on the
+// substring fallback in `findTeam` in _espn.js.
 function findNcaaTeamRow(rows, nameVariantSet) {
   if (!Array.isArray(rows) || rows.length === 0) return null;
+  const candidateCols = ['School', 'school', 'Team', 'TEAM', 'team', 'Name', 'NAME', 'name'];
+
+  // Pass 1: exact normalized equality.
   for (const row of rows) {
-    const candidates = [row.School, row.school, row.Team, row.team, row.Name];
-    for (const c of candidates) {
+    for (const col of candidateCols) {
+      const c = row[col];
       if (!c) continue;
       if (nameVariantSet.has(normalize(c))) return row;
+    }
+  }
+  // Pass 2: substring containment in either direction.
+  for (const row of rows) {
+    for (const col of candidateCols) {
+      const c = row[col];
+      if (!c) continue;
+      const norm = normalize(c);
+      if (!norm) continue;
+      for (const v of nameVariantSet) {
+        if (v.length < 4) continue;
+        if (norm.includes(v) || v.includes(norm)) return row;
+      }
     }
   }
   return null;
@@ -287,35 +221,23 @@ function pickNcaaPrimaryValue(row, cat) {
 }
 
 // Aggregate NCAA team-level totals for one team. Fetches every curated team
-// leaderboard in parallel (cached, so warm calls are essentially free), finds
-// this team's row in each, and returns a normalized totals object.
+// leaderboard in parallel (cached per-slug, so warm calls are essentially
+// free), finds this team's row in each, and returns a normalized totals
+// object. No discovery step — the slug → id mapping is hardcoded above.
 async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
   if (!nameVariantSet || nameVariantSet.size === 0) {
-    return { batting: {}, pitching: {}, found: 0, attempted: 0, error: 'no team name variants' };
-  }
-
-  // Force discovery first so we can report back what was actually found.
-  let curatedDiscovered = 0;
-  let rawDiscovered = {};
-  let curatedMissing = [];
-  try {
-    const map = await discoverNcaaTeamCategoryIds();
-    curatedDiscovered = map.size;
-    rawDiscovered = map._rawDiscovered || {};
-    curatedMissing = map._curatedMissing || [];
-  } catch (e) {
     return {
       batting: {},
       pitching: {},
       found: 0,
       attempted: NCAA_ALL_TEAM_CATS.length,
-      curatedDiscovered: 0,
-      error: `discovery failed: ${e.message}`,
+      slugStatus: {},
+      error: 'no team name variants',
     };
   }
 
   const cats = NCAA_ALL_TEAM_CATS;
-  const results = await Promise.all(cats.map((c) => fetchNcaaTeamLeaderboard(c.slug)));
+  const results = await Promise.all(cats.map((c) => fetchNcaaTeamLeaderboard(c)));
 
   const batting = {};
   const pitching = {};
@@ -326,7 +248,8 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
     const cat = cats[i];
     const lb = results[i];
     if (!lb) {
-      slugStatus[cat.slug] = 'no-id';
+      // Upstream fetch failed, 4xx/5xx, or unknown stat id.
+      slugStatus[cat.slug] = cat.id ? 'fetch-failed' : 'no-id';
       continue;
     }
     if (!lb.rows || lb.rows.length === 0) {
@@ -357,9 +280,6 @@ async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
     pitching,
     found,
     attempted: cats.length,
-    curatedDiscovered,
-    rawDiscovered,
-    curatedMissing,
     slugStatus,
   };
 }
@@ -812,9 +732,6 @@ async function computeTeamStats(teamId) {
         ? {
             found: ncaaTeamStats.found,
             attempted: ncaaTeamStats.attempted,
-            curatedDiscovered: ncaaTeamStats.curatedDiscovered,
-            rawDiscovered: ncaaTeamStats.rawDiscovered,
-            curatedMissing: ncaaTeamStats.curatedMissing,
             slugStatus: ncaaTeamStats.slugStatus,
             error: ncaaTeamStats.error,
           }
