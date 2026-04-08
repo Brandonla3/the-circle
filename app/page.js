@@ -339,42 +339,14 @@ function normalizeTeamName(name) {
 }
 
 function RankingsView({ rankings, lastUpdate }) {
-  const [standings, setStandings] = useState(null);
-  const [standingsErr, setStandingsErr] = useState(null);
+  if (!rankings) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading rankings…</div>;
+  const polls = rankings.rankings || [];
+  if (polls.length === 0) return <div className="text-center py-20 text-white/30">No rankings available (off-season).</div>;
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/standings?flat=1')
-      .then((r) => r.json())
-      .then((d) => { if (!cancelled) { if (d.error) setStandingsErr(d.error); else setStandings(d); } })
-      .catch((e) => { if (!cancelled) setStandingsErr(e.message); });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Pick the first poll (ESPN returns AP/USA/etc); we only display the flat
-  // list now, so we just need rank/previous/points per team from whichever
-  // poll is listed first.
-  const poll = rankings?.rankings?.[0] || null;
-
-  // Build a map keyed by normalized team name so we can merge poll data
-  // into the full standings list below.
-  const rankByTeam = new Map();
-  if (poll) {
-    for (const r of poll.ranks || []) {
-      const name = r.team?.name || r.team?.displayName;
-      const key = normalizeTeamName(name);
-      if (!key) continue;
-      rankByTeam.set(key, {
-        current: r.current,
-        previous: typeof r.previous === 'number' ? r.previous : null,
-        points: r.points,
-        logo: r.team?.logos?.[0]?.href || null,
-      });
-    }
-  }
-
-  const formatUpdated = (p) => {
-    const raw = p?.date || p?.lastUpdated || p?.publishDate || p?.headline;
+  const formatUpdated = (poll) => {
+    // ESPN's rankings payload puts the publish date in a few different shapes
+    // depending on the poll; try each and fall back to our own fetch time.
+    const raw = poll?.date || poll?.lastUpdated || poll?.publishDate || poll?.headline;
     const d = raw ? new Date(raw) : lastUpdate;
     if (!d || isNaN(d.getTime?.() ?? NaN)) return null;
     return d.toLocaleString('en-US', {
@@ -383,115 +355,68 @@ function RankingsView({ rankings, lastUpdate }) {
     });
   };
 
-  if (standingsErr) {
-    return (
-      <div className="max-w-xl mx-auto text-center py-16">
-        <div className="display text-white/30 text-3xl mb-3">Rankings unavailable</div>
-        <div className="text-white/50 text-sm">{standingsErr}</div>
-      </div>
-    );
-  }
-  if (!standings) {
-    return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading D1 teams…</div>;
-  }
-
-  // Merge poll info into each team row from flat standings.
-  const rows = (standings.teams || []).map((t) => {
-    const key = normalizeTeamName(t.name);
-    const rank = rankByTeam.get(key) || null;
-    return { ...t, rank };
-  });
-
-  // Ranked teams first (ordered by rank), then unranked by win % descending.
-  rows.sort((a, b) => {
-    if (a.rank && b.rank) return a.rank.current - b.rank.current;
-    if (a.rank) return -1;
-    if (b.rank) return 1;
-    if (b.winPct !== a.winPct) return b.winPct - a.winPct;
-    if (b.w !== a.w) return b.w - a.w;
-    return a.name.localeCompare(b.name);
-  });
-
-  const rankedCount = rows.filter((r) => r.rank).length;
-  const updated = formatUpdated(poll);
-  const pctStr = (n) => (n ? n.toFixed(3).replace(/^0/, '') : '.000');
-
   return (
-    <div>
-      <div className="mb-6 flex items-end justify-between border-b border-white/10 pb-3 flex-wrap gap-3">
-        <div>
-          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">Season</div>
-          <h2 className="display text-white text-3xl font-bold">D1 Softball Top 25</h2>
-          {updated && <div className="text-white/40 text-xs mono mt-1">Poll last updated {updated}</div>}
-        </div>
-        <div className="text-[10px] mono uppercase text-white/30 text-right">
-          <div>{rows.length} teams</div>
-          <div>{rankedCount} ranked · {rows.length - rankedCount} unranked</div>
-        </div>
-      </div>
-      <div className="overflow-x-auto rounded-lg border border-white/10">
-        <table className="w-full mono text-xs">
-          <thead>
-            <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
-              <th className="text-left py-2 px-3 font-normal w-12">#</th>
-              <th className="text-left py-2 px-3 font-normal">Team</th>
-              <th className="text-left py-2 px-3 font-normal">Conf</th>
-              <th className="text-center py-2 px-2 font-normal">Record</th>
-              <th className="text-center py-2 px-2 font-normal">Pct</th>
-              <th className="text-center py-2 px-2 font-normal">Streak</th>
-              <th className="text-center py-2 px-2 font-normal">L10</th>
-              <th className="text-center py-2 px-2 font-normal">Trend</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((t, i) => {
-              const rank = t.rank;
-              const isTop5 = rank && rank.current <= 5;
-              const moved = rank && typeof rank.previous === 'number' && rank.previous !== rank.current;
-              const up = moved && rank.previous > rank.current;
-              const logo = rank?.logo || t.logo;
-              return (
-                <tr key={`${t.name}-${i}`} className="border-t border-white/5 hover:bg-white/[0.02]">
-                  <td className="py-2 px-3">
-                    {rank ? (
-                      <span className={`display text-2xl font-black ${isTop5 ? '' : 'text-white/60'}`} style={isTop5 ? { color: '#ff6b1a' } : {}}>{rank.current}</span>
-                    ) : (
-                      <span className="text-white/20 text-[10px] tracking-widest uppercase">NR</span>
-                    )}
-                  </td>
-                  <td className="py-2 px-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {logo && (
-                        <img
-                          src={logo}
-                          alt=""
-                          className="h-5 w-5 object-contain"
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                        />
-                      )}
-                      <span className="text-white truncate">{t.name}</span>
-                    </div>
-                  </td>
-                  <td className="py-2 px-3 text-white/50 truncate max-w-[180px]">{t.conferenceDisplay || t.conference || '—'}</td>
-                  <td className="text-center py-2 px-2 text-white tabular-nums whitespace-nowrap">{t.w}-{t.l}</td>
-                  <td className="text-center py-2 px-2 text-white/70 tabular-nums">{pctStr(t.winPct)}</td>
-                  <td className="text-center py-2 px-2 text-white/70 tabular-nums">{t.streak || '—'}</td>
-                  <td className="text-center py-2 px-2 text-white/70 tabular-nums">{t.last10 || '—'}</td>
-                  <td className="text-center py-2 px-2 tabular-nums">
-                    {moved ? (
-                      <span className={`mono text-[11px] ${up ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {up ? '▲' : '▼'}{Math.abs(rank.previous - rank.current)}
-                      </span>
-                    ) : (
-                      <span className="text-white/20">—</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+    <div className="space-y-12">
+      {polls.map((poll) => {
+        const updated = formatUpdated(poll);
+        return (
+          <div key={poll.id || poll.name}>
+            <div className="mb-6 flex items-end justify-between border-b border-white/10 pb-3">
+              <div>
+                <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">Poll</div>
+                <h2 className="display text-white text-3xl font-bold">D1 Softball Top 25</h2>
+                {updated && <div className="text-white/40 text-xs mono mt-1">Last updated {updated}</div>}
+              </div>
+              {poll.shortName && <div className="text-white/30 text-xs mono">{poll.shortName}</div>}
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-white/10">
+              <table className="w-full mono text-xs">
+                <thead>
+                  <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
+                    <th className="text-left py-2 px-3 font-normal w-12">#</th>
+                    <th className="text-left py-2 px-3 font-normal">Team</th>
+                    <th className="text-center py-2 px-2 font-normal">Record</th>
+                    <th className="text-center py-2 px-2 font-normal">Points</th>
+                    <th className="text-center py-2 px-2 font-normal">Prev</th>
+                    <th className="text-center py-2 px-2 font-normal">Trend</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(poll.ranks || []).slice(0, 25).map((r, i) => {
+                    const moved = typeof r.previous === 'number' && r.previous !== r.current;
+                    const up = moved && r.previous > r.current;
+                    return (
+                      <tr key={r.team?.id || i} className="card-enter border-t border-white/5 hover:bg-white/[0.02]" style={{ animationDelay: `${i * 15}ms` }}>
+                        <td className="py-2 px-3">
+                          <span className={`display text-2xl font-black ${r.current <= 5 ? '' : 'text-white/40'}`} style={r.current <= 5 ? { color: '#ff6b1a' } : {}}>{r.current}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {r.team?.logos?.[0]?.href && <img src={r.team.logos[0].href} alt="" className="h-5 w-5 object-contain" />}
+                            <span className="text-white truncate">{r.team?.name || r.team?.displayName}</span>
+                          </div>
+                        </td>
+                        <td className="text-center py-2 px-2 text-white/70 tabular-nums whitespace-nowrap">{r.recordSummary || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/80 tabular-nums">{r.points?.toFixed?.(0) || r.points || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/50 tabular-nums">{typeof r.previous === 'number' ? r.previous : '—'}</td>
+                        <td className="text-center py-2 px-2 tabular-nums">
+                          {moved ? (
+                            <span className={`mono text-[11px] ${up ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {up ? '▲' : '▼'}{Math.abs(r.previous - r.current)}
+                            </span>
+                          ) : (
+                            <span className="text-white/20">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
