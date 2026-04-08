@@ -924,12 +924,15 @@ const COMPARE_BATTING = [
   { slug: 'doubles',      short: '2B'  },
   { slug: 'triples',      short: '3B'  },
 ];
+// `whip` previously lived in this list but the henrygd wrapper returns 500
+// "Could not parse data" for NCAA stat id 1237 (individual WHIP), which is
+// the only id NCAA exposes for it in softball. The Leaders sub-tab row
+// showed dashes for both teams; dropping it makes the list honest.
 const COMPARE_PITCHING = [
   { slug: 'era',             short: 'ERA',  lowerIsBetter: true },
   { slug: 'wins',            short: 'W'    },
   { slug: 'strikeouts',      short: 'K'    },
   { slug: 'saves',           short: 'SV'   },
-  { slug: 'whip',            short: 'WHIP', lowerIsBetter: true },
   { slug: 'k-per-7',         short: 'K/7'  },
   { slug: 'innings-pitched', short: 'IP'   },
   { slug: 'shutouts',        short: 'SHO'  },
