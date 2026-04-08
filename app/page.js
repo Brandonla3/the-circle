@@ -25,6 +25,7 @@ export default function Page() {
   const [selectedGame, setSelectedGame] = useState(null);
   const [gameDetail, setGameDetail] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [selectedTeam, setSelectedTeam] = useState(null);
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
 
@@ -172,11 +173,12 @@ export default function Page() {
         {tab === 'rankings' && <RankingsView rankings={rankings} lastUpdate={lastUpdate} />}
         {tab === 'standings' && <StandingsView />}
         {tab === 'leaders' && <LeadersView onSelectPlayer={setSelectedPlayer} />}
-        {tab === 'stats' && <StatsView />}
+        {tab === 'stats' && <StatsView onSelectTeam={setSelectedTeam} />}
       </main>
 
       {selectedGame && <GameModal game={selectedGame} detail={gameDetail} rankings={rankings} onRefresh={() => fetchGameDetail(selectedGame.id)} onClose={() => { setSelectedGame(null); setGameDetail(null); }} />}
       {selectedPlayer && <PlayerModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />}
+      {selectedTeam && <TeamModal team={selectedTeam} onClose={() => setSelectedTeam(null)} />}
 
       <footer className="border-t border-white/5 mt-16 py-6 px-6 text-center text-[10px] mono tracking-widest uppercase text-white/20">
         Data via ESPN & NCAA.com · Built for Daladier
@@ -421,7 +423,7 @@ function RankingsView({ rankings, lastUpdate }) {
   );
 }
 
-function StatsView() {
+function StatsView({ onSelectTeam }) {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
@@ -443,18 +445,164 @@ function StatsView() {
       <div className="mb-6 border-b border-white/10 pb-3">
         <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">Directory</div>
         <h2 className="display text-white text-3xl font-bold">D1 Teams <span className="text-white/30 text-lg">· {teams.length}</span></h2>
-        <p className="text-white/40 text-xs mt-1">Click any team to view their ESPN profile with full stats, schedule & roster.</p>
+        <p className="text-white/40 text-xs mt-1">Click any team to view its full roster.</p>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
         {teams.map((t, i) => (
-          <a key={t.id} href={t.links?.find((l) => l.rel?.includes('clubhouse'))?.href || `https://www.espn.com/college-sports/softball/team/_/id/${t.id}`} target="_blank" rel="noreferrer" className="card-enter flex items-center gap-3 p-3 rounded-lg border border-white/5 hover:border-white/30 hover:bg-white/[0.03] transition" style={{ animationDelay: `${Math.min(i * 8, 600)}ms`, borderLeft: `3px solid ${t.color ? '#' + t.color : '#ff6b1a'}` }}>
+          <button
+            key={t.id}
+            onClick={() => onSelectTeam && onSelectTeam(t)}
+            className="card-enter flex items-center gap-3 p-3 rounded-lg border border-white/5 hover:border-white/30 hover:bg-white/[0.03] transition text-left"
+            style={{ animationDelay: `${Math.min(i * 8, 600)}ms`, borderLeft: `3px solid ${t.color ? '#' + t.color : '#ff6b1a'}` }}
+          >
             {t.logos?.[0]?.href && <img src={t.logos[0].href} alt="" className="h-8 w-8 object-contain flex-shrink-0" />}
             <div className="min-w-0">
               <div className="text-white text-xs font-semibold truncate">{t.shortDisplayName || t.displayName}</div>
               <div className="text-[9px] mono text-white/30 uppercase truncate">{t.abbreviation}</div>
             </div>
-          </a>
+          </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function TeamModal({ team, onClose }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setData(null); setErr(null);
+    fetch(`/api/team-roster?teamId=${encodeURIComponent(team.id)}`)
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!r.ok || j.error) setErr(j.error || `HTTP ${r.status}`);
+        else setData(j);
+      })
+      .catch((e) => { if (!cancelled) setErr(e.message); });
+    return () => { cancelled = true; };
+  }, [team.id]);
+
+  // Esc closes
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const logo = data?.team?.logo || team?.logos?.[0]?.href;
+  const displayName = data?.team?.displayName || team?.displayName;
+  const abbrev = data?.team?.abbreviation || team?.abbreviation;
+  const color = data?.team?.color || (team?.color ? `#${team.color}` : '#ff6b1a');
+
+  // Group athletes by primary position bucket so scouts can scan quickly.
+  const grouped = (() => {
+    if (!data?.athletes) return null;
+    const buckets = {
+      Pitchers: [],
+      Catchers: [],
+      Infielders: [],
+      Outfielders: [],
+      'Utility / Other': [],
+    };
+    for (const a of data.athletes) {
+      const pos = (a.position || '').toUpperCase();
+      if (pos === 'P' || pos === 'RHP' || pos === 'LHP') buckets.Pitchers.push(a);
+      else if (pos === 'C') buckets.Catchers.push(a);
+      else if (pos === '1B' || pos === '2B' || pos === '3B' || pos === 'SS' || pos === 'IF') buckets.Infielders.push(a);
+      else if (pos === 'OF' || pos === 'LF' || pos === 'CF' || pos === 'RF') buckets.Outfielders.push(a);
+      else buckets['Utility / Other'].push(a);
+    }
+    return buckets;
+  })();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl border border-white/10" style={{ background: '#141210' }} onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="sticky top-4 float-right mr-4 z-10 p-2 rounded-full bg-black/40 hover:bg-white/10 text-white/60 hover:text-white">
+          <X className="h-4 w-4" />
+        </button>
+
+        <div className="px-6 pt-6 pb-5 border-b border-white/10" style={{ borderTop: `3px solid ${color}` }}>
+          <div className="flex items-center gap-4">
+            {logo && (
+              <img
+                src={logo}
+                alt=""
+                className="h-14 w-14 object-contain flex-shrink-0"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            )}
+            <div className="min-w-0">
+              <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-1">Roster</div>
+              <div className="display text-white text-3xl font-bold leading-tight truncate">{displayName || 'Team'}</div>
+              <div className="text-white/50 text-xs mono mt-1">
+                {abbrev && <span>{abbrev}</span>}
+                {data?.meta?.rosterSize != null && <span className="text-white/30"> · {data.meta.rosterSize} players</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {!data && !err && (
+            <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading roster…</div>
+          )}
+          {err && (
+            <div className="text-center py-12">
+              <div className="text-white/40 text-sm mb-2">Couldn't load roster.</div>
+              <div className="text-white/30 text-xs mono">{err}</div>
+            </div>
+          )}
+          {data && grouped && (
+            <div className="space-y-8">
+              {Object.entries(grouped).map(([label, list]) => {
+                if (list.length === 0) return null;
+                return (
+                  <div key={label}>
+                    <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-3">{label} <span className="text-white/20">· {list.length}</span></div>
+                    <div className="overflow-x-auto rounded-lg border border-white/5">
+                      <table className="w-full mono text-xs">
+                        <thead>
+                          <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
+                            <th className="text-left py-2 px-3 font-normal w-10">#</th>
+                            <th className="text-left py-2 px-3 font-normal">Player</th>
+                            <th className="text-center py-2 px-2 font-normal">Pos</th>
+                            <th className="text-center py-2 px-2 font-normal">Class</th>
+                            <th className="text-center py-2 px-2 font-normal">B/T</th>
+                            <th className="text-center py-2 px-2 font-normal">Ht</th>
+                            <th className="text-center py-2 px-2 font-normal">Wt</th>
+                            <th className="text-left py-2 px-3 font-normal">Hometown</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {list.map((a) => (
+                            <tr key={a.id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                              <td className="py-2 px-3 text-white/50 tabular-nums">{a.jersey || '—'}</td>
+                              <td className="py-2 px-3 text-white whitespace-nowrap">{a.name}</td>
+                              <td className="text-center py-2 px-2 text-white/60">{a.position || '—'}</td>
+                              <td className="text-center py-2 px-2 text-white/60">{a.classYear || '—'}</td>
+                              <td className="text-center py-2 px-2 text-white/50">{[a.bats, a.throws].filter(Boolean).join('/') || '—'}</td>
+                              <td className="text-center py-2 px-2 text-white/50">{a.heightDisplay || '—'}</td>
+                              <td className="text-center py-2 px-2 text-white/50">{a.weightDisplay || '—'}</td>
+                              <td className="py-2 px-3 text-white/50 truncate max-w-[180px]">{a.birthPlace || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30">
+          Roster via ESPN · Press Esc to close
+        </div>
       </div>
     </div>
   );
