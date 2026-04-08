@@ -96,9 +96,113 @@ function bucketConference(name) {
   return name || 'Other';
 }
 
+// Fetch one date and return a rich metadata object. Used by both the
+// `?probe` and `?debug` diagnostic modes so we can see exactly what the
+// upstream wrapper is returning without having to guess at its shape.
+async function probeDay(date) {
+  const url = `https://ncaa-api.henrygd.me/scoreboard/softball/d1/${date.getUTCFullYear()}/${pad(date.getUTCMonth() + 1)}/${pad(date.getUTCDate())}`;
+  const meta = {
+    date: `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`,
+    url,
+    status: null,
+    topLevelKeys: null,
+    gameCount: 0,
+    finalCount: 0,
+    rawFirstGame: null,
+    error: null,
+  };
+  try {
+    const r = await fetch(url, { headers: HEADERS, cache: 'no-store' });
+    meta.status = r.status;
+    if (!r.ok) return meta;
+    const raw = await r.json();
+    meta.topLevelKeys = Object.keys(raw || {});
+    const games = raw.games || raw.data || raw.scoreboard?.games || [];
+    meta.gameCount = Array.isArray(games) ? games.length : 0;
+    let finals = 0;
+    if (Array.isArray(games)) {
+      games.forEach((g, idx) => {
+        const game = g.game || g;
+        if (isFinal(game)) finals++;
+        if (idx === 0) meta.rawFirstGame = game;
+      });
+    }
+    meta.finalCount = finals;
+  } catch (e) {
+    meta.status = 'error';
+    meta.error = String(e.message || e);
+  }
+  return meta;
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const flat = searchParams.get('flat');
+  const debug = searchParams.get('debug');
+  const probe = searchParams.get('probe');
+
+  // Diagnostic: probe a single date and dump its raw wrapper response so we
+  // can verify the shape of fields like gameState/home/away/score.
+  if (probe) {
+    const m = probe.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) {
+      return Response.json({ error: 'probe must be YYYY-MM-DD' }, { status: 400 });
+    }
+    const date = new Date(Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)));
+    const meta = await probeDay(date);
+    return Response.json(meta, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
+  // Diagnostic: sweep every date in the season, return fetch status + game
+  // counts per date so we can see how much data we're actually pulling down.
+  if (debug) {
+    const now = new Date();
+    const year = now.getUTCFullYear();
+    const dates = dateRange(year, SEASON_START.month, SEASON_START.day, now);
+
+    const attempts = [];
+    const batchSize = 15;
+    for (let i = 0; i < dates.length; i += batchSize) {
+      const batch = dates.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(probeDay));
+      attempts.push(...results);
+    }
+
+    const ok = attempts.filter((a) => a.status === 200);
+    const empty = ok.filter((a) => a.gameCount === 0);
+    const withGames = ok.filter((a) => a.gameCount > 0);
+    const errors = attempts.filter((a) => typeof a.status !== 'number' || (a.status !== 200 && a.status !== 404));
+    const notFound = attempts.filter((a) => a.status === 404);
+    const totalGames = attempts.reduce((s, a) => s + (a.gameCount || 0), 0);
+    const totalFinals = attempts.reduce((s, a) => s + (a.finalCount || 0), 0);
+    const sampleGame = withGames[0]?.rawFirstGame || null;
+
+    return Response.json({
+      now: now.toISOString(),
+      dateRange: {
+        start: dates[0] ? `${dates[0].getUTCFullYear()}-${pad(dates[0].getUTCMonth() + 1)}-${pad(dates[0].getUTCDate())}` : null,
+        end: dates[dates.length - 1] ? `${dates[dates.length - 1].getUTCFullYear()}-${pad(dates[dates.length - 1].getUTCMonth() + 1)}-${pad(dates[dates.length - 1].getUTCDate())}` : null,
+        count: dates.length,
+      },
+      summary: {
+        attempted: attempts.length,
+        ok: ok.length,
+        notFound: notFound.length,
+        errors: errors.length,
+        datesWithGames: withGames.length,
+        datesWithNoGames: empty.length,
+        totalGames,
+        totalFinals,
+      },
+      sampleGameDate: withGames[0]?.date || null,
+      sampleGameKeys: sampleGame ? Object.keys(sampleGame) : null,
+      sampleGame,
+      firstFailedDates: errors.concat(notFound).slice(0, 10).map((a) => ({ date: a.date, status: a.status, error: a.error })),
+      // Compact per-date list: date → status/gameCount/finalCount
+      dates: attempts.map((a) => ({ date: a.date, status: a.status, g: a.gameCount, f: a.finalCount })),
+    }, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
   try {
     const now = new Date();
     const year = now.getUTCFullYear();
