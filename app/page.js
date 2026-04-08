@@ -174,11 +174,54 @@ export default function Page() {
         {tab === 'stats' && <StatsView />}
       </main>
 
-      {selectedGame && <GameModal game={selectedGame} detail={gameDetail} onClose={() => { setSelectedGame(null); setGameDetail(null); }} />}
+      {selectedGame && <GameModal game={selectedGame} detail={gameDetail} onRefresh={() => fetchGameDetail(selectedGame.id)} onClose={() => { setSelectedGame(null); setGameDetail(null); }} />}
 
       <footer className="border-t border-white/5 mt-16 py-6 px-6 text-center text-[10px] mono tracking-widest uppercase text-white/20">
         Data via ESPN, NCAA.com & WarrenNolan.com · Built for Daladier
       </footer>
+    </div>
+  );
+}
+
+function Diamond({ onFirst, onSecond, onThird, size = 64 }) {
+  const lit = '#ff6b1a';
+  const dim = 'rgba(255,255,255,0.12)';
+  const stroke = 'rgba(255,255,255,0.35)';
+  // Diamond rotated 45deg. Bases sit at the four points of the rhombus.
+  // Home = bottom, 1B = right, 2B = top, 3B = left.
+  return (
+    <svg viewBox="0 0 100 100" width={size} height={size} aria-label="Baserunners">
+      <polygon points="50,18 82,50 50,82 18,50" fill="none" stroke={stroke} strokeWidth="2" />
+      {/* 2B (top) */}
+      <rect x="42" y="10" width="16" height="16" transform="rotate(45 50 18)" fill={onSecond ? lit : dim} stroke={stroke} strokeWidth="1.5" />
+      {/* 3B (left) */}
+      <rect x="10" y="42" width="16" height="16" transform="rotate(45 18 50)" fill={onThird ? lit : dim} stroke={stroke} strokeWidth="1.5" />
+      {/* 1B (right) */}
+      <rect x="74" y="42" width="16" height="16" transform="rotate(45 82 50)" fill={onFirst ? lit : dim} stroke={stroke} strokeWidth="1.5" />
+      {/* Home (bottom) */}
+      <polygon points="50,74 58,82 50,90 42,82" fill="rgba(255,255,255,0.5)" stroke={stroke} strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function CountOuts({ balls = 0, strikes = 0, outs = 0 }) {
+  const Dot = ({ on, color }) => (
+    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: on ? color : 'rgba(255,255,255,0.15)' }} />
+  );
+  return (
+    <div className="flex flex-col gap-1 mono text-[10px] uppercase tracking-widest text-white/50">
+      <div className="flex items-center gap-2">
+        <span className="w-3">B</span>
+        <span className="flex gap-1">{[0,1,2].map((i) => <Dot key={i} on={i < balls} color="#22c55e" />)}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-3">S</span>
+        <span className="flex gap-1">{[0,1].map((i) => <Dot key={i} on={i < strikes} color="#eab308" />)}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-3">O</span>
+        <span className="flex gap-1">{[0,1].map((i) => <Dot key={i} on={i < outs} color="#ef4444" />)}</span>
+      </div>
     </div>
   );
 }
@@ -227,6 +270,32 @@ function GameCard({ game, index, onClick }) {
         <div className="h-px bg-white/5"></div>
         <TeamRow team={home} side="home" />
       </div>
+      {isLive && comp.situation && (
+        <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-4">
+          <Diamond
+            onFirst={!!comp.situation.onFirst}
+            onSecond={!!comp.situation.onSecond}
+            onThird={!!comp.situation.onThird}
+            size={56}
+          />
+          <CountOuts
+            balls={comp.situation.balls}
+            strikes={comp.situation.strikes}
+            outs={comp.situation.outs}
+          />
+          <div className="flex-1 min-w-0">
+            {comp.situation.batter?.athlete && (
+              <div className="text-[10px] mono uppercase tracking-widest text-white/40">At Bat</div>
+            )}
+            {comp.situation.batter?.athlete && (
+              <div className="text-white text-xs font-semibold truncate">{comp.situation.batter.athlete.shortName || comp.situation.batter.athlete.displayName}</div>
+            )}
+            {comp.situation.pitcher?.athlete && (
+              <div className="text-white/50 text-[10px] mono truncate">P: {comp.situation.pitcher.athlete.shortName || comp.situation.pitcher.athlete.displayName}</div>
+            )}
+          </div>
+        </div>
+      )}
       {comp.venue?.fullName && (
         <div className="mt-3 pt-3 border-t border-white/5 text-[10px] text-white/30 mono uppercase tracking-wide truncate">
           {comp.venue.fullName}{comp.venue.address?.city ? ` · ${comp.venue.address.city}` : ''}
@@ -400,19 +469,29 @@ function StatsView() {
   );
 }
 
-function GameModal({ game, detail, onClose }) {
-  const [modalTab, setModalTab] = useState('linescore');
+function GameModal({ game, detail, onRefresh, onClose }) {
+  const isLive = game.status?.type?.state === 'in';
+  const [modalTab, setModalTab] = useState(isLive ? 'live' : 'linescore');
   const comp = game.competitions?.[0];
   const home = comp?.competitors?.find((c) => c.homeAway === 'home');
   const away = comp?.competitors?.find((c) => c.homeAway === 'away');
 
+  // Auto-refresh while live
+  useEffect(() => {
+    if (!isLive || !onRefresh) return;
+    const id = setInterval(onRefresh, 15000);
+    return () => clearInterval(id);
+  }, [isLive, onRefresh]);
+
   const tabs = [
+    ...(isLive ? [{ id: 'live', label: 'Live' }] : []),
     { id: 'linescore', label: 'Linescore' },
     { id: 'box', label: 'Box Score' },
     { id: 'pbp', label: 'Play-by-Play' },
     { id: 'scoring', label: 'Scoring Plays' },
     { id: 'winprob', label: 'Win Probability' },
     { id: 'compare', label: 'Team Compare' },
+    { id: 'info', label: 'Game Info' },
   ];
 
   return (
@@ -452,12 +531,14 @@ function GameModal({ game, detail, onClose }) {
             <div className="text-center py-12 text-red-400 text-sm">Error: {detail.error}</div>
           ) : (
             <>
+              {modalTab === 'live' && <LiveTab game={game} detail={detail} />}
               {modalTab === 'linescore' && <LinescoreTab home={home} away={away} detail={detail} />}
               {modalTab === 'box' && <BoxScoreTab detail={detail} />}
               {modalTab === 'pbp' && <PlayByPlayTab detail={detail} />}
               {modalTab === 'scoring' && <ScoringPlaysTab detail={detail} />}
               {modalTab === 'winprob' && <WinProbabilityTab detail={detail} />}
               {modalTab === 'compare' && <TeamCompareTab detail={detail} />}
+              {modalTab === 'info' && <GameInfoTab detail={detail} />}
             </>
           )}
         </div>
@@ -699,6 +780,205 @@ function TeamCompareTab({ detail }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function LiveTab({ game, detail }) {
+  // Prefer the richer situation from the summary endpoint, fall back to scoreboard.
+  const sit = detail?.situation || game.competitions?.[0]?.situation;
+  const comp = game.competitions?.[0];
+  const home = comp?.competitors?.find((c) => c.homeAway === 'home');
+  const away = comp?.competitors?.find((c) => c.homeAway === 'away');
+  const lastPlay = sit?.lastPlay?.text || detail?.plays?.[detail.plays.length - 1]?.text;
+  const dueUp = detail?.situation?.dueUp || sit?.dueUp;
+  const probables = detail?.boxscore?.teams?.flatMap?.((t) => t.probableStarter || []) || [];
+
+  if (!sit) return <EmptyState text="Live situation not available yet — waiting for first pitch." />;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/[0.06] to-transparent p-6">
+        <div className="flex flex-col items-center">
+          <Diamond
+            onFirst={!!sit.onFirst}
+            onSecond={!!sit.onSecond}
+            onThird={!!sit.onThird}
+            size={140}
+          />
+          <div className="mt-3 text-[10px] mono uppercase tracking-[0.3em] text-white/40">
+            {game.status?.type?.shortDetail}
+          </div>
+        </div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="text-[10px] mono uppercase tracking-[0.3em] text-white/40">Count</div>
+          <div className="display text-white text-6xl font-black tabular-nums">
+            {sit.balls ?? 0}<span className="text-white/30">–</span>{sit.strikes ?? 0}
+          </div>
+          <div className="flex gap-1.5">
+            {[0,1,2].map((i) => (
+              <span key={i} className="h-2.5 w-2.5 rounded-full" style={{ background: i < (sit.outs ?? 0) ? '#ef4444' : 'rgba(255,255,255,0.12)' }} />
+            ))}
+          </div>
+          <div className="text-[10px] mono uppercase tracking-widest text-white/40">{sit.outs ?? 0} Out{(sit.outs ?? 0) === 1 ? '' : 's'}</div>
+        </div>
+        <div className="space-y-3">
+          {sit.batter?.athlete && (
+            <PlayerLine label="At Bat" athlete={sit.batter.athlete} note={sit.batter.summary} />
+          )}
+          {sit.pitcher?.athlete && (
+            <PlayerLine label="Pitching" athlete={sit.pitcher.athlete} note={sit.pitcher.summary} />
+          )}
+        </div>
+      </div>
+
+      {lastPlay && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">Last Play</div>
+          <div className="text-white text-sm">{lastPlay}</div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <RunnerCard base="3B" runner={sit.onThird} />
+        <RunnerCard base="2B" runner={sit.onSecond} />
+        <RunnerCard base="1B" runner={sit.onFirst} />
+      </div>
+
+      {dueUp && dueUp.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Due Up</div>
+          <div className="flex flex-wrap gap-3">
+            {dueUp.map((d, i) => (
+              <div key={i} className="text-xs text-white/80">
+                <span className="text-white/40 mono mr-1">{i + 1}.</span>
+                {d.athlete?.shortName || d.athlete?.displayName}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 mono text-xs">
+        <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+          <div className="text-[10px] uppercase tracking-widest text-white/40">{away?.team?.abbreviation}</div>
+          <div className="display text-white text-3xl font-black tabular-nums">{away?.score ?? '0'}</div>
+          <div className="text-white/40 text-[10px] uppercase">H {away?.hits ?? '–'} · E {away?.errors ?? '–'}</div>
+        </div>
+        <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+          <div className="text-[10px] uppercase tracking-widest text-white/40">{home?.team?.abbreviation}</div>
+          <div className="display text-white text-3xl font-black tabular-nums">{home?.score ?? '0'}</div>
+          <div className="text-white/40 text-[10px] uppercase">H {home?.hits ?? '–'} · E {home?.errors ?? '–'}</div>
+        </div>
+      </div>
+
+      <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center">
+        Auto-refresh every 15s
+      </div>
+    </div>
+  );
+}
+
+function PlayerLine({ label, athlete, note }) {
+  return (
+    <div>
+      <div className="text-[10px] mono uppercase tracking-widest text-white/40">{label}</div>
+      <div className="text-white text-sm font-semibold">{athlete.shortName || athlete.displayName}</div>
+      {note && <div className="text-white/50 text-[10px] mono">{note}</div>}
+    </div>
+  );
+}
+
+function RunnerCard({ base, runner }) {
+  const occupied = !!runner;
+  return (
+    <div className={`rounded-lg border p-3 ${occupied ? 'border-orange-500/40 bg-orange-500/5' : 'border-white/5 bg-white/[0.02]'}`}>
+      <div className="text-[10px] mono uppercase tracking-widest" style={{ color: occupied ? '#ff6b1a' : 'rgba(255,255,255,0.3)' }}>{base}</div>
+      <div className={`text-sm mt-1 ${occupied ? 'text-white' : 'text-white/30'}`}>
+        {occupied ? (runner.athlete?.shortName || runner.athlete?.displayName || 'Runner on') : 'Empty'}
+      </div>
+    </div>
+  );
+}
+
+function GameInfoTab({ detail }) {
+  const gi = detail?.gameInfo;
+  const venue = gi?.venue || detail?.header?.competitions?.[0]?.venue;
+  const weather = gi?.weather;
+  const attendance = gi?.attendance;
+  const officials = gi?.officials || [];
+  const broadcasts = detail?.header?.competitions?.[0]?.broadcasts || [];
+  const odds = detail?.pickcenter?.[0];
+
+  if (!gi && !venue && !odds) return <EmptyState text="Game info not available." />;
+
+  return (
+    <div className="space-y-6 text-sm">
+      {venue && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">Venue</div>
+          <div className="text-white font-semibold">{venue.fullName}</div>
+          {venue.address && (
+            <div className="text-white/50 text-xs mono">
+              {venue.address.city}{venue.address.state ? `, ${venue.address.state}` : ''}
+            </div>
+          )}
+          {typeof venue.capacity === 'number' && (
+            <div className="text-white/40 text-[10px] mono uppercase mt-1">Capacity {venue.capacity.toLocaleString()}</div>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {weather && (
+          <InfoCard label="Weather">
+            <div className="text-white">{weather.displayValue || weather.summary}</div>
+            {typeof weather.temperature === 'number' && <div className="text-white/50 text-xs mono">{weather.temperature}°</div>}
+          </InfoCard>
+        )}
+        {attendance != null && (
+          <InfoCard label="Attendance">
+            <div className="text-white tabular-nums">{Number(attendance).toLocaleString()}</div>
+          </InfoCard>
+        )}
+        {broadcasts.length > 0 && (
+          <InfoCard label="Broadcast">
+            <div className="text-white">{broadcasts.flatMap((b) => b.media?.shortName || b.names || []).join(' · ')}</div>
+          </InfoCard>
+        )}
+      </div>
+
+      {odds && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">Odds</div>
+          {odds.details && <div className="text-white">{odds.details}</div>}
+          {odds.overUnder != null && <div className="text-white/60 text-xs mono">O/U {odds.overUnder}</div>}
+          {odds.provider?.name && <div className="text-white/30 text-[10px] mono uppercase mt-1">{odds.provider.name}</div>}
+        </div>
+      )}
+
+      {officials.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">Officials</div>
+          <div className="grid grid-cols-2 gap-2">
+            {officials.map((o, i) => (
+              <div key={i} className="text-xs">
+                <span className="text-white/40 mono mr-2 uppercase">{o.position?.displayName || o.position?.name}</span>
+                <span className="text-white">{o.fullName || o.displayName}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoCard({ label, children }) {
+  return (
+    <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+      <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-1">{label}</div>
+      {children}
     </div>
   );
 }
