@@ -308,71 +308,325 @@ function StatsView() {
   );
 }
 
+/* ============================================================ */
+/*                         GAME MODAL                            */
+/* ============================================================ */
+
 function GameModal({ game, detail, onClose }) {
+  const [modalTab, setModalTab] = useState('linescore');
   const comp = game.competitions?.[0];
   const home = comp?.competitors?.find((c) => c.homeAway === 'home');
   const away = comp?.competitors?.find((c) => c.homeAway === 'away');
-  const maxInnings = Math.max(home?.linescores?.length || 0, away?.linescores?.length || 0, 7);
-  const innings = Array.from({ length: maxInnings }, (_, i) => i + 1);
+
+  const tabs = [
+    { id: 'linescore', label: 'Linescore' },
+    { id: 'box', label: 'Box Score' },
+    { id: 'pbp', label: 'Play-by-Play' },
+    { id: 'scoring', label: 'Scoring Plays' },
+    { id: 'winprob', label: 'Win Probability' },
+    { id: 'compare', label: 'Team Compare' },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 p-6" style={{ background: '#141210' }} onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-white/60 hover:text-white"><X className="h-4 w-4" /></button>
-        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-1">{game.status?.type?.shortDetail}</div>
-        <div className="display text-white text-2xl font-bold mb-5">
-          {away?.team?.displayName} <span className="text-white/30">@</span> {home?.team?.displayName}
-        </div>
-        <div className="overflow-x-auto mb-6">
-          <table className="w-full mono text-sm">
-            <thead>
-              <tr className="text-white/30 text-[10px] uppercase tracking-widest">
-                <th className="text-left py-2 pr-4">Team</th>
-                {innings.map((i) => <th key={i} className="px-2 text-center w-8">{i}</th>)}
-                <th className="px-2 text-center font-bold text-white/60">R</th>
-                <th className="px-2 text-center text-white/60">H</th>
-                <th className="px-2 text-center text-white/60">E</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[away, home].map((t, ti) => (
-                <tr key={ti} className="border-t border-white/5">
-                  <td className="py-2 pr-4 text-white font-semibold">{t?.team?.abbreviation || t?.team?.shortDisplayName}</td>
-                  {innings.map((i) => { const ls = t?.linescores?.[i - 1]; return <td key={i} className="px-2 text-center text-white/70">{ls?.value ?? ''}</td>; })}
-                  <td className="px-2 text-center text-white font-bold">{t?.score ?? '—'}</td>
-                  <td className="px-2 text-center text-white/60">{t?.hits ?? '—'}</td>
-                  <td className="px-2 text-center text-white/60">{t?.errors ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {detail?.leaders && detail.leaders.length > 0 && (
-          <div>
-            <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Game Leaders</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {detail.leaders.slice(0, 2).map((teamLeaders, idx) => (
-                <div key={idx} className="space-y-2">
-                  <div className="text-white/70 text-xs font-semibold">{teamLeaders.team?.displayName}</div>
-                  {(teamLeaders.leaders || []).slice(0, 3).map((cat, j) => {
-                    const l = cat.leaders?.[0]; if (!l) return null;
-                    return (
-                      <div key={j} className="flex items-center justify-between text-xs py-1 border-b border-white/5">
-                        <span className="text-white/40 uppercase mono text-[10px]">{cat.shortDisplayName}</span>
-                        <span className="text-white">{l.athlete?.shortName} <span className="mono text-white/50 ml-2">{l.displayValue}</span></span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+      <div className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-white/10" style={{ background: '#141210' }} onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="sticky top-4 float-right mr-4 z-10 p-2 rounded-full bg-black/40 hover:bg-white/10 text-white/60 hover:text-white">
+          <X className="h-4 w-4" />
+        </button>
+
+        <div className="px-6 pt-6 pb-4">
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-1">{game.status?.type?.shortDetail}</div>
+          <div className="display text-white text-2xl md:text-3xl font-bold mb-1">
+            {away?.team?.displayName} <span className="text-white/30">@</span> {home?.team?.displayName}
           </div>
-        )}
+          <div className="mono text-white/40 text-sm">
+            {away?.team?.abbreviation} {away?.score ?? '—'} <span className="text-white/20 mx-2">·</span> {home?.team?.abbreviation} {home?.score ?? '—'}
+          </div>
+        </div>
+
+        <div className="px-6 border-b border-white/10 flex gap-1 overflow-x-auto">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setModalTab(t.id)}
+              className={`relative px-4 py-3 text-[11px] mono uppercase tracking-widest whitespace-nowrap transition-colors ${modalTab === t.id ? 'text-white' : 'text-white/40 hover:text-white/70'}`}
+            >
+              {t.label}
+              {modalTab === t.id && <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: '#ff6b1a' }}></div>}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-6">
+          {!detail ? (
+            <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading game data…</div>
+          ) : detail.error ? (
+            <div className="text-center py-12 text-red-400 text-sm">Error: {detail.error}</div>
+          ) : (
+            <>
+              {modalTab === 'linescore' && <LinescoreTab home={home} away={away} detail={detail} />}
+              {modalTab === 'box' && <BoxScoreTab detail={detail} />}
+              {modalTab === 'pbp' && <PlayByPlayTab detail={detail} />}
+              {modalTab === 'scoring' && <ScoringPlaysTab detail={detail} />}
+              {modalTab === 'winprob' && <WinProbabilityTab detail={detail} />}
+              {modalTab === 'compare' && <TeamCompareTab detail={detail} />}
+            </>
+          )}
+        </div>
+
         {comp?.venue?.fullName && (
-          <div className="mt-5 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30">
+          <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30">
             {comp.venue.fullName}{comp.venue.address?.city ? ` · ${comp.venue.address.city}, ${comp.venue.address.state || ''}` : ''}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+function LinescoreTab({ home, away, detail }) {
+  const maxInnings = Math.max(home?.linescores?.length || 0, away?.linescores?.length || 0, 7);
+  const innings = Array.from({ length: maxInnings }, (_, i) => i + 1);
+  return (
+    <div>
+      <div className="overflow-x-auto mb-6">
+        <table className="w-full mono text-sm">
+          <thead>
+            <tr className="text-white/30 text-[10px] uppercase tracking-widest">
+              <th className="text-left py-2 pr-4">Team</th>
+              {innings.map((i) => <th key={i} className="px-2 text-center w-8">{i}</th>)}
+              <th className="px-2 text-center font-bold text-white/60">R</th>
+              <th className="px-2 text-center text-white/60">H</th>
+              <th className="px-2 text-center text-white/60">E</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[away, home].map((t, ti) => (
+              <tr key={ti} className="border-t border-white/5">
+                <td className="py-2 pr-4 text-white font-semibold">{t?.team?.abbreviation || t?.team?.shortDisplayName}</td>
+                {innings.map((i) => { const ls = t?.linescores?.[i - 1]; return <td key={i} className="px-2 text-center text-white/70">{ls?.value ?? ''}</td>; })}
+                <td className="px-2 text-center text-white font-bold">{t?.score ?? '—'}</td>
+                <td className="px-2 text-center text-white/60">{t?.hits ?? '—'}</td>
+                <td className="px-2 text-center text-white/60">{t?.errors ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {detail?.leaders && detail.leaders.length > 0 && (
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Game Leaders</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {detail.leaders.slice(0, 2).map((teamLeaders, idx) => (
+              <div key={idx} className="space-y-2">
+                <div className="text-white/70 text-xs font-semibold">{teamLeaders.team?.displayName}</div>
+                {(teamLeaders.leaders || []).slice(0, 4).map((cat, j) => {
+                  const l = cat.leaders?.[0]; if (!l) return null;
+                  return (
+                    <div key={j} className="flex items-center justify-between text-xs py-1.5 border-b border-white/5">
+                      <span className="text-white/40 uppercase mono text-[10px]">{cat.shortDisplayName}</span>
+                      <span className="text-white">{l.athlete?.shortName} <span className="mono text-white/50 ml-2">{l.displayValue}</span></span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BoxScoreTab({ detail }) {
+  const players = detail?.boxscore?.players || [];
+  if (players.length === 0) return <EmptyState text="Box score not available for this game." />;
+  return (
+    <div className="space-y-8">
+      {players.map((teamData, ti) => {
+        const teamName = teamData.team?.displayName || teamData.team?.name;
+        return (
+          <div key={ti}>
+            <div className="display text-white text-xl font-bold mb-3 flex items-center gap-2">
+              {teamData.team?.logo && <img src={teamData.team.logo} alt="" className="h-6 w-6" />}
+              {teamName}
+            </div>
+            {(teamData.statistics || []).map((statGroup, sgi) => {
+              const labels = statGroup.labels || [];
+              const athletes = statGroup.athletes || [];
+              const groupName = statGroup.name || statGroup.text || (sgi === 0 ? 'Batting' : 'Pitching');
+              if (athletes.length === 0) return null;
+              return (
+                <div key={sgi} className="mb-5">
+                  <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-2">{groupName}</div>
+                  <div className="overflow-x-auto rounded-lg border border-white/5">
+                    <table className="w-full mono text-xs">
+                      <thead>
+                        <tr className="bg-white/[0.02]">
+                          <th className="text-left py-2 px-3 text-white/40 font-normal uppercase tracking-wider">Player</th>
+                          {labels.map((lbl, li) => (
+                            <th key={li} className="text-center py-2 px-2 text-white/40 font-normal uppercase tracking-wider">{lbl}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {athletes.map((a, ai) => (
+                          <tr key={ai} className="border-t border-white/5 hover:bg-white/[0.02]">
+                            <td className="py-2 px-3 text-white whitespace-nowrap">
+                              {a.athlete?.shortName || a.athlete?.displayName}
+                              {a.position?.abbreviation && <span className="text-white/30 ml-2 text-[10px]">{a.position.abbreviation}</span>}
+                            </td>
+                            {(a.stats || []).map((s, si) => (
+                              <td key={si} className="text-center py-2 px-2 text-white/80 tabular-nums">{s}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlayByPlayTab({ detail }) {
+  const plays = detail?.plays || [];
+  if (plays.length === 0) return <EmptyState text="Play-by-play not available for this game." />;
+  // Group by inning/period
+  const byPeriod = {};
+  plays.forEach((p) => {
+    const period = p.period?.displayValue || p.period?.number || 'Unknown';
+    if (!byPeriod[period]) byPeriod[period] = [];
+    byPeriod[period].push(p);
+  });
+  return (
+    <div className="space-y-6">
+      {Object.entries(byPeriod).map(([period, periodPlays]) => (
+        <div key={period}>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2 sticky top-0 bg-[#141210] py-1">{period}</div>
+          <div className="space-y-2">
+            {periodPlays.map((p, i) => (
+              <div key={p.id || i} className={`p-3 rounded-lg border text-xs ${p.scoringPlay ? 'border-orange-500/30 bg-orange-500/5' : 'border-white/5 bg-white/[0.02]'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-white/80 flex-1">{p.text}</div>
+                  {p.scoringPlay && (
+                    <div className="mono text-[10px] whitespace-nowrap" style={{ color: '#ff6b1a' }}>
+                      {p.awayScore}–{p.homeScore}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ScoringPlaysTab({ detail }) {
+  const plays = detail?.scoringPlays || (detail?.plays || []).filter((p) => p.scoringPlay);
+  if (!plays || plays.length === 0) return <EmptyState text="No scoring plays recorded yet." />;
+  return (
+    <div className="space-y-3">
+      {plays.map((p, i) => (
+        <div key={p.id || i} className="p-4 rounded-lg border border-white/10 bg-gradient-to-br from-orange-500/[0.04] to-transparent">
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <div className="text-[10px] mono tracking-widest uppercase text-white/40">{p.period?.displayValue || `Inning ${p.period?.number || ''}`}</div>
+            <div className="mono text-sm font-bold" style={{ color: '#ff6b1a' }}>{p.awayScore}–{p.homeScore}</div>
+          </div>
+          <div className="text-white text-sm">{p.text}</div>
+          {p.team?.displayName && <div className="text-[10px] text-white/30 mono uppercase mt-2">{p.team.displayName}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WinProbabilityTab({ detail }) {
+  const wp = detail?.winprobability || [];
+  if (wp.length === 0) return <EmptyState text="Win probability data not available for this game." />;
+
+  const w = 800, h = 240, pad = 30;
+  const points = wp.map((p, i) => ({
+    x: pad + (i / Math.max(wp.length - 1, 1)) * (w - pad * 2),
+    y: pad + (1 - (p.homeWinPercentage ?? 0.5)) * (h - pad * 2),
+    pct: p.homeWinPercentage ?? 0.5,
+  }));
+  const path = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
+  const areaPath = `${path} L ${points[points.length - 1].x} ${h - pad} L ${pad} ${h - pad} Z`;
+
+  const homeName = detail?.boxscore?.teams?.find((t) => t.homeAway === 'home')?.team?.abbreviation || 'HOME';
+  const awayName = detail?.boxscore?.teams?.find((t) => t.homeAway === 'away')?.team?.abbreviation || 'AWAY';
+
+  return (
+    <div>
+      <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-4">Home Win Probability</div>
+      <div className="rounded-xl border border-white/10 p-4 bg-white/[0.02]">
+        <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto">
+          {/* 50% line */}
+          <line x1={pad} x2={w - pad} y1={h / 2} y2={h / 2} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 4" />
+          <text x={pad + 4} y={h / 2 - 4} fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="monospace">50%</text>
+          {/* Labels */}
+          <text x={pad} y={pad - 8} fill="rgba(255,255,255,0.5)" fontSize="11" fontFamily="monospace">{homeName} 100%</text>
+          <text x={pad} y={h - 8} fill="rgba(255,255,255,0.5)" fontSize="11" fontFamily="monospace">{awayName} 100%</text>
+          {/* Area + line */}
+          <path d={areaPath} fill="#ff6b1a" fillOpacity="0.12" />
+          <path d={path} fill="none" stroke="#ff6b1a" strokeWidth="2.5" strokeLinejoin="round" />
+        </svg>
+        <div className="mt-3 text-[10px] mono uppercase tracking-widest text-white/30 text-center">
+          {wp.length} plays tracked
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamCompareTab({ detail }) {
+  const teams = detail?.boxscore?.teams || [];
+  if (teams.length < 2) return <EmptyState text="Team comparison data not available." />;
+  // Build a unified list of stat names from both teams
+  const statKeys = new Set();
+  teams.forEach((t) => (t.statistics || []).forEach((s) => statKeys.add(s.label || s.name)));
+  const rows = Array.from(statKeys);
+  const get = (team, key) => {
+    const s = (team.statistics || []).find((x) => (x.label || x.name) === key);
+    return s?.displayValue ?? s?.value ?? '—';
+  };
+  const away = teams.find((t) => t.homeAway === 'away') || teams[0];
+  const home = teams.find((t) => t.homeAway === 'home') || teams[1];
+
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-4 items-center mb-4 pb-3 border-b border-white/10">
+        <div className="text-right">
+          <div className="text-white font-semibold text-sm">{away.team?.abbreviation}</div>
+          <div className="text-[10px] text-white/40 mono uppercase">Away</div>
+        </div>
+        <div className="text-center text-[10px] mono tracking-[0.3em] uppercase text-white/40">vs</div>
+        <div>
+          <div className="text-white font-semibold text-sm">{home.team?.abbreviation}</div>
+          <div className="text-[10px] text-white/40 mono uppercase">Home</div>
+        </div>
+      </div>
+      <div className="space-y-1">
+        {rows.map((key) => (
+          <div key={key} className="grid grid-cols-3 gap-4 items-center py-2 border-b border-white/5 text-sm">
+            <div className="text-right mono text-white tabular-nums">{get(away, key)}</div>
+            <div className="text-center text-[10px] mono uppercase tracking-wider text-white/40">{key}</div>
+            <div className="mono text-white tabular-nums">{get(home, key)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ text }) {
+  return <div className="text-center py-12 text-white/30 text-sm">{text}</div>;
 }
