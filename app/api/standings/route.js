@@ -1,140 +1,250 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Major D1 softball conferences. Slug format matches d1softball.com URLs:
-// https://d1softball.com/conference/<slug>/
-const CONFERENCES = [
-  { name: 'SEC', slug: 'southeastern-conference' },
-  { name: 'ACC', slug: 'atlantic-coast-conference' },
-  { name: 'Big 12', slug: 'big-12-conference' },
-  { name: 'Big Ten', slug: 'big-ten-conference' },
-  { name: 'Pac-12', slug: 'pac-12-conference' },
-  { name: 'American', slug: 'american-athletic-conference' },
-  { name: 'Big East', slug: 'big-east-conference' },
-  { name: 'Mountain West', slug: 'mountain-west-conference' },
-  { name: 'Conference USA', slug: 'conference-usa' },
-  { name: 'Sun Belt', slug: 'sun-belt-conference' },
-];
+// Aggregate D1 softball standings by walking NCAA.com's daily scoreboard JSON
+// from the start of the season to today, tallying W/L per team and grouping
+// by the conference the NCAA feed already attaches to each team.
+//
+// Endpoint shape (confirmed working for NCAA softball):
+//   https://data.ncaa.com/casablanca/scoreboard/softball-women/d1/YYYY/MM/DD/scoreboard.json
 
+const SEASON_START = { month: 2, day: 1 }; // Feb 1
 const HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.9',
+  'Accept': 'application/json',
 };
 
-function stripTags(s) {
-  return (s || '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// Major D1 softball conferences we want to surface in the UI by default.
+// Names here are normalized substrings — anything containing one of these
+// (case-insensitive) gets bucketed under the matching display name.
+const MAJOR_CONFS = [
+  { display: 'SEC', match: ['southeastern', 'sec'] },
+  { display: 'ACC', match: ['atlantic coast', 'acc'] },
+  { display: 'Big 12', match: ['big 12'] },
+  { display: 'Big Ten', match: ['big ten'] },
+  { display: 'Pac-12', match: ['pac-12', 'pac 12'] },
+  { display: 'American', match: ['american athletic', 'aac'] },
+  { display: 'Big East', match: ['big east'] },
+  { display: 'Mountain West', match: ['mountain west'] },
+  { display: 'Conference USA', match: ['conference usa', 'c-usa', 'cusa'] },
+  { display: 'Sun Belt', match: ['sun belt'] },
+];
 
-// Parse a single HTML table into { headers: [], rows: [[]] }
-function parseTable(tableHtml) {
-  const rowMatches = [...tableHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
-  const rows = rowMatches.map((m) => {
-    const cellHtml = m[1];
-    const cells = [...cellHtml.matchAll(/<(t[hd])[^>]*>([\s\S]*?)<\/\1>/gi)].map((c) => c[2]);
-    return cells;
-  });
-  if (rows.length === 0) return null;
-  let headerRow = null;
-  let headerIdx = -1;
-  for (let i = 0; i < Math.min(rows.length, 3); i++) {
-    if (/<th[\s>]/i.test(rowMatches[i][1])) {
-      headerRow = rows[i].map(stripTags);
-      headerIdx = i;
-      break;
-    }
+function pad(n) { return n < 10 ? `0${n}` : `${n}`; }
+
+function dateRange(startY, startM, startD, end) {
+  const dates = [];
+  const cur = new Date(Date.UTC(startY, startM - 1, startD));
+  while (cur <= end) {
+    dates.push(new Date(cur));
+    cur.setUTCDate(cur.getUTCDate() + 1);
   }
-  const dataRows = rows.slice(headerIdx + 1).filter((r) => r.length > 1);
-  return { headers: headerRow || [], rows: dataRows };
+  return dates;
 }
 
-// Score how "standings-like" a table looks. Higher = more likely.
-function scoreTable(parsed) {
-  if (!parsed || parsed.rows.length < 4) return 0;
-  let score = 0;
-  const headerStr = parsed.headers.join(' ').toLowerCase();
-  if (/team|school/.test(headerStr)) score += 3;
-  if (/conf|conference/.test(headerStr)) score += 3;
-  if (/overall|record/.test(headerStr)) score += 3;
-  if (/\bw\b|\bl\b|wins|losses/.test(headerStr)) score += 2;
-  if (/pct|percent|gb|streak/.test(headerStr)) score += 2;
-  if (parsed.rows.length >= 6 && parsed.rows.length <= 20) score += 2;
-  // First column should look like team names (have alpha chars)
-  const firstColSample = parsed.rows.slice(0, 3).map((r) => stripTags(r[0] || '')).join(' ');
-  if (/[A-Za-z]{3,}/.test(firstColSample)) score += 1;
-  return score;
-}
-
-function extractStandingsFromHtml(html) {
-  const tables = [...html.matchAll(/<table[^>]*>([\s\S]*?)<\/table>/gi)];
-  let best = null;
-  let bestScore = 0;
-  for (const t of tables) {
-    const parsed = parseTable(t[1]);
-    const s = scoreTable(parsed);
-    if (s > bestScore) {
-      best = parsed;
-      bestScore = s;
-    }
-  }
-  return bestScore >= 5 ? best : null;
-}
-
-function rowsToTeams(parsed) {
-  return parsed.rows
-    .map((cells) => {
-      const stripped = cells.map(stripTags);
-      const logoMatch = cells[0]?.match(/<img[^>]+src=["']([^"']+)["']/i);
-      return {
-        name: stripped[0] || '',
-        logo: logoMatch?.[1],
-        stats: stripped.slice(1),
-      };
-    })
-    .filter((t) => t.name && !/^total/i.test(t.name));
-}
-
-async function fetchConference(conf) {
-  const url = `https://d1softball.com/conference/${conf.slug}/`;
+async function fetchDay(date) {
+  const url = `https://data.ncaa.com/casablanca/scoreboard/softball-women/d1/${date.getUTCFullYear()}/${pad(date.getUTCMonth() + 1)}/${pad(date.getUTCDate())}/scoreboard.json`;
   try {
-    const r = await fetch(url, { headers: HEADERS, redirect: 'follow', cache: 'no-store' });
-    if (!r.ok) return { name: conf.name, error: `HTTP ${r.status}`, url };
-    const html = await r.text();
-    const parsed = extractStandingsFromHtml(html);
-    if (!parsed) return { name: conf.name, error: 'No standings table found', url };
-    return {
-      name: conf.name,
-      abbreviation: conf.name,
-      headers: parsed.headers.slice(1),
-      teams: rowsToTeams(parsed),
-      source: 'd1softball.com',
-      sourceUrl: url,
-    };
+    const r = await fetch(url, { headers: HEADERS, cache: 'no-store' });
+    if (!r.ok) return { games: [] };
+    return await r.json();
   } catch (e) {
-    return { name: conf.name, error: e.message, url };
+    return { games: [] };
   }
+}
+
+// Pull the team's conference name out of whatever shape NCAA used.
+function getConf(side) {
+  if (!side) return '';
+  if (Array.isArray(side.conferences) && side.conferences.length) {
+    const c = side.conferences[0];
+    return c.conferenceName || c.name || '';
+  }
+  return side.conference || side.conferenceName || '';
+}
+
+function getTeamName(side) {
+  return (
+    side?.names?.full ||
+    side?.names?.short ||
+    side?.names?.seo ||
+    side?.nameRaw ||
+    side?.name ||
+    ''
+  );
+}
+
+function getTeamLogo(side) {
+  const seo = side?.names?.seo;
+  // NCAA hosts team logos at a predictable path keyed by SEO slug.
+  return seo ? `https://i.turner.ncaa.com/sites/default/files/images/logos/schools/bgl/${seo}.svg` : null;
+}
+
+function isFinal(game) {
+  const state = (game.gameState || game.gameStatus || '').toLowerCase();
+  return state === 'final' || state === 'f' || state === 'final/' || state.includes('final');
+}
+
+function bucketConference(name) {
+  const lower = (name || '').toLowerCase();
+  for (const c of MAJOR_CONFS) {
+    if (c.match.some((m) => lower.includes(m))) return c.display;
+  }
+  return name || 'Other';
 }
 
 export async function GET() {
-  const results = await Promise.all(CONFERENCES.map(fetchConference));
-  const conferences = results.filter((r) => !r.error && r.teams?.length);
-  const failures = results.filter((r) => r.error || !r.teams?.length);
-  if (conferences.length === 0) {
+  try {
+    const now = new Date();
+    const year = now.getUTCFullYear();
+    const dates = dateRange(year, SEASON_START.month, SEASON_START.day, now);
+
+    // Cap parallelism a bit to be polite to NCAA
+    const batchSize = 20;
+    const allGames = [];
+    for (let i = 0; i < dates.length; i += batchSize) {
+      const batch = dates.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(fetchDay));
+      results.forEach((d) => {
+        (d.games || []).forEach((g) => {
+          const game = g.game || g;
+          if (isFinal(game)) allGames.push(game);
+        });
+      });
+    }
+
+    // Tally W/L per team
+    const teams = new Map(); // key: team name, value: { name, logo, conf, w, l, cw, cl, lastResults: [] }
+    const ensure = (side) => {
+      const name = getTeamName(side);
+      if (!name) return null;
+      if (!teams.has(name)) {
+        teams.set(name, {
+          name,
+          logo: getTeamLogo(side),
+          conf: getConf(side),
+          w: 0, l: 0, cw: 0, cl: 0,
+          recent: [], // 'W' or 'L', most recent appended last
+        });
+      } else {
+        // refresh conf/logo if missing
+        const t = teams.get(name);
+        if (!t.conf) t.conf = getConf(side);
+        if (!t.logo) t.logo = getTeamLogo(side);
+      }
+      return teams.get(name);
+    };
+
+    for (const g of allGames) {
+      const home = g.home || g.homeTeam;
+      const away = g.away || g.awayTeam;
+      if (!home || !away) continue;
+      const ht = ensure(home);
+      const at = ensure(away);
+      if (!ht || !at) continue;
+
+      const homeScore = parseInt(home.score, 10);
+      const awayScore = parseInt(away.score, 10);
+      if (Number.isNaN(homeScore) || Number.isNaN(awayScore)) continue;
+
+      const homeWon = home.winner === true || home.winner === 'true' || homeScore > awayScore;
+      const sameConf = ht.conf && at.conf && ht.conf === at.conf;
+
+      if (homeWon) {
+        ht.w++; at.l++;
+        if (sameConf) { ht.cw++; at.cl++; }
+        ht.recent.push('W'); at.recent.push('L');
+      } else {
+        at.w++; ht.l++;
+        if (sameConf) { at.cw++; ht.cl++; }
+        at.recent.push('W'); ht.recent.push('L');
+      }
+    }
+
+    // Compute streaks from recent results
+    const streak = (rec) => {
+      if (!rec.length) return '';
+      const last = rec[rec.length - 1];
+      let n = 0;
+      for (let i = rec.length - 1; i >= 0 && rec[i] === last; i--) n++;
+      return `${last}${n}`;
+    };
+    const last10 = (rec) => {
+      const slice = rec.slice(-10);
+      const w = slice.filter((x) => x === 'W').length;
+      return `${w}-${slice.length - w}`;
+    };
+
+    // Group teams by display conference, filtering out non-major buckets
+    const buckets = new Map();
+    for (const t of teams.values()) {
+      if (!t.conf) continue;
+      const display = bucketConference(t.conf);
+      if (!MAJOR_CONFS.find((c) => c.display === display)) continue;
+      if (!buckets.has(display)) buckets.set(display, []);
+      buckets.get(display).push(t);
+    }
+
+    // Sort teams within each conference: conference wins desc, then conf pct, then overall pct
+    const pct = (w, l) => (w + l > 0 ? w / (w + l) : 0);
+    for (const arr of buckets.values()) {
+      arr.sort((a, b) => {
+        if (b.cw !== a.cw) return b.cw - a.cw;
+        if (b.cw + b.cl !== a.cw + a.cl) return (b.cw + b.cl) - (a.cw + a.cl);
+        const cpa = pct(a.cw, a.cl), cpb = pct(b.cw, b.cl);
+        if (cpb !== cpa) return cpb - cpa;
+        return pct(b.w, b.l) - pct(a.w, a.l);
+      });
+    }
+
+    // Order conferences in MAJOR_CONFS order
+    const conferences = MAJOR_CONFS
+      .map((c) => ({ display: c.display, teams: buckets.get(c.display) || [] }))
+      .filter((c) => c.teams.length > 0)
+      .map((c) => ({
+        name: c.display,
+        abbreviation: c.display,
+        headers: ['Conf', 'Pct', 'Overall', 'Pct', 'Streak', 'L10'],
+        teams: c.teams.map((t) => {
+          const cp = pct(t.cw, t.cl);
+          const op = pct(t.w, t.l);
+          return {
+            name: t.name,
+            logo: t.logo,
+            stats: [
+              `${t.cw}-${t.cl}`,
+              cp ? cp.toFixed(3).replace(/^0/, '') : '.000',
+              `${t.w}-${t.l}`,
+              op ? op.toFixed(3).replace(/^0/, '') : '.000',
+              streak(t.recent),
+              last10(t.recent),
+            ],
+          };
+        }),
+      }));
+
+    if (conferences.length === 0) {
+      return Response.json(
+        { error: 'No standings could be aggregated from NCAA.com', debug: { datesScanned: dates.length, gamesParsed: allGames.length, teamsFound: teams.size } },
+        { status: 502 }
+      );
+    }
+
     return Response.json(
-      { error: 'Could not parse standings from any conference', debug: failures },
-      { status: 502 }
+      {
+        conferences,
+        meta: {
+          source: 'data.ncaa.com',
+          datesScanned: dates.length,
+          gamesParsed: allGames.length,
+          teamsFound: teams.size,
+          generatedAt: now.toISOString(),
+        },
+      },
+      { headers: { 'Cache-Control': 'public, max-age=600, s-maxage=600' } }
     );
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 });
   }
-  return Response.json(
-    { conferences, failures: failures.length ? failures : undefined },
-    { headers: { 'Cache-Control': 'public, max-age=600' } }
-  );
 }
