@@ -761,7 +761,9 @@ function WinProbabilityTab({ detail }) {
 
 // Curated categories the Team Compare tab scouts. Must stay in sync with the
 // slugs the player-stats route actually matches — these are the same slugs
-// surfaced in the Players tab.
+// surfaced in the Players tab. `lowerIsBetter` flags the two pitching stats
+// (ERA, WHIP) where a smaller number is the good number; everything else
+// higher-wins.
 const COMPARE_BATTING = [
   { slug: 'batting-avg',  short: 'BA'  },
   { slug: 'home-runs',    short: 'HR'  },
@@ -775,15 +777,97 @@ const COMPARE_BATTING = [
   { slug: 'triples',      short: '3B'  },
 ];
 const COMPARE_PITCHING = [
-  { slug: 'era',             short: 'ERA'  },
+  { slug: 'era',             short: 'ERA',  lowerIsBetter: true },
   { slug: 'wins',            short: 'W'    },
   { slug: 'strikeouts',      short: 'K'    },
   { slug: 'saves',           short: 'SV'   },
-  { slug: 'whip',            short: 'WHIP' },
+  { slug: 'whip',            short: 'WHIP', lowerIsBetter: true },
   { slug: 'k-per-7',         short: 'K/7'  },
   { slug: 'innings-pitched', short: 'IP'   },
   { slug: 'shutouts',        short: 'SHO'  },
 ];
+
+// Map the NCAA short-code column headers to human-readable names. Several
+// codes (R, H, BB, SO) mean different things for batters vs pitchers, so the
+// lookup is side-aware.
+const COMMON_STAT_LABELS = {
+  'G':    'Games',
+  'GP':   'Games Played',
+  'GS':   'Games Started',
+  'Pct':  'Winning Percentage',
+  'PCT':  'Winning Percentage',
+  'W%':   'Winning Percentage',
+};
+const BATTING_STAT_LABELS = {
+  'AB':    'At Bats',
+  'R':     'Runs Scored',
+  'H':     'Hits',
+  '2B':    'Doubles',
+  '3B':    'Triples',
+  'HR':    'Home Runs',
+  'RBI':   'Runs Batted In',
+  'RBIs':  'Runs Batted In',
+  'BB':    'Walks',
+  'SO':    'Strikeouts',
+  'K':     'Strikeouts',
+  'SB':    'Stolen Bases',
+  'CS':    'Caught Stealing',
+  'HBP':   'Hit By Pitch',
+  'HP':    'Hit By Pitch',
+  'SH':    'Sacrifice Hits',
+  'SF':    'Sacrifice Flies',
+  'TB':    'Total Bases',
+  'GDP':   'Grounded Into DP',
+  'BA':    'Batting Average',
+  'AVG':   'Batting Average',
+  'OBP':   'On Base Percentage',
+  'SLG':   'Slugging Percentage',
+  'OPS':   'On-base Plus Slugging',
+  'SB%':   'Stolen Base Percentage',
+  'SBPct': 'Stolen Base Percentage',
+  'BB/G':  'Walks Per Game',
+  'H/G':   'Hits Per Game',
+  'R/G':   'Runs Per Game',
+  'HR/G':  'Home Runs Per Game',
+  'RBI/G': 'RBI Per Game',
+  'SB/G':  'Stolen Bases Per Game',
+  '2B/G':  'Doubles Per Game',
+  '3B/G':  'Triples Per Game',
+};
+const PITCHING_STAT_LABELS = {
+  'IP':    'Innings Pitched',
+  'W':     'Wins',
+  'L':     'Losses',
+  'APP':   'Appearances',
+  'App':   'Appearances',
+  'CG':    'Complete Games',
+  'SV':    'Saves',
+  'SHO':   'Shutouts',
+  'SO':    'Strikeouts',
+  'K':     'Strikeouts',
+  'H':     'Hits Allowed',
+  'R':     'Runs Allowed',
+  'ER':    'Earned Runs',
+  'BB':    'Walks Allowed',
+  'HB':    'Hit Batters',
+  'WP':    'Wild Pitches',
+  'BK':    'Balks',
+  'BF':    'Batters Faced',
+  'ERA':   'Earned Run Average',
+  'WHIP':  'Walks + Hits per Inning',
+  'OBA':   'Opponent Batting Average',
+  'K/7':   'Strikeouts Per 7 Innings',
+  'SO/7':  'Strikeouts Per 7 Innings',
+  'BB/7':  'Walks Per 7 Innings',
+  'H/7':   'Hits Per 7 Innings',
+  'K:BB':  'Strikeout-to-Walk Ratio',
+  'K/BB':  'Strikeout-to-Walk Ratio',
+};
+function fullStatName(short, side) {
+  if (!short) return short;
+  const sideMap = side === 'pitching' ? PITCHING_STAT_LABELS : BATTING_STAT_LABELS;
+  return sideMap[short] || COMMON_STAT_LABELS[short] || short;
+}
 
 function TeamCompareTab({ home, away, rankings }) {
   const [leaders, setLeaders] = useState(null); // { [slug]: { rows, short, label } }
@@ -947,29 +1031,44 @@ function TeamCompareTab({ home, away, rankings }) {
     );
   };
 
-  const LeaderCell = ({ leader, align }) => {
+  // Decide who's better in a given stat row. Returns 'home' | 'away' | null.
+  // null means tie, missing value, or un-parseable — the UI should show neutral.
+  const pickWinner = (awayLeader, homeLeader, lowerIsBetter) => {
+    const a = awayLeader ? parseFloat(awayLeader.primary) : NaN;
+    const h = homeLeader ? parseFloat(homeLeader.primary) : NaN;
+    if (!Number.isFinite(a) && !Number.isFinite(h)) return null;
+    if (!Number.isFinite(a)) return 'home';
+    if (!Number.isFinite(h)) return 'away';
+    if (a === h) return null;
+    const awayBetter = lowerIsBetter ? a < h : a > h;
+    return awayBetter ? 'away' : 'home';
+  };
+
+  const LeaderCell = ({ leader, align, isWinner }) => {
     if (!leader) {
       return <div className={`text-white/20 text-xs mono ${align === 'right' ? 'text-right' : 'text-left'}`}>—</div>;
     }
+    const winnerStyle = isWinner ? { color: '#ff6b1a' } : {};
     return (
       <div className={`min-w-0 ${align === 'right' ? 'text-right' : 'text-left'}`}>
-        <div className="text-white text-sm font-semibold truncate">
-          <span className="text-white/40 mono text-[10px] mr-1.5">#{leader.rank}</span>
+        <div className={`text-sm font-semibold truncate ${isWinner ? '' : 'text-white'}`} style={winnerStyle}>
+          <span className={`mono text-[10px] mr-1.5 ${isWinner ? 'text-white/50' : 'text-white/40'}`}>#{leader.rank}</span>
           {leader.name}
         </div>
-        <div className="text-white/50 text-[10px] mono tabular-nums">{leader.primary}</div>
+        <div className={`mono text-[11px] tabular-nums font-bold ${isWinner ? '' : 'text-white/50'}`} style={winnerStyle}>{leader.primary}</div>
       </div>
     );
   };
 
-  const StatRow = ({ slug, short }) => {
+  const StatRow = ({ slug, short, lowerIsBetter }) => {
     const awayLeader = findLeader(slug, awayName);
     const homeLeader = findLeader(slug, homeName);
+    const winner = pickWinner(awayLeader, homeLeader, lowerIsBetter);
     return (
       <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center py-2.5 border-b border-white/5">
-        <LeaderCell leader={awayLeader} align="right" />
+        <LeaderCell leader={awayLeader} align="right" isWinner={winner === 'away'} />
         <div className="text-center text-[10px] mono uppercase tracking-widest text-white/40 w-14">{short}</div>
-        <LeaderCell leader={homeLeader} align="left" />
+        <LeaderCell leader={homeLeader} align="left" isWinner={winner === 'home'} />
       </div>
     );
   };
@@ -988,7 +1087,7 @@ function TeamCompareTab({ home, away, rankings }) {
           <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-6">Loading leaders…</div>
         ) : (
           <div>
-            {COMPARE_BATTING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} />)}
+            {COMPARE_BATTING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} lowerIsBetter={c.lowerIsBetter} />)}
           </div>
         )}
       </div>
@@ -999,7 +1098,7 @@ function TeamCompareTab({ home, away, rankings }) {
           <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-6">Loading leaders…</div>
         ) : (
           <div>
-            {COMPARE_PITCHING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} />)}
+            {COMPARE_PITCHING.map((c) => <StatRow key={c.slug} slug={c.slug} short={c.short} lowerIsBetter={c.lowerIsBetter} />)}
           </div>
         )}
       </div>
@@ -1600,12 +1699,19 @@ function PlayerModal({ player, onClose }) {
                 <div className="mb-6">
                   <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-3">Season Stat Line</div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                    {data.stats.map((s, i) => (
-                      <div key={`${s.label}-${i}`} className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
-                        <div className="text-[10px] mono tracking-[0.2em] uppercase text-white/40">{s.label}</div>
-                        <div className="text-white tabular-nums mono text-sm font-bold mt-1">{s.value}</div>
-                      </div>
-                    ))}
+                    {data.stats.map((s, i) => {
+                      const full = fullStatName(s.label, data.side || player.side);
+                      const hasExpansion = full !== s.label;
+                      return (
+                        <div key={`${s.label}-${i}`} className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+                          <div className="text-[10px] leading-tight text-white/60">{full}</div>
+                          {hasExpansion && (
+                            <div className="text-[9px] mono tracking-[0.2em] uppercase text-white/30 mt-0.5">{s.label}</div>
+                          )}
+                          <div className="text-white tabular-nums mono text-lg font-bold mt-1">{s.value}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
