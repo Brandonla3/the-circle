@@ -25,31 +25,35 @@ const HEADERS = {
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 };
 
-// Curated stat slugs we expose to the UI. The `label` field is matched against
-// NCAA.com's category sidebar to resolve the opaque stat ID. `short` is the
-// column header we expect henrygd to surface for the primary stat.
+// Curated stat slugs we expose to the UI. `labels` is a list of possible NCAA
+// sidebar labels we'll accept (via substring match) — NCAA varies between
+// abbreviated ("ERA") and long ("Earned Run Average") wording depending on
+// page, so we provide multiple aliases per category. `short` is the column
+// header we expect henrygd to surface for the primary stat.
 const CATEGORY_BATTING = [
-  { slug: 'batting-avg',   label: 'Batting Average',          short: 'BA'  },
-  { slug: 'home-runs',     label: 'Home Runs',                short: 'HR'  },
-  { slug: 'rbi',           label: 'Runs Batted In',           short: 'RBI' },
-  { slug: 'hits',          label: 'Hits',                     short: 'H'   },
-  { slug: 'runs-scored',   label: 'Runs Scored',              short: 'R'   },
-  { slug: 'stolen-bases',  label: 'Stolen Bases',             short: 'SB'  },
-  { slug: 'on-base-pct',   label: 'On Base Percentage',       short: 'OBP' },
-  { slug: 'slugging-pct',  label: 'Slugging Percentage',      short: 'SLG' },
-  { slug: 'doubles',       label: 'Doubles',                  short: '2B'  },
+  { slug: 'batting-avg',   short: 'BA',   labels: ['Batting Average', 'Batting Avg', 'Batting Pct', 'Avg'] },
+  { slug: 'home-runs',     short: 'HR',   labels: ['Home Runs Per Game', 'Home Runs', 'HR'] },
+  { slug: 'rbi',           short: 'RBI',  labels: ['Runs Batted In Per Game', 'Runs Batted In', 'RBI Per Game', 'RBI'] },
+  { slug: 'hits',          short: 'H',    labels: ['Hits Per Game', 'Hits'] },
+  { slug: 'runs-scored',   short: 'R',    labels: ['Runs Scored Per Game', 'Runs Scored', 'Runs Per Game', 'Runs'] },
+  { slug: 'stolen-bases',  short: 'SB',   labels: ['Stolen Bases Per Game', 'Stolen Bases', 'Stolen Base Pct'] },
+  { slug: 'on-base-pct',   short: 'OBP',  labels: ['On Base Percentage', 'On Base Pct', 'OBP'] },
+  { slug: 'slugging-pct',  short: 'SLG',  labels: ['Slugging Percentage', 'Slugging Pct', 'SLG'] },
+  { slug: 'doubles',       short: '2B',   labels: ['Doubles Per Game', 'Doubles'] },
+  { slug: 'triples',       short: '3B',   labels: ['Triples Per Game', 'Triples'] },
+  { slug: 'walks',         short: 'BB',   labels: ['Walks Drawn Per Game', 'Walks Per Game', 'Walks'] },
 ];
 
 const CATEGORY_PITCHING = [
-  { slug: 'era',              label: 'Earned Run Average',            short: 'ERA'  },
-  { slug: 'wins',             label: 'Wins',                          short: 'W'    },
-  { slug: 'strikeouts',       label: 'Strikeouts',                    short: 'SO'   },
-  { slug: 'saves',            label: 'Saves',                         short: 'SV'   },
-  { slug: 'whip',             label: 'WHIP',                          short: 'WHIP' },
-  { slug: 'k-per-7',          label: 'Strikeouts Per Seven Innings',  short: 'K/7'  },
-  { slug: 'innings-pitched',  label: 'Innings Pitched',               short: 'IP'   },
-  { slug: 'shutouts',         label: 'Shutouts',                      short: 'SHO'  },
-  { slug: 'opponent-ba',      label: 'Opponent Batting Average',      short: 'OBA'  },
+  { slug: 'era',              short: 'ERA',  labels: ['Earned Run Average', 'Earned Run Avg', 'ERA'] },
+  { slug: 'wins',             short: 'W',    labels: ['Winning Percentage', 'Wins', 'Pitching Wins'] },
+  { slug: 'strikeouts',       short: 'SO',   labels: ['Strikeouts Per Game', 'Total Strikeouts', 'Strikeouts'] },
+  { slug: 'saves',            short: 'SV',   labels: ['Saves Per Game', 'Saves'] },
+  { slug: 'whip',             short: 'WHIP', labels: ['Walks Hits Per Innings Pitched', 'WHIP'] },
+  { slug: 'k-per-7',          short: 'K/7',  labels: ['Strikeouts Per Seven Innings', 'Strikeouts Per 7 Innings', 'Strikeouts/7', 'K/7'] },
+  { slug: 'innings-pitched',  short: 'IP',   labels: ['Innings Pitched', 'Innings'] },
+  { slug: 'shutouts',         short: 'SHO',  labels: ['Shutouts Per Game', 'Shutouts'] },
+  { slug: 'opponent-ba',      short: 'OBA',  labels: ['Opponent Batting Average', 'Opponent Batting Avg', 'Opponent Avg', 'OBA'] },
 ];
 
 const ALL_CATEGORIES = [
@@ -95,46 +99,144 @@ function teamLogoFromName(name) {
   return `https://i.turner.ncaa.com/sites/default/files/images/logos/schools/bgl/${slug}.svg`;
 }
 
+// Collect every (id -> label) pair from a chunk of HTML. We try several
+// patterns because NCAA.com's stat index varies: sometimes it's rendered as
+// <a href="...individual/NNN">Label</a>, sometimes as <option value="NNN">,
+// and the URL prefix can be /current/, /2026/, or a relative path.
+function extractLabelsFromHtml(html) {
+  const found = new Map(); // id (string) -> label (string)
+
+  const addMatch = (id, rawLabel) => {
+    if (!id || !rawLabel) return;
+    const label = rawLabel
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&#\d+;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!label || label.length < 2) return;
+    // Keep the longest label we've seen for a given id (more descriptive).
+    const prev = found.get(id);
+    if (!prev || label.length > prev.length) found.set(id, label);
+  };
+
+  const patterns = [
+    // <a href="...anything.../individual/NNN...">Label</a>
+    /href="[^"]*?\/individual\/(\d+)[^"]*"[^>]*>([\s\S]*?)<\/a>/gi,
+    // <option value="NNN">Label</option>  (dropdown form)
+    /<option[^>]*\bvalue="(\d+)"[^>]*>([\s\S]*?)<\/option>/gi,
+    // <option value="...individual/NNN...">Label</option>
+    /<option[^>]*\bvalue="[^"]*?\/individual\/(\d+)[^"]*"[^>]*>([\s\S]*?)<\/option>/gi,
+    // data-stat-id="NNN" ... >Label<
+    /data-stat-id="(\d+)"[^>]*>([\s\S]*?)</gi,
+  ];
+
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(html)) !== null) addMatch(m[1], m[2]);
+  }
+  return found;
+}
+
+async function fetchWithTimeout(url, ms = 10000) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  try {
+    return await fetch(url, { headers: HEADERS, cache: 'no-store', signal: ac.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Try several source URLs in order; the first one that yields any labels wins.
+// NCAA.com's root stats page may render an empty sidebar client-side, whereas
+// an individual stat page typically renders the full category list server-side.
+async function discoverRawLabels() {
+  const sources = [
+    'https://www.ncaa.com/stats/softball/d1',
+    'https://www.ncaa.com/stats/softball/d1/current/individual/271',
+    'https://www.ncaa.com/stats/softball/d1/current/individual/200',
+  ];
+  const merged = new Map();
+  const attempts = [];
+  for (const url of sources) {
+    try {
+      const r = await fetchWithTimeout(url, 10000);
+      const ok = r.ok;
+      const html = ok ? await r.text() : '';
+      const found = ok ? extractLabelsFromHtml(html) : new Map();
+      attempts.push({ url, status: r.status, labelsFound: found.size });
+      for (const [id, label] of found) {
+        if (!merged.has(id)) merged.set(id, label);
+      }
+      if (merged.size >= 10) break; // enough coverage, stop probing
+    } catch (e) {
+      attempts.push({ url, status: 'error', error: String(e.message || e) });
+    }
+  }
+  return { merged, attempts };
+}
+
 async function discoverCategoryIds() {
   if (categoryMap) return categoryMap;
   if (categoryMapPromise) return categoryMapPromise;
   categoryMapPromise = (async () => {
-    const url = 'https://www.ncaa.com/stats/softball/d1';
-    const r = await fetch(url, { headers: HEADERS, cache: 'no-store' });
-    if (!r.ok) throw new Error(`NCAA stats index HTTP ${r.status}`);
-    const html = await r.text();
-
-    // Pull every "/stats/softball/d1/current/individual/NNN" link with its label.
-    // The sidebar wraps each category in an <a>; we capture the id and the
-    // visible text (which may include extra whitespace from layout markup).
-    const linkRe =
-      /href="\/stats\/softball\/d1\/current\/individual\/(\d+)"[^>]*>([\s\S]*?)<\/a>/gi;
-    const labelToId = new Map();
-    let m;
-    while ((m = linkRe.exec(html)) !== null) {
-      const id = m[1];
-      const label = m[2]
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      const key = normalizeLabel(label);
-      if (key && !labelToId.has(key)) labelToId.set(key, id);
-    }
-    if (labelToId.size === 0) {
-      throw new Error('Failed to parse any NCAA stat categories from sidebar');
+    const { merged, attempts } = await discoverRawLabels();
+    if (merged.size === 0) {
+      const err = new Error('Failed to parse any NCAA stat categories');
+      err.debug = { attempts };
+      throw err;
     }
 
+    // Index normalized NCAA labels -> id so we can do lenient matching.
+    const normToId = new Map();
+    const byId = {};
+    for (const [id, label] of merged) {
+      byId[id] = label;
+      const norm = normalizeLabel(label);
+      if (!normToId.has(norm)) normToId.set(norm, id);
+    }
+
+    // For each curated category, accept the first alias that matches any NCAA
+    // label either by full equality or by substring (in either direction).
     const map = new Map();
     for (const cat of ALL_CATEGORIES) {
-      const id = labelToId.get(normalizeLabel(cat.label));
-      if (id) map.set(cat.slug, { id, label: cat.label, short: cat.short, side: cat.side });
+      let hit = null;
+      for (const alias of cat.labels) {
+        const a = normalizeLabel(alias);
+        if (!a) continue;
+        // Exact normalized match first.
+        if (normToId.has(a)) { hit = { id: normToId.get(a), ncaaLabel: byId[normToId.get(a)] }; break; }
+        // Then substring in either direction.
+        for (const [nLabel, id] of normToId) {
+          if (nLabel.includes(a) || a.includes(nLabel)) {
+            hit = { id, ncaaLabel: byId[id] };
+            break;
+          }
+        }
+        if (hit) break;
+      }
+      if (hit) {
+        map.set(cat.slug, {
+          id: hit.id,
+          label: hit.ncaaLabel || cat.labels[0],
+          short: cat.short,
+          side: cat.side,
+        });
+      }
     }
+
     if (map.size === 0) {
-      throw new Error('No curated categories matched any NCAA sidebar label');
+      const err = new Error('No curated categories matched any NCAA sidebar label');
+      err.debug = { attempts, discoveredCount: merged.size, sampleLabels: Array.from(merged.values()).slice(0, 20) };
+      throw err;
     }
+
     categoryMap = map;
+    categoryMap._attempts = attempts;
+    categoryMap._discoveredCount = merged.size;
+    categoryMap._raw = Object.fromEntries(merged);
     return map;
   })();
   try {
@@ -154,7 +256,7 @@ function normalizeRow(row, cat) {
   const teamName = get('Team', 'TEAM', 'team', 'School', 'school');
   // Pull the primary stat: try the curated short header first, then fall back
   // to scanning the row for the first numeric-looking non-metadata value.
-  let primary = get(cat.short, cat.label);
+  let primary = get(cat.short, cat.label || '');
   if (!primary) {
     for (const [k, v] of Object.entries(row)) {
       if (META_KEYS.has(k)) continue;
@@ -292,6 +394,46 @@ export async function GET(request) {
       });
     }
 
+    // Diagnostic endpoint — returns what discovery actually found so we can
+    // iterate on the label-matching logic without flying blind.
+    if (searchParams.get('debug')) {
+      try {
+        const map = await discoverCategoryIds();
+        const matched = ALL_CATEGORIES
+          .filter((c) => map.has(c.slug))
+          .map((c) => ({
+            slug: c.slug,
+            side: c.side,
+            tried: c.labels,
+            matchedNcaaLabel: map.get(c.slug).label,
+            statId: map.get(c.slug).id,
+          }));
+        const missing = ALL_CATEGORIES
+          .filter((c) => !map.has(c.slug))
+          .map((c) => ({ slug: c.slug, side: c.side, tried: c.labels }));
+        return new Response(JSON.stringify({
+          ok: true,
+          attempts: map._attempts || [],
+          discoveredCount: map._discoveredCount || 0,
+          rawDiscovered: map._raw || {},
+          curatedMatched: matched,
+          curatedMissing: missing,
+        }, null, 2), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({
+          ok: false,
+          error: e.message,
+          debug: e.debug || null,
+        }, null, 2), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const slug = searchParams.get('category');
     if (!slug) {
       // Index of categories the UI can show.
@@ -300,7 +442,7 @@ export async function GET(request) {
         .filter((c) => map.has(c.slug))
         .map((c) => ({
           slug: c.slug,
-          label: c.label,
+          label: map.get(c.slug).label,
           short: c.short,
           side: c.side,
         }));
@@ -322,7 +464,7 @@ export async function GET(request) {
       },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
+    return new Response(JSON.stringify({ error: e.message, debug: e.debug || undefined }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
