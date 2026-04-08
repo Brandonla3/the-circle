@@ -1047,53 +1047,22 @@ function StandingsView() {
 
   useEffect(() => {
     (async () => {
-      const season = new Date().getFullYear();
-      // ESPN's college standings live on site.web.api under /apis/v2/.
-      // Level 2 = conference grouping. Try a few candidates and use whichever returns data.
-      const candidates = [
-        `https://site.web.api.espn.com/apis/v2/sports/baseball/college-softball/standings?season=${season}&level=2&sort=winpercent%3Adesc`,
-        `https://site.web.api.espn.com/apis/v2/sports/baseball/college-softball/standings?season=${season}&level=2`,
-        `https://site.web.api.espn.com/apis/v2/sports/baseball/college-softball/standings?season=${season}`,
-        `${ESPN_SITE}/standings?season=${season}`,
-      ];
-      for (const url of candidates) {
-        try {
-          const r = await fetch(proxy(url));
-          if (!r.ok) continue;
-          const json = await r.json();
-          // Quick sanity check: walk for any standings.entries
-          const hasEntries = JSON.stringify(json).includes('"entries"');
-          if (hasEntries) { setData(json); return; }
-        } catch (e) { /* try next */ }
-      }
-      setError('No standings data returned by ESPN for any known endpoint.');
+      try {
+        const r = await fetch('/api/standings');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const json = await r.json();
+        if (json.error) throw new Error(json.error);
+        setData(json);
+      } catch (e) { setError(e.message); }
     })();
   }, []);
 
   if (error) return <div className="text-center py-20 text-red-400 text-sm">Error loading standings: {error}</div>;
   if (!data) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading standings…</div>;
 
-  // ESPN standings payload shape varies. Walk it and collect any node that has
-  // a `standings.entries` array, treating each as a conference group.
-  const groups = [];
-  const walk = (node) => {
-    if (!node || typeof node !== 'object') return;
-    if (node.standings?.entries?.length) {
-      groups.push({
-        name: node.name || node.shortName || node.abbreviation || 'Conference',
-        abbreviation: node.abbreviation,
-        entries: node.standings.entries,
-      });
-    }
-    if (Array.isArray(node.children)) node.children.forEach(walk);
-    if (Array.isArray(node.groups)) node.groups.forEach(walk);
-  };
-  walk(data);
-  if (data.children) data.children.forEach(walk);
-  if (data.groups) data.groups.forEach(walk);
-
-  if (groups.length === 0) {
-    return <EmptyState text="No standings data returned by ESPN. The conference standings API may not be populated yet for this season." />;
+  const conferences = data.conferences || [];
+  if (conferences.length === 0) {
+    return <EmptyState text="No standings parsed from ESPN's page. They may have changed their HTML structure." />;
   }
 
   const isMajor = (g) =>
@@ -1102,8 +1071,8 @@ function StandingsView() {
       (g.abbreviation || '').toLowerCase() === m.toLowerCase()
     );
 
-  const visible = showAll ? groups : groups.filter(isMajor);
-  const display = visible.length > 0 ? visible : groups; // fallback if filter wipes everything
+  const visible = showAll ? conferences : conferences.filter(isMajor);
+  const display = visible.length > 0 ? visible : conferences;
 
   return (
     <div className="space-y-12">
@@ -1116,7 +1085,7 @@ function StandingsView() {
           onClick={() => setShowAll((v) => !v)}
           className="text-[10px] mono uppercase tracking-widest px-3 py-1.5 rounded-full border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition"
         >
-          {showAll ? 'Major Only' : 'Show All'}
+          {showAll ? 'Major Only' : `Show All (${conferences.length})`}
         </button>
       </div>
 
@@ -1128,16 +1097,7 @@ function StandingsView() {
 }
 
 function ConferenceTable({ group, index }) {
-  // Each entry has team + stats. Stats are an array of { name, displayValue, value }.
-  const get = (entry, names) => {
-    const stats = entry.stats || [];
-    for (const n of names) {
-      const s = stats.find((x) => x.name === n || x.abbreviation === n || x.shortDisplayName === n);
-      if (s) return s.displayValue ?? s.value ?? '';
-    }
-    return '';
-  };
-
+  const headers = group.headers && group.headers.length ? group.headers : ['Team', 'Conf', 'Overall'];
   return (
     <div className="card-enter" style={{ animationDelay: `${Math.min(index * 60, 500)}ms` }}>
       <div className="mb-3 flex items-end justify-between">
@@ -1150,41 +1110,26 @@ function ConferenceTable({ group, index }) {
             <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
               <th className="text-left py-2 px-3 font-normal">#</th>
               <th className="text-left py-2 px-3 font-normal">Team</th>
-              <th className="text-center py-2 px-2 font-normal">Conf</th>
-              <th className="text-center py-2 px-2 font-normal">Pct</th>
-              <th className="text-center py-2 px-2 font-normal">Overall</th>
-              <th className="text-center py-2 px-2 font-normal">Streak</th>
-              <th className="text-center py-2 px-2 font-normal">Home</th>
-              <th className="text-center py-2 px-2 font-normal">Away</th>
+              {headers.map((h, hi) => (
+                <th key={hi} className="text-center py-2 px-2 font-normal whitespace-nowrap">{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {group.entries.map((e, i) => {
-              const t = e.team || {};
-              const conf = get(e, ['vsConf', 'conferenceRecord', 'leagueRecord']);
-              const overall = get(e, ['overall', 'Overall', 'overallRecord']);
-              const pct = get(e, ['winPercent', 'pct']);
-              const streak = get(e, ['streak', 'Streak']);
-              const homeRec = get(e, ['home', 'Home']);
-              const awayRec = get(e, ['away', 'road', 'Road']);
-              return (
-                <tr key={t.id || i} className="border-t border-white/5 hover:bg-white/[0.02]">
-                  <td className="py-2 px-3 text-white/40 tabular-nums">{i + 1}</td>
-                  <td className="py-2 px-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {t.logos?.[0]?.href && <img src={t.logos[0].href} alt="" className="h-5 w-5 object-contain" />}
-                      <span className="text-white truncate">{t.displayName || t.name || t.shortDisplayName}</span>
-                    </div>
-                  </td>
-                  <td className="text-center py-2 px-2 text-white/80 tabular-nums">{conf || '—'}</td>
-                  <td className="text-center py-2 px-2 text-white/60 tabular-nums">{pct || '—'}</td>
-                  <td className="text-center py-2 px-2 text-white/60 tabular-nums">{overall || '—'}</td>
-                  <td className="text-center py-2 px-2 text-white/60 tabular-nums">{streak || '—'}</td>
-                  <td className="text-center py-2 px-2 text-white/60 tabular-nums">{homeRec || '—'}</td>
-                  <td className="text-center py-2 px-2 text-white/60 tabular-nums">{awayRec || '—'}</td>
-                </tr>
-              );
-            })}
+            {group.teams.map((t, i) => (
+              <tr key={t.id || i} className="border-t border-white/5 hover:bg-white/[0.02]">
+                <td className="py-2 px-3 text-white/40 tabular-nums">{i + 1}</td>
+                <td className="py-2 px-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {t.logo && <img src={t.logo} alt="" className="h-5 w-5 object-contain" />}
+                    <span className="text-white truncate">{t.name}</span>
+                  </div>
+                </td>
+                {(t.stats || []).map((s, si) => (
+                  <td key={si} className="text-center py-2 px-2 text-white/70 tabular-nums whitespace-nowrap">{s || '—'}</td>
+                ))}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
