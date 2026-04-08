@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, BarChart3, Activity } from 'lucide-react';
+import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, BarChart3, Activity, Users } from 'lucide-react';
 
 const ESPN_SITE = 'https://site.api.espn.com/apis/site/v2/sports/baseball/college-softball';
 const ESPN_WEBAPI = 'https://site.web.api.espn.com/apis/site/v2/sports/baseball/college-softball';
@@ -24,6 +24,7 @@ export default function Page() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [selectedGame, setSelectedGame] = useState(null);
   const [gameDetail, setGameDetail] = useState(null);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
 
@@ -104,6 +105,7 @@ export default function Page() {
               {id:'rankings',label:'ESPN Rankings',icon:Trophy},
               {id:'ncaa',label:'NCAA RPI',icon:BarChart3, suffix:'*Weekly'},
               {id:'standings',label:'Standings',icon:Activity},
+              {id:'leaders',label:'Players',icon:Users},
               {id:'stats',label:'Teams',icon:TrendingUp},
             ].map((t) => {
               const Icon = t.icon; const active = tab === t.id;
@@ -173,10 +175,12 @@ export default function Page() {
         {tab === 'nolan' && <RpiView source="nolan" />}
         {tab === 'ncaa' && <RpiView source="ncaa" />}
         {tab === 'standings' && <StandingsView />}
+        {tab === 'leaders' && <LeadersView onSelectPlayer={setSelectedPlayer} />}
         {tab === 'stats' && <StatsView />}
       </main>
 
       {selectedGame && <GameModal game={selectedGame} detail={gameDetail} onRefresh={() => fetchGameDetail(selectedGame.id)} onClose={() => { setSelectedGame(null); setGameDetail(null); }} />}
+      {selectedPlayer && <PlayerModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />}
 
       <footer className="border-t border-white/5 mt-16 py-6 px-6 text-center text-[10px] mono tracking-widest uppercase text-white/20">
         Data via ESPN, NCAA.com & WarrenNolan.com · Built for Daladier
@@ -1169,6 +1173,286 @@ function ConferenceTable({ group, index }) {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function LeadersView({ onSelectPlayer }) {
+  const [categories, setCategories] = useState(null);
+  const [side, setSide] = useState('batting');
+  const [slug, setSlug] = useState('batting-avg');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+
+  // Pull the curated category index once on mount.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/player-stats')
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setCategories(d.categories || []); })
+      .catch((e) => { if (!cancelled) setErr(e.message); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch the active leaderboard whenever the category changes.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true); setErr(null); setData(null);
+    fetch(`/api/player-stats?category=${encodeURIComponent(slug)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d.error) setErr(d.error);
+        else setData(d);
+      })
+      .catch((e) => { if (!cancelled) setErr(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  const switchSide = (next) => {
+    if (next === side) return;
+    setSide(next);
+    const first = (categories || []).find((c) => c.side === next);
+    if (first) setSlug(first.slug);
+  };
+
+  const sideCats = (categories || []).filter((c) => c.side === side);
+
+  return (
+    <div>
+      <div className="mb-6 border-b border-white/10 pb-3 flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">Season Leaders</div>
+          <h2 className="display text-white text-3xl font-bold">Player {side === 'batting' ? 'Batting' : 'Pitching'} Leaders</h2>
+          <div className="text-white/40 text-xs mono mt-1">Source: NCAA.com · Click any player for a full profile</div>
+        </div>
+        <div className="flex gap-1 p-1 rounded-full border border-white/10 bg-white/[0.02]">
+          {['batting', 'pitching'].map((s) => (
+            <button
+              key={s}
+              onClick={() => switchSide(s)}
+              className={`px-4 py-1.5 rounded-full text-[10px] mono uppercase tracking-widest transition ${side === s ? 'text-white' : 'text-white/40 hover:text-white/70'}`}
+              style={side === s ? { background: '#ff6b1a' } : {}}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6 -mx-1 flex gap-1 overflow-x-auto pb-1">
+        {sideCats.map((c) => {
+          const active = c.slug === slug;
+          return (
+            <button
+              key={c.slug}
+              onClick={() => setSlug(c.slug)}
+              className={`px-3 py-1.5 rounded-full text-[10px] mono uppercase tracking-widest whitespace-nowrap border transition ${active ? 'text-white border-transparent' : 'text-white/50 border-white/10 hover:border-white/30 hover:text-white/80'}`}
+              style={active ? { background: 'rgba(255,107,26,0.18)', borderColor: 'rgba(255,107,26,0.45)', color: '#ffb88a' } : {}}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+        {!categories && (
+          <div className="text-white/30 mono text-[10px] tracking-widest uppercase px-3 py-1.5">Loading categories…</div>
+        )}
+      </div>
+
+      {err && (
+        <div className="max-w-xl mx-auto text-center py-16">
+          <div className="display text-white/30 text-3xl mb-3">Leaders unavailable</div>
+          <div className="text-white/50 text-sm">{err}</div>
+        </div>
+      )}
+
+      {!err && loading && (
+        <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading {data?.label || 'leaders'}…</div>
+      )}
+
+      {!err && !loading && data && data.rows && data.rows.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border border-white/10">
+          <table className="w-full mono text-xs">
+            <thead>
+              <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
+                <th className="text-left py-2 px-3 font-normal w-12">#</th>
+                <th className="text-left py-2 px-3 font-normal">Player</th>
+                <th className="text-left py-2 px-3 font-normal">Team</th>
+                <th className="text-center py-2 px-2 font-normal">Cl</th>
+                <th className="text-center py-2 px-2 font-normal">Pos</th>
+                <th className="text-center py-2 px-2 font-normal">G</th>
+                <th className="text-center py-2 px-2 font-normal text-white/70">{data.short || data.label}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.slice(0, 50).map((row, i) => {
+                const rankNum = parseInt(row.rank, 10);
+                const isTop5 = !isNaN(rankNum) && rankNum <= 5;
+                return (
+                  <tr
+                    key={`${row.name}-${row.team}-${i}`}
+                    onClick={() => onSelectPlayer && onSelectPlayer({ name: row.name, team: row.team, side, slug, primaryShort: data.short, primaryValue: row.primary })}
+                    className="card-enter border-t border-white/5 hover:bg-white/[0.03] cursor-pointer"
+                    style={{ animationDelay: `${Math.min(i * 12, 500)}ms` }}
+                  >
+                    <td className="py-2 px-3">
+                      <span className={`display text-2xl font-black ${isTop5 ? '' : 'text-white/40'}`} style={isTop5 ? { color: '#ff6b1a' } : {}}>{row.rank}</span>
+                    </td>
+                    <td className="py-2 px-3 text-white whitespace-nowrap">{row.name}</td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {row.teamLogo && (
+                          <img
+                            src={row.teamLogo}
+                            alt=""
+                            className="h-5 w-5 object-contain"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        )}
+                        <span className="text-white/70 truncate">{row.team}</span>
+                      </div>
+                    </td>
+                    <td className="text-center py-2 px-2 text-white/50">{row.cls || '—'}</td>
+                    <td className="text-center py-2 px-2 text-white/50">{row.position || '—'}</td>
+                    <td className="text-center py-2 px-2 text-white/60 tabular-nums">{row.gp || '—'}</td>
+                    <td className="text-center py-2 px-2 text-white font-bold tabular-nums">{row.primary || '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!err && !loading && data && (!data.rows || data.rows.length === 0) && (
+        <EmptyState text="No leaderboard rows yet. Likely off-season or NCAA hasn't published this category yet." />
+      )}
+
+      {data?.updated && (
+        <div className="mt-4 text-[10px] mono uppercase tracking-widest text-white/30">
+          Updated {data.updated}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlayerModal({ player, onClose }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setData(null); setErr(null);
+    const url = `/api/player-stats?profile=1&name=${encodeURIComponent(player.name)}&team=${encodeURIComponent(player.team || '')}&side=${encodeURIComponent(player.side || 'batting')}`;
+    fetch(url)
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!r.ok || j.error) setErr(j.error || `HTTP ${r.status}`);
+        else setData(j);
+      })
+      .catch((e) => { if (!cancelled) setErr(e.message); });
+    return () => { cancelled = true; };
+  }, [player.name, player.team, player.side]);
+
+  // Esc closes
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-2xl border border-white/10" style={{ background: '#141210' }} onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="sticky top-4 float-right mr-4 z-10 p-2 rounded-full bg-black/40 hover:bg-white/10 text-white/60 hover:text-white">
+          <X className="h-4 w-4" />
+        </button>
+
+        <div className="px-6 pt-6 pb-4">
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">{player.side === 'pitching' ? 'Pitching Profile' : 'Batting Profile'}</div>
+          <div className="flex items-center gap-4">
+            {data?.player?.teamLogo && (
+              <img
+                src={data.player.teamLogo}
+                alt=""
+                className="h-12 w-12 object-contain"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            )}
+            <div className="min-w-0">
+              <div className="display text-white text-3xl font-bold leading-tight truncate">{data?.player?.name || player.name}</div>
+              <div className="text-white/50 text-sm mono truncate">
+                {data?.player?.team || player.team}
+                {data?.player?.position && <span className="text-white/30"> · {data.player.position}</span>}
+                {data?.player?.cls && <span className="text-white/30"> · {data.player.cls}</span>}
+                {data?.player?.gp && <span className="text-white/30"> · {data.player.gp} G</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 pt-0">
+          {!data && !err && (
+            <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading profile…</div>
+          )}
+          {err && (
+            <div className="text-center py-12">
+              <div className="text-white/40 text-sm mb-2">No NCAA leaderboard data for this player.</div>
+              <div className="text-white/30 text-xs mono">{err}</div>
+            </div>
+          )}
+          {data && (
+            <>
+              {player.primaryShort && player.primaryValue && (
+                <div className="mb-6 p-5 rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent flex items-center gap-5">
+                  <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">{player.primaryShort}</div>
+                  <div className="display text-5xl font-black tabular-nums" style={{ color: '#ff6b1a' }}>{player.primaryValue}</div>
+                </div>
+              )}
+
+              {data.stats && data.stats.length > 0 && (
+                <div className="mb-6">
+                  <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-3">Season Stat Line</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    {data.stats.map((s, i) => (
+                      <div key={`${s.label}-${i}`} className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+                        <div className="text-[10px] mono tracking-[0.2em] uppercase text-white/40">{s.label}</div>
+                        <div className="text-white tabular-nums mono text-sm font-bold mt-1">{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {data.appearsIn && data.appearsIn.length > 0 && (
+                <div>
+                  <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-3">Leaderboard Appearances</div>
+                  <div className="flex flex-wrap gap-2">
+                    {data.appearsIn.map((a) => (
+                      <div
+                        key={a.slug}
+                        className="px-3 py-2 rounded-lg border border-white/10 bg-white/[0.02] text-xs flex items-center gap-2"
+                      >
+                        <span className="text-white/40 mono uppercase tracking-wider text-[10px]">#{a.rank}</span>
+                        <span className="text-white/80">{a.short || a.label}</span>
+                        <span className="text-white mono tabular-nums font-bold">{a.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30">
+          Aggregated from NCAA.com season leaderboards · Press Esc to close
+        </div>
       </div>
     </div>
   );
