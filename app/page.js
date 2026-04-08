@@ -339,25 +339,50 @@ function RankingsView({ rankings }) {
             </div>
             {poll.shortName && <div className="text-white/30 text-xs mono">{poll.shortName}</div>}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {(poll.ranks || []).slice(0, 25).map((r, i) => (
-              <div key={r.team?.id || i} className="card-enter flex items-center gap-4 py-3 px-4 rounded-lg border border-white/5 hover:border-white/20 hover:bg-white/[0.03] transition" style={{ animationDelay: `${i * 20}ms` }}>
-                <div className={`display text-3xl font-black w-10 ${r.current <= 5 ? '' : 'text-white/40'}`} style={r.current <= 5 ? { color: '#ff6b1a' } : {}}>{r.current}</div>
-                {r.team?.logos?.[0]?.href && <img src={r.team.logos[0].href} alt="" className="h-8 w-8 object-contain" />}
-                <div className="flex-1 min-w-0">
-                  <div className="text-white font-semibold text-sm truncate">{r.team?.name || r.team?.displayName}</div>
-                  <div className="text-[10px] mono text-white/40 uppercase">{r.recordSummary || ''}</div>
-                </div>
-                <div className="text-right">
-                  <div className="mono text-white/80 text-sm">{r.points?.toFixed?.(0) || r.points || ''}</div>
-                  {typeof r.previous === 'number' && r.previous !== r.current && (
-                    <div className={`text-[10px] mono ${r.previous > r.current ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {r.previous > r.current ? '▲' : '▼'}{Math.abs(r.previous - r.current)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto rounded-lg border border-white/10">
+            <table className="w-full mono text-xs">
+              <thead>
+                <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
+                  <th className="text-left py-2 px-3 font-normal w-12">#</th>
+                  <th className="text-left py-2 px-3 font-normal">Team</th>
+                  <th className="text-center py-2 px-2 font-normal">Record</th>
+                  <th className="text-center py-2 px-2 font-normal">Points</th>
+                  <th className="text-center py-2 px-2 font-normal">Prev</th>
+                  <th className="text-center py-2 px-2 font-normal">Trend</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(poll.ranks || []).slice(0, 25).map((r, i) => {
+                  const moved = typeof r.previous === 'number' && r.previous !== r.current;
+                  const up = moved && r.previous > r.current;
+                  return (
+                    <tr key={r.team?.id || i} className="card-enter border-t border-white/5 hover:bg-white/[0.02]" style={{ animationDelay: `${i * 15}ms` }}>
+                      <td className="py-2 px-3">
+                        <span className={`display text-2xl font-black ${r.current <= 5 ? '' : 'text-white/40'}`} style={r.current <= 5 ? { color: '#ff6b1a' } : {}}>{r.current}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {r.team?.logos?.[0]?.href && <img src={r.team.logos[0].href} alt="" className="h-5 w-5 object-contain" />}
+                          <span className="text-white truncate">{r.team?.name || r.team?.displayName}</span>
+                        </div>
+                      </td>
+                      <td className="text-center py-2 px-2 text-white/70 tabular-nums whitespace-nowrap">{r.recordSummary || '—'}</td>
+                      <td className="text-center py-2 px-2 text-white/80 tabular-nums">{r.points?.toFixed?.(0) || r.points || '—'}</td>
+                      <td className="text-center py-2 px-2 text-white/50 tabular-nums">{typeof r.previous === 'number' ? r.previous : '—'}</td>
+                      <td className="text-center py-2 px-2 tabular-nums">
+                        {moved ? (
+                          <span className={`mono text-[11px] ${up ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {up ? '▲' : '▼'}{Math.abs(r.previous - r.current)}
+                          </span>
+                        ) : (
+                          <span className="text-white/20">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       ))}
