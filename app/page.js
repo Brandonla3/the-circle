@@ -1,11 +1,11 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, BarChart3, Activity } from 'lucide-react';
- 
+
 const ESPN_SITE = 'https://site.api.espn.com/apis/site/v2/sports/baseball/college-softball';
 const ESPN_WEBAPI = 'https://site.web.api.espn.com/apis/site/v2/sports/baseball/college-softball';
 const proxy = (url) => `/api/espn?url=${encodeURIComponent(url)}`;
- 
+
 const fmtDate = (d) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -14,7 +14,7 @@ const fmtDate = (d) => {
 };
 const prettyDate = (d) =>
   d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
- 
+
 export default function Page() {
   const [tab, setTab] = useState('scores');
   const [date, setDate] = useState(new Date());
@@ -26,7 +26,7 @@ export default function Page() {
   const [gameDetail, setGameDetail] = useState(null);
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
- 
+
   const fetchScores = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError(null);
@@ -39,7 +39,7 @@ export default function Page() {
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }, [date]);
- 
+
   const fetchRankings = useCallback(async () => {
     try {
       const r = await fetch(proxy(`${ESPN_SITE}/rankings`));
@@ -47,7 +47,7 @@ export default function Page() {
       setRankings(await r.json());
     } catch (e) { setError(e.message); }
   }, []);
- 
+
   const fetchGameDetail = async (eventId) => {
     setGameDetail(null);
     try {
@@ -55,9 +55,9 @@ export default function Page() {
       setGameDetail(await r.json());
     } catch (e) { setGameDetail({ error: e.message }); }
   };
- 
+
   useEffect(() => { fetchScores(); fetchRankings(); }, [fetchScores, fetchRankings]);
- 
+
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     const hasLive = games.some((g) => g.status?.type?.state === 'in');
@@ -66,11 +66,11 @@ export default function Page() {
     }
     return () => pollRef.current && clearInterval(pollRef.current);
   }, [games, tab, fetchScores]);
- 
+
   const shiftDate = (days) => { const d = new Date(date); d.setDate(d.getDate() + days); setDate(d); };
   const liveCount = games.filter((g) => g.status?.type?.state === 'in').length;
   const finalCount = games.filter((g) => g.status?.type?.state === 'post').length;
- 
+
   return (
     <div className="min-h-screen w-full">
       <header className="relative border-b border-white/10" style={{ background: 'linear-gradient(180deg,#141210 0%,#0a0908 100%)' }}>
@@ -119,14 +119,14 @@ export default function Page() {
           </nav>
         </div>
       </header>
- 
+
       <main className="max-w-7xl mx-auto px-6 py-8">
         {error && (
           <div className="mb-6 p-4 rounded-lg border border-red-500/30 bg-red-500/5 text-red-300 text-sm">
             Error: {error}
           </div>
         )}
- 
+
         {tab === 'scores' && (
           <div>
             <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
@@ -143,7 +143,7 @@ export default function Page() {
                 {lastUpdate && `Updated ${lastUpdate.toLocaleTimeString()}`} {liveCount > 0 && '· Auto-refresh 20s'}
               </div>
             </div>
- 
+
             {loading && games.length === 0 ? (
               <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading scoreboard…</div>
             ) : games.length === 0 ? (
@@ -158,7 +158,7 @@ export default function Page() {
                 ))}
               </div>
             )}
- 
+
             {(liveCount > 0 || finalCount > 0) && (
               <div className="mt-10 pt-6 border-t border-white/5 flex gap-8 text-[10px] mono uppercase tracking-widest text-white/30">
                 <span>{games.length} Total</span>
@@ -168,23 +168,23 @@ export default function Page() {
             )}
           </div>
         )}
- 
+
         {tab === 'rankings' && <RankingsView rankings={rankings} />}
         {tab === 'nolan' && <RpiView source="nolan" />}
         {tab === 'ncaa' && <RpiView source="ncaa" />}
         {tab === 'standings' && <StandingsView />}
         {tab === 'stats' && <StatsView />}
       </main>
- 
+
       {selectedGame && <GameModal game={selectedGame} detail={gameDetail} onRefresh={() => fetchGameDetail(selectedGame.id)} onClose={() => { setSelectedGame(null); setGameDetail(null); }} />}
- 
+
       <footer className="border-t border-white/5 mt-16 py-6 px-6 text-center text-[10px] mono tracking-widest uppercase text-white/20">
         Data via ESPN, NCAA.com & WarrenNolan.com · Built for Daladier
       </footer>
     </div>
   );
 }
- 
+
 function Diamond({ onFirst, onSecond, onThird, size = 64 }) {
   const lit = '#ff6b1a';
   const dim = 'rgba(255,255,255,0.12)';
@@ -205,7 +205,7 @@ function Diamond({ onFirst, onSecond, onThird, size = 64 }) {
     </svg>
   );
 }
- 
+
 function CountOuts({ balls = 0, strikes = 0, outs = 0 }) {
   const Dot = ({ on, color }) => (
     <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: on ? color : 'rgba(255,255,255,0.15)' }} />
@@ -227,7 +227,7 @@ function CountOuts({ balls = 0, strikes = 0, outs = 0 }) {
     </div>
   );
 }
- 
+
 function GameCard({ game, index, onClick }) {
   const comp = game.competitions?.[0]; if (!comp) return null;
   const home = comp.competitors?.find((c) => c.homeAway === 'home');
@@ -236,7 +236,7 @@ function GameCard({ game, index, onClick }) {
   const detail = game.status?.type?.shortDetail || game.status?.type?.detail;
   const isLive = state === 'in'; const isFinal = state === 'post';
   const winner = isFinal ? (Number(home?.score) > Number(away?.score) ? 'home' : 'away') : null;
- 
+
   const TeamRow = ({ team, side }) => {
     const t = team?.team || {};
     const rank = team?.curatedRank?.current;
@@ -257,7 +257,7 @@ function GameCard({ game, index, onClick }) {
       </div>
     );
   };
- 
+
   // Glow when at least one team is ranked in the AP/USA Top 10.
   const homeRank = home?.curatedRank?.current;
   const awayRank = away?.curatedRank?.current;
@@ -265,7 +265,7 @@ function GameCard({ game, index, onClick }) {
   const coverageGlow = isTop10
     ? { boxShadow: '0 0 0 1px rgba(255,107,26,0.35), 0 0 24px -4px rgba(255,107,26,0.35)', borderColor: 'rgba(255,107,26,0.45)' }
     : {};
- 
+
   return (
     <div
       onClick={onClick}
@@ -323,7 +323,7 @@ function GameCard({ game, index, onClick }) {
     </div>
   );
 }
- 
+
 function RankingsView({ rankings }) {
   if (!rankings) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading rankings…</div>;
   const polls = rankings.rankings || [];
@@ -364,12 +364,12 @@ function RankingsView({ rankings }) {
     </div>
   );
 }
- 
+
 function RpiView({ source }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
- 
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setErr(null); setData(null);
@@ -380,7 +380,7 @@ function RpiView({ source }) {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [source]);
- 
+
   if (loading) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading {source === 'ncaa' ? 'NCAA' : 'Nolan'} RPI…</div>;
   if (err) return (
     <div className="max-w-xl mx-auto text-center py-16">
@@ -402,7 +402,7 @@ function RpiView({ source }) {
       </div>
     );
   }
- 
+
   return (
     <div>
       <div className="mb-6 flex items-end justify-between border-b border-white/10 pb-3 flex-wrap gap-3">
@@ -448,7 +448,7 @@ function RpiView({ source }) {
     </div>
   );
 }
- 
+
 function StatsView() {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -487,21 +487,21 @@ function StatsView() {
     </div>
   );
 }
- 
+
 function GameModal({ game, detail, onRefresh, onClose }) {
   const isLive = game.status?.type?.state === 'in';
   const [modalTab, setModalTab] = useState(isLive ? 'live' : 'linescore');
   const comp = game.competitions?.[0];
   const home = comp?.competitors?.find((c) => c.homeAway === 'home');
   const away = comp?.competitors?.find((c) => c.homeAway === 'away');
- 
+
   // Auto-refresh while live
   useEffect(() => {
     if (!isLive || !onRefresh) return;
     const id = setInterval(onRefresh, 15000);
     return () => clearInterval(id);
   }, [isLive, onRefresh]);
- 
+
   // Detect what coverage ESPN actually returned for this game so we can hide
   // tabs that would just show "not available." Linescore is always shown
   // because it's built from the scoreboard payload.
@@ -514,7 +514,7 @@ function GameModal({ game, detail, onRefresh, onClose }) {
   const hasInfo = !!(detail?.gameInfo || detail?.pickcenter);
   // If the summary hasn't loaded yet, optimistically show all tabs so they don't flicker.
   const loaded = !!detail && !detail.error;
- 
+
   const tabs = [
     ...(isLive && (hasSituation || !loaded) ? [{ id: 'live', label: 'Live' }] : []),
     { id: 'linescore', label: 'Linescore' },
@@ -525,19 +525,19 @@ function GameModal({ game, detail, onRefresh, onClose }) {
     ...(!loaded || hasCompare ? [{ id: 'compare', label: 'Team Compare' }] : []),
     ...(!loaded || hasInfo ? [{ id: 'info', label: 'Game Info' }] : []),
   ];
- 
+
   // If the active tab got hidden after data loaded, fall back to linescore.
   useEffect(() => {
     if (loaded && !tabs.find((t) => t.id === modalTab)) setModalTab('linescore');
   }, [loaded, tabs, modalTab]);
- 
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <div className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-white/10" style={{ background: '#141210' }} onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="sticky top-4 float-right mr-4 z-10 p-2 rounded-full bg-black/40 hover:bg-white/10 text-white/60 hover:text-white">
           <X className="h-4 w-4" />
         </button>
- 
+
         <div className="px-6 pt-6 pb-4">
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-1">{game.status?.type?.shortDetail}</div>
           <div className="display text-white text-2xl md:text-3xl font-bold mb-1">
@@ -547,7 +547,7 @@ function GameModal({ game, detail, onRefresh, onClose }) {
             {away?.team?.abbreviation} {away?.score ?? '—'} <span className="text-white/20 mx-2">·</span> {home?.team?.abbreviation} {home?.score ?? '—'}
           </div>
         </div>
- 
+
         <div className="px-6 border-b border-white/10 flex gap-1 overflow-x-auto">
           {tabs.map((t) => (
             <button
@@ -560,7 +560,7 @@ function GameModal({ game, detail, onRefresh, onClose }) {
             </button>
           ))}
         </div>
- 
+
         <div className="p-6">
           {!detail ? (
             <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading game data…</div>
@@ -584,7 +584,7 @@ function GameModal({ game, detail, onRefresh, onClose }) {
             </>
           )}
         </div>
- 
+
         {comp?.venue?.fullName && (
           <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30">
             {comp.venue.fullName}{comp.venue.address?.city ? ` · ${comp.venue.address.city}, ${comp.venue.address.state || ''}` : ''}
@@ -594,7 +594,7 @@ function GameModal({ game, detail, onRefresh, onClose }) {
     </div>
   );
 }
- 
+
 function LinescoreTab({ home, away, detail }) {
   const maxInnings = Math.max(home?.linescores?.length || 0, away?.linescores?.length || 0, 7);
   const innings = Array.from({ length: maxInnings }, (_, i) => i + 1);
@@ -648,7 +648,7 @@ function LinescoreTab({ home, away, detail }) {
     </div>
   );
 }
- 
+
 function BoxScoreTab({ detail }) {
   const players = detail?.boxscore?.players || [];
   if (players.length === 0) return <EmptyState text="Box score not available for this game." />;
@@ -704,7 +704,7 @@ function BoxScoreTab({ detail }) {
     </div>
   );
 }
- 
+
 function PlayByPlayTab({ detail }) {
   const plays = detail?.plays || [];
   if (plays.length === 0) return <EmptyState text="Play-by-play not available for this game." />;
@@ -738,7 +738,7 @@ function PlayByPlayTab({ detail }) {
     </div>
   );
 }
- 
+
 function ScoringPlaysTab({ detail }) {
   const plays = detail?.scoringPlays || (detail?.plays || []).filter((p) => p.scoringPlay);
   if (!plays || plays.length === 0) return <EmptyState text="No scoring plays recorded yet." />;
@@ -757,7 +757,7 @@ function ScoringPlaysTab({ detail }) {
     </div>
   );
 }
- 
+
 function WinProbabilityTab({ detail }) {
   const wp = detail?.winprobability || [];
   if (wp.length === 0) return <EmptyState text="Win probability data not available for this game." />;
@@ -787,7 +787,7 @@ function WinProbabilityTab({ detail }) {
     </div>
   );
 }
- 
+
 function TeamCompareTab({ detail }) {
   const teams = detail?.boxscore?.teams || [];
   if (teams.length < 2) return <EmptyState text="Team comparison data not available." />;
@@ -825,7 +825,7 @@ function TeamCompareTab({ detail }) {
     </div>
   );
 }
- 
+
 function LiveTab({ game, detail }) {
   // Prefer the richer situation from the summary endpoint, fall back to scoreboard.
   const sit = detail?.situation || game.competitions?.[0]?.situation;
@@ -835,9 +835,9 @@ function LiveTab({ game, detail }) {
   const lastPlay = sit?.lastPlay?.text || detail?.plays?.[detail.plays.length - 1]?.text;
   const dueUp = detail?.situation?.dueUp || sit?.dueUp;
   const probables = detail?.boxscore?.teams?.flatMap?.((t) => t.probableStarter || []) || [];
- 
+
   if (!sit) return <EmptyState text="Live situation not available yet — waiting for first pitch." />;
- 
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/[0.06] to-transparent p-6">
@@ -873,20 +873,20 @@ function LiveTab({ game, detail }) {
           )}
         </div>
       </div>
- 
+
       {lastPlay && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">Last Play</div>
           <div className="text-white text-sm">{lastPlay}</div>
         </div>
       )}
- 
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <RunnerCard base="3B" runner={sit.onThird} />
         <RunnerCard base="2B" runner={sit.onSecond} />
         <RunnerCard base="1B" runner={sit.onFirst} />
       </div>
- 
+
       {dueUp && dueUp.length > 0 && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Due Up</div>
@@ -900,7 +900,7 @@ function LiveTab({ game, detail }) {
           </div>
         </div>
       )}
- 
+
       <div className="grid grid-cols-2 gap-3 mono text-xs">
         <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
           <div className="text-[10px] uppercase tracking-widest text-white/40">{away?.team?.abbreviation}</div>
@@ -913,14 +913,14 @@ function LiveTab({ game, detail }) {
           <div className="text-white/40 text-[10px] uppercase">H {home?.hits ?? '–'} · E {home?.errors ?? '–'}</div>
         </div>
       </div>
- 
+
       <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center">
         Auto-refresh every 15s
       </div>
     </div>
   );
 }
- 
+
 function PlayerLine({ label, athlete, note }) {
   return (
     <div>
@@ -930,7 +930,7 @@ function PlayerLine({ label, athlete, note }) {
     </div>
   );
 }
- 
+
 function RunnerCard({ base, runner }) {
   const occupied = !!runner;
   return (
@@ -942,7 +942,7 @@ function RunnerCard({ base, runner }) {
     </div>
   );
 }
- 
+
 function GameInfoTab({ detail }) {
   const gi = detail?.gameInfo;
   const venue = gi?.venue || detail?.header?.competitions?.[0]?.venue;
@@ -951,9 +951,9 @@ function GameInfoTab({ detail }) {
   const officials = gi?.officials || [];
   const broadcasts = detail?.header?.competitions?.[0]?.broadcasts || [];
   const odds = detail?.pickcenter?.[0];
- 
+
   if (!gi && !venue && !odds) return <EmptyState text="Game info not available." />;
- 
+
   return (
     <div className="space-y-6 text-sm">
       {venue && (
@@ -970,7 +970,7 @@ function GameInfoTab({ detail }) {
           )}
         </div>
       )}
- 
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {weather && (
           <InfoCard label="Weather">
@@ -989,7 +989,7 @@ function GameInfoTab({ detail }) {
           </InfoCard>
         )}
       </div>
- 
+
       {odds && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">Odds</div>
@@ -998,7 +998,7 @@ function GameInfoTab({ detail }) {
           {odds.provider?.name && <div className="text-white/30 text-[10px] mono uppercase mt-1">{odds.provider.name}</div>}
         </div>
       )}
- 
+
       {officials.length > 0 && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">Officials</div>
@@ -1015,7 +1015,7 @@ function GameInfoTab({ detail }) {
     </div>
   );
 }
- 
+
 function InfoCard({ label, children }) {
   return (
     <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
@@ -1024,7 +1024,7 @@ function InfoCard({ label, children }) {
     </div>
   );
 }
- 
+
 // Major D1 softball conferences. Used to filter the full ESPN standings payload
 // down to the conferences most fans actually care about.
 const MAJOR_CONFERENCES = [
@@ -1039,26 +1039,40 @@ const MAJOR_CONFERENCES = [
   'Conference USA', 'C-USA',
   'Sun Belt',
 ];
- 
+
 function StandingsView() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [showAll, setShowAll] = useState(false);
- 
+
   useEffect(() => {
     (async () => {
-      try {
-        const season = new Date().getFullYear();
-        const r = await fetch(proxy(`${ESPN_SITE}/standings?season=${season}`));
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        setData(await r.json());
-      } catch (e) { setError(e.message); }
+      const season = new Date().getFullYear();
+      // ESPN's college standings live on site.web.api under /apis/v2/.
+      // Level 2 = conference grouping. Try a few candidates and use whichever returns data.
+      const candidates = [
+        `https://site.web.api.espn.com/apis/v2/sports/baseball/college-softball/standings?season=${season}&level=2&sort=winpercent%3Adesc`,
+        `https://site.web.api.espn.com/apis/v2/sports/baseball/college-softball/standings?season=${season}&level=2`,
+        `https://site.web.api.espn.com/apis/v2/sports/baseball/college-softball/standings?season=${season}`,
+        `${ESPN_SITE}/standings?season=${season}`,
+      ];
+      for (const url of candidates) {
+        try {
+          const r = await fetch(proxy(url));
+          if (!r.ok) continue;
+          const json = await r.json();
+          // Quick sanity check: walk for any standings.entries
+          const hasEntries = JSON.stringify(json).includes('"entries"');
+          if (hasEntries) { setData(json); return; }
+        } catch (e) { /* try next */ }
+      }
+      setError('No standings data returned by ESPN for any known endpoint.');
     })();
   }, []);
- 
+
   if (error) return <div className="text-center py-20 text-red-400 text-sm">Error loading standings: {error}</div>;
   if (!data) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading standings…</div>;
- 
+
   // ESPN standings payload shape varies. Walk it and collect any node that has
   // a `standings.entries` array, treating each as a conference group.
   const groups = [];
@@ -1077,20 +1091,20 @@ function StandingsView() {
   walk(data);
   if (data.children) data.children.forEach(walk);
   if (data.groups) data.groups.forEach(walk);
- 
+
   if (groups.length === 0) {
     return <EmptyState text="No standings data returned by ESPN. The conference standings API may not be populated yet for this season." />;
   }
- 
+
   const isMajor = (g) =>
     MAJOR_CONFERENCES.some((m) =>
       (g.name || '').toLowerCase().includes(m.toLowerCase()) ||
       (g.abbreviation || '').toLowerCase() === m.toLowerCase()
     );
- 
+
   const visible = showAll ? groups : groups.filter(isMajor);
   const display = visible.length > 0 ? visible : groups; // fallback if filter wipes everything
- 
+
   return (
     <div className="space-y-12">
       <div className="flex items-end justify-between border-b border-white/10 pb-3">
@@ -1105,14 +1119,14 @@ function StandingsView() {
           {showAll ? 'Major Only' : 'Show All'}
         </button>
       </div>
- 
+
       {display.map((g, gi) => (
         <ConferenceTable key={(g.abbreviation || g.name) + gi} group={g} index={gi} />
       ))}
     </div>
   );
 }
- 
+
 function ConferenceTable({ group, index }) {
   // Each entry has team + stats. Stats are an array of { name, displayValue, value }.
   const get = (entry, names) => {
@@ -1123,7 +1137,7 @@ function ConferenceTable({ group, index }) {
     }
     return '';
   };
- 
+
   return (
     <div className="card-enter" style={{ animationDelay: `${Math.min(index * 60, 500)}ms` }}>
       <div className="mb-3 flex items-end justify-between">
@@ -1177,8 +1191,7 @@ function ConferenceTable({ group, index }) {
     </div>
   );
 }
- 
+
 function EmptyState({ text }) {
   return <div className="text-center py-12 text-white/30 text-sm">{text}</div>;
 }
- 
