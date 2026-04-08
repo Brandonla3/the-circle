@@ -1148,6 +1148,21 @@ function LeadersView({ onSelectPlayer }) {
 
   const sideCats = (categories || []).filter((c) => c.side === side);
 
+  // Slugs where stat/G is a meaningful derived column. Rate stats (BA, OBP,
+  // SLG, ERA, WHIP, K/7) are already rates so /G is nonsense, and pitching
+  // counting stats divide by pitching appearances which is less intuitive
+  // than the already-shown K/7. Batting counting stats are the sweet spot.
+  const PER_GAME_SLUGS = new Set([
+    'home-runs', 'rbi', 'hits', 'runs-scored', 'stolen-bases', 'doubles', 'triples',
+  ]);
+  const showPerGame = PER_GAME_SLUGS.has(slug);
+  const perGame = (primary, gp) => {
+    const p = parseFloat(primary);
+    const g = parseInt(gp, 10);
+    if (!isFinite(p) || !g) return '—';
+    return (p / g).toFixed(2);
+  };
+
   return (
     <div>
       <div className="mb-6 border-b border-white/10 pb-3 flex items-end justify-between flex-wrap gap-3">
@@ -1218,6 +1233,7 @@ function LeadersView({ onSelectPlayer }) {
                 <th className="text-center py-2 px-2 font-normal">Pos</th>
                 <th className="text-center py-2 px-2 font-normal">G</th>
                 <th className="text-center py-2 px-2 font-normal text-white/70">{data.short || data.label}</th>
+                {showPerGame && <th className="text-center py-2 px-2 font-normal text-white/40">/G</th>}
               </tr>
             </thead>
             <tbody>
@@ -1252,6 +1268,9 @@ function LeadersView({ onSelectPlayer }) {
                     <td className="text-center py-2 px-2 text-white/50">{row.position || '—'}</td>
                     <td className="text-center py-2 px-2 text-white/60 tabular-nums">{row.gp || '—'}</td>
                     <td className="text-center py-2 px-2 text-white font-bold tabular-nums">{row.primary || '—'}</td>
+                    {showPerGame && (
+                      <td className="text-center py-2 px-2 text-white/60 tabular-nums">{perGame(row.primary, row.gp)}</td>
+                    )}
                   </tr>
                 );
               })}
