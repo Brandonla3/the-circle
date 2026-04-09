@@ -78,7 +78,10 @@ const inFlight = new Map();          // teamId  -> Promise
 // every 200 response. If NCAA re-numbers a stat between seasons, `slugStatus`
 // will start reporting `empty-leaderboard` for the affected slug and a
 // quick re-sweep will give us the new id.
-const NCAA_TEAM_LB_TTL_MS = 10 * 60 * 1000;
+// NCAA leaderboard pages only change once a day when NCAA publishes new
+// stats overnight. 60 minutes is a safe TTL that avoids redundant fetches
+// across back-to-back scorecards while still picking up same-day updates.
+const NCAA_TEAM_LB_TTL_MS = 60 * 60 * 1000;
 // Keyed by `${slug}:p${page}`. Each curated slug may end up with multiple
 // cached page entries after a scan walks a leaderboard in search of a
 // specific team.
@@ -87,8 +90,9 @@ const ncaaTeamLbCache = new Map();
 // ncaa-api.henrygd.me throttles with HTTP 428 after ~5-6 parallel requests,
 // same pattern the standings route documented in commit 5b32d2d. We batch
 // at 4 concurrent with a small delay and retry transient failures.
-const NCAA_BATCH_SIZE = 4;
-const NCAA_BATCH_DELAY_MS = 150;
+// Batch 5 concurrent requests (safe ceiling before henrygd throttles at 6).
+const NCAA_BATCH_SIZE = 5;
+const NCAA_BATCH_DELAY_MS = 100;
 const NCAA_RETRY_DELAYS_MS = [500, 1000, 2000];
 const NCAA_SCAN_BUDGET_MS = 7000;
 
@@ -782,7 +786,9 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
   };
 }
 
-const TEAM_TTL_MS = 5 * 60 * 1000;
+// 30-minute in-process cache. Stats update once daily; 30 min is fine and
+// avoids redundant re-scans from the same warm Lambda instance.
+const TEAM_TTL_MS = 30 * 60 * 1000;
 const ESPN_RETRY_DELAYS_MS = [500, 1000, 2000];
 
 // Retry wrapper for ESPN endpoints (schedule, records). Same backoff shape
@@ -1132,7 +1138,11 @@ export async function GET(request) {
   try {
     const data = await getTeamStats(teamId);
     return Response.json(data, {
-      headers: { 'Cache-Control': 'public, max-age=300, s-maxage=300' },
+      // s-maxage=1800: Vercel's CDN edge holds the response for 30 min.
+      // stale-while-revalidate=3600: edge serves stale data instantly while
+      // fetching a fresh copy in the background — users never wait on a
+      // cache miss after the first request per team.
+      headers: { 'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600' },
     });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });

@@ -80,7 +80,7 @@ export const META_KEYS = new Set([
 let categoryMap = null;            // Map<slug, { id, label, short, side }>
 let categoryMapPromise = null;     // dedupe in-flight discovery
 const leaderboardCache = new Map();// keyed by `${slug}:p${page}`
-const LEADERBOARD_TTL_MS = 10 * 60 * 1000;
+const LEADERBOARD_TTL_MS = 60 * 60 * 1000; // NCAA publishes stats once daily
 
 // Throttle/retry config mirrors team-stats/route.js so warm Vercel
 // instances treat both players and teams the same way.
