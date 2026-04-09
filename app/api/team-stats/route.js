@@ -51,6 +51,7 @@ import { getSecTeamStats } from '../sec-stats/route.js';
 import { getSecTeamSchedule } from '../_sec-schedule.js';
 import { getBig12TeamSchedule } from '../_big12-schedule.js';
 import { getAccTeamSchedule } from '../_acc-schedule.js';
+import { getBig10TeamSchedule } from '../_big10-schedule.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -742,6 +743,7 @@ async function computeTeamStats(teamId) {
     secSchedule,
     big12Schedule,
     accSchedule,
+    big10Schedule,
   ] = await Promise.all([
     fetchWithRetry(scheduleUrl),
     fetchWithRetry(recordsUrl),
@@ -767,6 +769,12 @@ async function computeTeamStats(teamId) {
     // ACC schedule feed via theacc.com — identical Sidearm endpoint as
     // Big 12, different host + sport_id. Also self-gating on name match.
     getAccTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
+    // Big Ten schedule feed scraped from bigten.org/sb/schedule/ — the
+    // Boost Sport AI CMS server-renders the entire conference season
+    // inline in __NEXT_DATA__, so one HTTP GET gives us all ~700 games
+    // for the 16–17 softball-sponsoring B1G programs. Self-gating on
+    // market/name match, same as Big 12/ACC.
+    getBig10TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
   ]);
   const ncaaPlayerStats = await aggregateNcaaPlayerStats(teamId, nameVariantSet).catch(() => null);
 
@@ -881,6 +889,8 @@ async function computeTeamStats(teamId) {
         ? big12Schedule
         : accSchedule && accSchedule.length > 0
         ? accSchedule
+        : big10Schedule && big10Schedule.length > 0
+        ? big10Schedule
         : scheduleGames,
     scheduleSource:
       secWmt && secSchedule && secSchedule.length > 0
@@ -889,6 +899,8 @@ async function computeTeamStats(teamId) {
         ? 'big12'
         : accSchedule && accSchedule.length > 0
         ? 'acc'
+        : big10Schedule && big10Schedule.length > 0
+        ? 'big10'
         : 'espn',
     meta: {
       source: secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
