@@ -467,21 +467,46 @@ function StatsView({ onSelectTeam }) {
   );
 }
 
-function TeamModal({ team, onClose }) {
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState(null);
+const TEAM_MODAL_SUB_TABS = [
+  { id: 'roster',  label: 'Roster' },
+  { id: 'totals',  label: 'Team Totals' },
+  { id: 'players', label: 'Player Stats' },
+];
 
+function TeamModal({ team, onClose }) {
+  const [subTab, setSubTab] = useState('roster');
+  const [roster, setRoster] = useState(null);
+  const [rosterErr, setRosterErr] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [statsErr, setStatsErr] = useState(null);
+
+  // Fetch roster + team-stats in parallel on mount. Dependency list is ONLY
+  // [team.id] — derived strings would cause the effect to re-run every time
+  // the parent re-renders with a new prop object reference, which is the
+  // same class of bug 89f70cd fixed in TeamCompareTab.
   useEffect(() => {
     let cancelled = false;
-    setData(null); setErr(null);
+    setRoster(null); setRosterErr(null);
+    setStats(null); setStatsErr(null);
+
     fetch(`/api/team-roster?teamId=${encodeURIComponent(team.id)}`)
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
         if (cancelled) return;
-        if (!r.ok || j.error) setErr(j.error || `HTTP ${r.status}`);
-        else setData(j);
+        if (!r.ok || j.error) setRosterErr(j.error || `HTTP ${r.status}`);
+        else setRoster(j);
       })
-      .catch((e) => { if (!cancelled) setErr(e.message); });
+      .catch((e) => { if (!cancelled) setRosterErr(e.message); });
+
+    fetch(`/api/team-stats?teamId=${encodeURIComponent(team.id)}`)
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!r.ok || j.error) setStatsErr(j.error || `HTTP ${r.status}`);
+        else setStats(j);
+      })
+      .catch((e) => { if (!cancelled) setStatsErr(e.message); });
+
     return () => { cancelled = true; };
   }, [team.id]);
 
@@ -492,14 +517,14 @@ function TeamModal({ team, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const logo = data?.team?.logo || team?.logos?.[0]?.href;
-  const displayName = data?.team?.displayName || team?.displayName;
-  const abbrev = data?.team?.abbreviation || team?.abbreviation;
-  const color = data?.team?.color || (team?.color ? `#${team.color}` : '#ff6b1a');
+  const logo = roster?.team?.logo || team?.logos?.[0]?.href;
+  const displayName = roster?.team?.displayName || team?.displayName;
+  const abbrev = roster?.team?.abbreviation || team?.abbreviation;
+  const color = roster?.team?.color || (team?.color ? `#${team.color}` : '#ff6b1a');
 
   // Group athletes by primary position bucket so scouts can scan quickly.
   const grouped = (() => {
-    if (!data?.athletes) return null;
+    if (!roster?.athletes) return null;
     const buckets = {
       Pitchers: [],
       Catchers: [],
@@ -507,7 +532,7 @@ function TeamModal({ team, onClose }) {
       Outfielders: [],
       'Utility / Other': [],
     };
-    for (const a of data.athletes) {
+    for (const a of roster.athletes) {
       const pos = (a.position || '').toUpperCase();
       if (pos === 'P' || pos === 'RHP' || pos === 'LHP') buckets.Pitchers.push(a);
       else if (pos === 'C') buckets.Catchers.push(a);
@@ -517,6 +542,105 @@ function TeamModal({ team, onClose }) {
     }
     return buckets;
   })();
+
+  // ---------------- Render helpers ----------------
+  // Plain functions that return JSX — NOT `const Foo = () => ...` inner
+  // components. Inner components create a new function identity every
+  // parent render, which makes React unmount + remount the entire sub-
+  // tree. That surfaced as the sub-tab reset loop in TeamCompareTab
+  // (commit 89f70cd) and would do the same here the moment team-stats
+  // resolves and triggers a re-render.
+
+  const renderRosterView = () => {
+    if (!roster && !rosterErr) {
+      return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading roster…</div>;
+    }
+    if (rosterErr) {
+      return (
+        <div className="text-center py-12">
+          <div className="text-white/40 text-sm mb-2">Couldn't load roster.</div>
+          <div className="text-white/30 text-xs mono">{rosterErr}</div>
+        </div>
+      );
+    }
+    if (!grouped) return null;
+    return (
+      <div className="space-y-8">
+        {Object.entries(grouped).map(([label, list]) => {
+          if (list.length === 0) return null;
+          return (
+            <div key={label}>
+              <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-3">
+                {label} <span className="text-white/20">· {list.length}</span>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-white/5">
+                <table className="w-full mono text-xs">
+                  <thead>
+                    <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
+                      <th className="text-left py-2 px-3 font-normal w-10">#</th>
+                      <th className="text-left py-2 px-3 font-normal">Player</th>
+                      <th className="text-center py-2 px-2 font-normal">Pos</th>
+                      <th className="text-center py-2 px-2 font-normal">Class</th>
+                      <th className="text-center py-2 px-2 font-normal">B/T</th>
+                      <th className="text-center py-2 px-2 font-normal">Ht</th>
+                      <th className="text-center py-2 px-2 font-normal">Wt</th>
+                      <th className="text-left py-2 px-3 font-normal">Hometown</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.map((a) => (
+                      <tr key={a.id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                        <td className="py-2 px-3 text-white/50 tabular-nums">{a.jersey || '—'}</td>
+                        <td className="py-2 px-3 text-white whitespace-nowrap">{a.name}</td>
+                        <td className="text-center py-2 px-2 text-white/60">{a.position || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/60">{a.classYear || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/50">{[a.bats, a.throws].filter(Boolean).join('/') || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/50">{a.heightDisplay || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/50">{a.weightDisplay || '—'}</td>
+                        <td className="py-2 px-3 text-white/50 truncate max-w-[180px]">{a.birthPlace || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderTotalsView = () => renderSingleTeamTotals(stats, statsErr);
+
+  const renderPlayersView = () => {
+    if (statsErr) {
+      return (
+        <div className="text-center py-12">
+          <div className="text-white/40 text-sm mb-2">Couldn't load player stats.</div>
+          <div className="text-white/30 text-xs mono">{statsErr}</div>
+        </div>
+      );
+    }
+    if (!stats) {
+      return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading player stats…</div>;
+    }
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Batters</div>
+          {renderPlayerTable(stats, 'batting')}
+        </div>
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Pitchers</div>
+          {renderPlayerTable(stats, 'pitching')}
+        </div>
+        <div className="text-[10px] mono text-white/30 text-center">
+          Via NCAA top-50 individual leaderboards. Role players outside every
+          top 50 won't appear here.
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
@@ -535,73 +659,43 @@ function TeamModal({ team, onClose }) {
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             )}
-            <div className="min-w-0">
-              <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-1">Roster</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-1">Team</div>
               <div className="display text-white text-3xl font-bold leading-tight truncate">{displayName || 'Team'}</div>
               <div className="text-white/50 text-xs mono mt-1">
                 {abbrev && <span>{abbrev}</span>}
-                {data?.meta?.rosterSize != null && <span className="text-white/30"> · {data.meta.rosterSize} players</span>}
+                {roster?.meta?.rosterSize != null && <span className="text-white/30"> · {roster.meta.rosterSize} players</span>}
+                {stats?.teamMeta?.wins != null && stats?.teamMeta?.losses != null && (
+                  <span className="text-white/30"> · {stats.teamMeta.wins}-{stats.teamMeta.losses}</span>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="p-6">
-          {!data && !err && (
-            <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading roster…</div>
-          )}
-          {err && (
-            <div className="text-center py-12">
-              <div className="text-white/40 text-sm mb-2">Couldn't load roster.</div>
-              <div className="text-white/30 text-xs mono">{err}</div>
-            </div>
-          )}
-          {data && grouped && (
-            <div className="space-y-8">
-              {Object.entries(grouped).map(([label, list]) => {
-                if (list.length === 0) return null;
-                return (
-                  <div key={label}>
-                    <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-3">{label} <span className="text-white/20">· {list.length}</span></div>
-                    <div className="overflow-x-auto rounded-lg border border-white/5">
-                      <table className="w-full mono text-xs">
-                        <thead>
-                          <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
-                            <th className="text-left py-2 px-3 font-normal w-10">#</th>
-                            <th className="text-left py-2 px-3 font-normal">Player</th>
-                            <th className="text-center py-2 px-2 font-normal">Pos</th>
-                            <th className="text-center py-2 px-2 font-normal">Class</th>
-                            <th className="text-center py-2 px-2 font-normal">B/T</th>
-                            <th className="text-center py-2 px-2 font-normal">Ht</th>
-                            <th className="text-center py-2 px-2 font-normal">Wt</th>
-                            <th className="text-left py-2 px-3 font-normal">Hometown</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {list.map((a) => (
-                            <tr key={a.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                              <td className="py-2 px-3 text-white/50 tabular-nums">{a.jersey || '—'}</td>
-                              <td className="py-2 px-3 text-white whitespace-nowrap">{a.name}</td>
-                              <td className="text-center py-2 px-2 text-white/60">{a.position || '—'}</td>
-                              <td className="text-center py-2 px-2 text-white/60">{a.classYear || '—'}</td>
-                              <td className="text-center py-2 px-2 text-white/50">{[a.bats, a.throws].filter(Boolean).join('/') || '—'}</td>
-                              <td className="text-center py-2 px-2 text-white/50">{a.heightDisplay || '—'}</td>
-                              <td className="text-center py-2 px-2 text-white/50">{a.weightDisplay || '—'}</td>
-                              <td className="py-2 px-3 text-white/50 truncate max-w-[180px]">{a.birthPlace || '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        <div className="px-6 pt-5 pb-1 flex justify-center">
+          <div className="flex gap-1 p-1 rounded-full border border-white/10 bg-white/[0.02] w-fit">
+            {TEAM_MODAL_SUB_TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setSubTab(t.id)}
+                className={`px-4 py-1.5 rounded-full text-[10px] mono uppercase tracking-widest transition ${subTab === t.id ? 'text-white' : 'text-white/40 hover:text-white/70'}`}
+                style={subTab === t.id ? { background: '#ff6b1a' } : {}}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30">
-          Roster via ESPN · Press Esc to close
+        <div className="p-6">
+          {subTab === 'roster' && renderRosterView()}
+          {subTab === 'totals' && renderTotalsView()}
+          {subTab === 'players' && renderPlayersView()}
+        </div>
+
+        <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30 text-center">
+          Roster via ESPN · Stats via NCAA · Press Esc to close
         </div>
       </div>
     </div>
@@ -902,6 +996,192 @@ function WinProbabilityTab({ detail }) {
           <path d={path} fill="none" stroke="#ff6b1a" strokeWidth="2.5" strokeLinejoin="round" />
         </svg>
         <div className="mt-3 text-[10px] mono uppercase tracking-widest text-white/30 text-center">{wp.length} plays tracked</div>
+      </div>
+    </div>
+  );
+}
+
+// --- Shared render helpers -------------------------------------------------
+// Lowercase functions that return JSX, NOT `const Foo = () => ...` inner
+// components. The latter pattern gives React a new function identity on
+// every parent render which unmounts/remounts the whole inner tree — that
+// was the bug fixed in commit 89f70cd for TeamCompareTab, and TeamModal
+// runs into the exact same trap once it grows sub-tabs. Keeping these at
+// module scope means both components can share them without either
+// accidentally recreating the tree.
+
+const fmtOrDash = (v) => (v == null || v === '' ? '—' : v);
+
+// Empty-state copy for the player-stats table. NCAA-aware: reads the new
+// meta.ncaaPlayerStats block the team-stats route emits so we can explain
+// *why* a team has zero rows (timed out, partial scan, genuinely no top-50
+// appearances) rather than the misleading "ESPN box-score" wording the old
+// ESPN-sourced path used.
+function playerTableEmptyDetail(stats, group) {
+  const ps = stats?.meta?.ncaaPlayerStats;
+  if (!ps) return 'No player stats available for this team.';
+  if (ps.error) return ps.error;
+  if (ps.timeExhausted) return 'NCAA leaderboard scan timed out; refresh to retry.';
+  if (ps.slugsOk != null && ps.attempted != null && ps.slugsOk < ps.attempted) {
+    return `Partial NCAA scan: only ${ps.slugsOk}/${ps.attempted} leaderboards fetched.`;
+  }
+  if (ps.playerCount === 0) {
+    return 'No players from this team appear in any NCAA top-50 individual leaderboard.';
+  }
+  const side = group === 'batting' ? 'batting' : 'pitching';
+  return `No ${side} entries from this team in the top-50 ${side} leaderboards.`;
+}
+
+// Render one team's batting or pitching table. Used by both the Team
+// Compare tab (side-by-side for home/away) and the Team modal (single
+// column). Pitching columns surface {G, IP, K, W, ERA, SHO} — NCAA
+// individual leaderboards don't ship raw BB (walks allowed) or a working
+// WHIP for softball at the individual level, so those were dropped from
+// the column set rather than displayed as permanent dashes.
+function renderPlayerTable(stats, group) {
+  const rows = stats?.players?.[group] || [];
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-lg border border-white/5 bg-white/[0.01] p-4 text-center">
+        <div className="text-white/40 text-xs mb-1">No player stats</div>
+        <div className="text-white/30 text-[10px] mono">{playerTableEmptyDetail(stats, group)}</div>
+      </div>
+    );
+  }
+  const isBatting = group === 'batting';
+  return (
+    <div className="overflow-x-auto rounded-lg border border-white/5">
+      <table className="w-full mono text-[11px]">
+        <thead>
+          <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
+            <th className="text-left py-1.5 px-2 font-normal">Player</th>
+            <th className="text-center py-1.5 px-1 font-normal">G</th>
+            {isBatting ? (
+              <>
+                <th className="text-center py-1.5 px-1 font-normal">AB</th>
+                <th className="text-center py-1.5 px-1 font-normal">H</th>
+                <th className="text-center py-1.5 px-1 font-normal">HR</th>
+                <th className="text-center py-1.5 px-1 font-normal">RBI</th>
+                <th className="text-center py-1.5 px-1 font-normal">BA</th>
+              </>
+            ) : (
+              <>
+                <th className="text-center py-1.5 px-1 font-normal">IP</th>
+                <th className="text-center py-1.5 px-1 font-normal">K</th>
+                <th className="text-center py-1.5 px-1 font-normal">W</th>
+                <th className="text-center py-1.5 px-1 font-normal">ERA</th>
+                <th className="text-center py-1.5 px-1 font-normal">SHO</th>
+              </>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr key={p.id} className="border-t border-white/5 hover:bg-white/[0.02]">
+              <td className="py-1.5 px-2 text-white whitespace-nowrap truncate max-w-[140px]">{p.name}</td>
+              <td className="text-center py-1.5 px-1 text-white/50 tabular-nums">{fmtOrDash(p.games)}</td>
+              {isBatting ? (
+                <>
+                  <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{fmtOrDash(p.AB)}</td>
+                  <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{fmtOrDash(p.H)}</td>
+                  <td className="text-center py-1.5 px-1 text-white tabular-nums">{fmtOrDash(p.HR)}</td>
+                  <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{fmtOrDash(p.RBI)}</td>
+                  <td className="text-center py-1.5 px-1 text-white font-bold tabular-nums">{fmtOrDash(p.BA)}</td>
+                </>
+              ) : (
+                <>
+                  <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{fmtOrDash(p.IP)}</td>
+                  <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{fmtOrDash(p.K)}</td>
+                  <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{fmtOrDash(p.W)}</td>
+                  <td className="text-center py-1.5 px-1 text-white font-bold tabular-nums">{fmtOrDash(p.ERA)}</td>
+                  <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{fmtOrDash(p.SHO)}</td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Single-team totals panel. For the head-to-head Team Compare view use the
+// renderTotalRow closure inside TeamCompareTab — this is the standalone
+// variant for TeamModal.
+function renderSingleTeamTotals(stats, err) {
+  if (err) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-white/40 text-sm mb-2">Couldn't load team totals.</div>
+        <div className="text-white/30 text-xs mono">{err}</div>
+      </div>
+    );
+  }
+  if (!stats) {
+    return (
+      <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-8">
+        Loading team totals…
+      </div>
+    );
+  }
+  const meta = stats.teamMeta || {};
+  const batting = stats.totals?.batting || {};
+  const pitching = stats.totals?.pitching || {};
+  const runDiff =
+    meta.runsFor != null && meta.runsAgainst != null ? meta.runsFor - meta.runsAgainst : null;
+
+  const row = (key, label, short, value, rank) => (
+    <div key={key} className="grid grid-cols-[auto_1fr_auto] gap-4 items-baseline py-1.5 border-b border-white/5">
+      <div className="mono uppercase tracking-wider text-white/40 text-[10px] w-12">{short}</div>
+      <div className="text-[11px] text-white/60">{label}</div>
+      <div className="text-right whitespace-nowrap">
+        <span className="text-sm text-white tabular-nums">{fmtOrDash(value)}</span>
+        {rank && rank !== '-' && (
+          <span className="text-[10px] mono text-white/30 ml-2">#{rank}</span>
+        )}
+      </div>
+    </div>
+  );
+
+  const recordValue =
+    meta.wins != null && meta.losses != null ? `${meta.wins}-${meta.losses}` : null;
+  const diffValue = runDiff != null ? (runDiff > 0 ? `+${runDiff}` : String(runDiff)) : null;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Season</div>
+        {row('record', 'Record',       'W-L',  recordValue)}
+        {row('rs',     'Runs Scored',  'RS',   meta.runsFor)}
+        {row('ra',     'Runs Allowed', 'RA',   meta.runsAgainst)}
+        {row('diff',   'Run Diff',     'DIFF', diffValue)}
+        {row('strk',   'Streak',       'STRK', meta.streak)}
+      </div>
+
+      <div>
+        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Team Batting</div>
+        {row('ba',   'Batting Average', 'BA',  batting.BA,     batting.BA_rank)}
+        {row('obp',  'On-Base Pct',     'OBP', batting.OBP,    batting.OBP_rank)}
+        {row('slg',  'Slugging Pct',    'SLG', batting.SLG,    batting.SLG_rank)}
+        {row('hr',   'Home Runs',       'HR',  batting.HR,     batting.HR_rank)}
+        {row('rbi',  'Runs Batted In',  'RBI', batting.RBI,    batting.RBI_rank)}
+        {row('r',    'Runs',            'R',   batting.R,      batting.R_rank)}
+        {row('h',    'Hits',            'H',   batting.H,      batting.H_rank)}
+        {row('sb',   'Stolen Bases',    'SB',  batting.SB,     batting.SB_rank)}
+        {row('2b',   'Doubles',         '2B',  batting['2B'],  batting['2B_rank'])}
+        {row('3b',   'Triples',         '3B',  batting['3B'],  batting['3B_rank'])}
+      </div>
+
+      <div>
+        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Team Pitching</div>
+        {row('era',  'Earned Run Average', 'ERA',  pitching.ERA,     pitching.ERA_rank)}
+        {row('whip', 'WHIP',               'WHIP', pitching.WHIP,    pitching.WHIP_rank)}
+        {row('k7',   'K per 7 Innings',    'K/7',  pitching['K/7'],  pitching['K/7_rank'])}
+        {row('sho',  'Shutouts',           'SHO',  pitching.SHO,     pitching.SHO_rank)}
+      </div>
+
+      <div className="text-[10px] mono text-white/30 text-center leading-relaxed pt-2">
+        Totals via NCAA team leaderboards. Ranks are D1 season-to-date.
       </div>
     </div>
   );
@@ -1321,14 +1601,6 @@ function TeamCompareTab({ home, away, rankings }) {
       return <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-10">Loading team totals…</div>;
     }
 
-    const coverageLine = (s) => {
-      if (!s?.meta) return null;
-      const wb = s.meta.gamesWithBatting ?? 0;
-      const wp = s.meta.gamesWithPitching ?? 0;
-      const total = s.meta.completedEvents ?? 0;
-      return `${wb}/${total} batting · ${wp}/${total} pitching`;
-    };
-
     const errNote = (teamLabel, errMsg) => errMsg
       ? <span className="text-red-400/70"> · {teamLabel} failed: {errMsg}</span>
       : null;
@@ -1354,10 +1626,11 @@ function TeamCompareTab({ home, away, rankings }) {
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Team Batting</div>
           {renderTotalRow('ba',  'Batting Avg',  'BA',  (s) => s.totals?.batting?.BA)}
           {renderTotalRow('obp', 'On-Base Pct',  'OBP', (s) => s.totals?.batting?.OBP)}
-          {renderTotalRow('hr',  'Box HR',       'HR',  (s) => s.totals?.batting?.HR)}
-          {renderTotalRow('rbi', 'Box RBI',      'RBI', (s) => s.totals?.batting?.RBI)}
-          {renderTotalRow('bb',  'Box BB',       'BB',  (s) => s.totals?.batting?.BB)}
-          {renderTotalRow('bk',  'Box K',        'K',   (s) => s.totals?.batting?.K, true)}
+          {renderTotalRow('slg', 'Slugging Pct', 'SLG', (s) => s.totals?.batting?.SLG)}
+          {renderTotalRow('hr',  'Home Runs',    'HR',  (s) => s.totals?.batting?.HR)}
+          {renderTotalRow('rbi', 'Runs Batted In','RBI',(s) => s.totals?.batting?.RBI)}
+          {renderTotalRow('h',   'Hits',         'H',   (s) => s.totals?.batting?.H)}
+          {renderTotalRow('sb',  'Stolen Bases', 'SB',  (s) => s.totals?.batting?.SB)}
         </div>
 
         <div>
@@ -1365,22 +1638,19 @@ function TeamCompareTab({ home, away, rankings }) {
           {renderTotalRow('era',  'Earned Run Avg',   'ERA',  (s) => s.totals?.pitching?.ERA, true)}
           {renderTotalRow('whip', 'WHIP',             'WHIP', (s) => s.totals?.pitching?.WHIP, true)}
           {renderTotalRow('k7',   'K per 7 Innings',  'K/7',  (s) => s.totals?.pitching?.['K/7'])}
-          {renderTotalRow('ip',   'Innings Pitched',  'IP',   (s) => s.totals?.pitching?.IP)}
-          {renderTotalRow('tk',   'Total Strikeouts', 'SO',   (s) => s.totals?.pitching?.K)}
-          {renderTotalRow('er',   'Box Earned Runs',  'ER',   (s) => s.totals?.pitching?.ER, true)}
+          {renderTotalRow('sho',  'Shutouts',         'SHO',  (s) => s.totals?.pitching?.SHO)}
         </div>
 
         <div className="text-[10px] mono text-white/30 text-center leading-relaxed">
-          Season / run totals are authoritative from ESPN. Rates (BA, OBP, ERA, WHIP, K/7)
-          are computed from summed box-score counting stats — accurate even when
-          box-score coverage is partial.<br />
-          <span className="text-white/20">
-            Coverage — {awayName}: {coverageLine(awayStats) || (awayStatsErr ? 'error' : '…')}
-            {errNote(awayName, awayStatsErr)}
-            {' · '}
-            {homeName}: {coverageLine(homeStats) || (homeStatsErr ? 'error' : '…')}
-            {errNote(homeName, homeStatsErr)}
-          </span>
+          Record and run totals via ESPN. Team batting and pitching totals
+          via NCAA team leaderboards (season totals, every D1 team).
+          {(awayStatsErr || homeStatsErr) && (
+            <span className="text-white/20 block mt-1">
+              {errNote(awayName, awayStatsErr)}
+              {homeStatsErr && awayStatsErr && ' · '}
+              {errNote(homeName, homeStatsErr)}
+            </span>
+          )}
         </div>
       </div>
     );
@@ -1414,91 +1684,9 @@ function TeamCompareTab({ home, away, rankings }) {
   );
 
   // ---------------- Players sub-tab ----------------
-  const renderRosterTable = (stats, group) => {
-    const rows = stats?.players?.[group] || [];
-    if (rows.length === 0) {
-      // Empty roster usually means ESPN had no box-score data for this team
-      // in any of the season's games. Use the response meta to spell out
-      // exactly what was found so the user knows whether the issue is
-      // "schedule had zero completed games" vs "schedule had games but
-      // none had box scores for this team".
-      const m = stats?.meta;
-      let detail = 'ESPN returned no box-score data for this team.';
-      if (m) {
-        if (m.completedEvents === 0) {
-          detail = `ESPN's schedule for this team has 0 completed games (${m.scheduleEvents || 0} total scheduled).`;
-        } else if (group === 'batting' && m.gamesWithBatting === 0) {
-          detail = `0 of ${m.completedEvents} completed games had box-score batting data for this team.`;
-        } else if (group === 'pitching' && m.gamesWithPitching === 0) {
-          detail = `0 of ${m.completedEvents} completed games had box-score pitching data for this team.`;
-        }
-      }
-      return (
-        <div className="rounded-lg border border-white/5 bg-white/[0.01] p-4 text-center">
-          <div className="text-white/40 text-xs mb-1">No box-score data</div>
-          <div className="text-white/30 text-[10px] mono">{detail}</div>
-        </div>
-      );
-    }
-    const isBatting = group === 'batting';
-    return (
-      <div className="overflow-x-auto rounded-lg border border-white/5">
-        <table className="w-full mono text-[11px]">
-          <thead>
-            <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
-              <th className="text-left py-1.5 px-2 font-normal">Player</th>
-              <th className="text-center py-1.5 px-1 font-normal">G</th>
-              {isBatting ? (
-                <>
-                  <th className="text-center py-1.5 px-1 font-normal">AB</th>
-                  <th className="text-center py-1.5 px-1 font-normal">H</th>
-                  <th className="text-center py-1.5 px-1 font-normal">HR</th>
-                  <th className="text-center py-1.5 px-1 font-normal">RBI</th>
-                  <th className="text-center py-1.5 px-1 font-normal">BA</th>
-                </>
-              ) : (
-                <>
-                  <th className="text-center py-1.5 px-1 font-normal">IP</th>
-                  <th className="text-center py-1.5 px-1 font-normal">K</th>
-                  <th className="text-center py-1.5 px-1 font-normal">BB</th>
-                  <th className="text-center py-1.5 px-1 font-normal">ERA</th>
-                  <th className="text-center py-1.5 px-1 font-normal">WHIP</th>
-                </>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                <td className="py-1.5 px-2 text-white whitespace-nowrap truncate max-w-[140px]">{p.name}</td>
-                <td className="text-center py-1.5 px-1 text-white/50 tabular-nums">{p.games}</td>
-                {isBatting ? (
-                  <>
-                    <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.AB}</td>
-                    <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.H}</td>
-                    <td className="text-center py-1.5 px-1 text-white tabular-nums">{p.HR}</td>
-                    <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.RBI}</td>
-                    <td className="text-center py-1.5 px-1 text-white font-bold tabular-nums">{p.BA}</td>
-                  </>
-                ) : (
-                  <>
-                    <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.IP}</td>
-                    <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.K}</td>
-                    <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.BB}</td>
-                    <td className="text-center py-1.5 px-1 text-white font-bold tabular-nums">{p.ERA}</td>
-                    <td className="text-center py-1.5 px-1 text-white/70 tabular-nums">{p.WHIP}</td>
-                  </>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  // Render a single team's side of the Players comparison. Shows an error
-  // message if that team's fetch failed instead of an invisible empty column.
+  // The actual table JSX lives in the module-scope `renderPlayerTable`
+  // helper defined near the top of this file; this is just the per-team
+  // wrapper that adds loading / error states above the table.
   const renderPlayerColumn = (teamLabel, stats, errMsg, group) => {
     if (errMsg) {
       return (
@@ -1511,7 +1699,7 @@ function TeamCompareTab({ home, away, rankings }) {
     if (!stats) {
       return <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-4">Loading…</div>;
     }
-    return renderRosterTable(stats, group);
+    return renderPlayerTable(stats, group);
   };
 
   const renderPlayers = () => {
@@ -1561,9 +1749,9 @@ function TeamCompareTab({ home, away, rankings }) {
         </div>
 
         <div className="text-[10px] mono text-white/30 text-center">
-          Per-player stats from ESPN box scores. G is the number of box-scored
-          games a player appears in — may be fewer than their actual games if
-          ESPN only shipped a linescore for some of them.
+          Per-player stats from NCAA individual leaderboards (top 50 per
+          category). Role players who aren't ranked in any top-50 stat
+          won't appear here. Missing stat cells render as —.
         </div>
       </div>
     );
