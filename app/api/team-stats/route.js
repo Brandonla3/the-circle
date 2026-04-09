@@ -38,13 +38,16 @@ import {
   ESPN_SITE,
   ESPN_HEADERS,
   normalize,
+  splitName,
+  scoreMatch,
   getTeamDirectory,
   findTeam,
   findTeamById,
+  getRoster,
 } from '../_espn.js';
 import {
   ALL_CATEGORIES as NCAA_PLAYER_CATS,
-  fetchLeaderboard as fetchNcaaPlayerLeaderboard,
+  fetchLeaderboardAllPages as fetchNcaaPlayerLeaderboard,
   normalizePlayerKey,
 } from '../_ncaa-player.js';
 import { getSecTeamStats } from '../sec-stats/route.js';
@@ -471,7 +474,7 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
     const batchEnd = Math.min(i + NCAA_BATCH_SIZE, cats.length);
     const batch = cats.slice(i, batchEnd);
     const batchResults = await Promise.all(
-      batch.map((c) => fetchNcaaPlayerLeaderboard(c.slug).catch(() => null))
+      batch.map((c) => fetchNcaaPlayerLeaderboard(c.slug, 2).catch(() => null))
     );
     for (let k = 0; k < batch.length; k++) {
       results[i + k] = batchResults[k];
@@ -482,7 +485,7 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
   }
 
   // byPlayer: key -> accumulator {
-  //   key, name, team, cls, position, gp,
+  //   key, name, team, cls, position, jersey, gp,
   //   sides: Set<'batting'|'pitching'>,
   //   rawMerged: { ... every raw column we've seen across leaderboards ... },
   //   appearances: Set<slug>,
@@ -505,16 +508,20 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
     slugStatus[cat.slug] = 'ok';
     slugsOk++;
     for (const row of lb.rows) {
-      // Match by normalized team name against any known variant for this team.
+      // Team-name match: exact first, then the SAFE substring direction only.
+      // The old code used `rowTeamNorm.includes(v) || v.includes(rowTeamNorm)`.
+      // The first direction is dangerous: "texas tech".includes("texas") = true,
+      // causing Texas Tech players to appear for Texas. We keep only the safe
+      // direction `v.includes(rowTeamNorm)` which handles NCAA abbreviated names
+      // like "Florida St." matching our variant "florida state", without allowing
+      // any prefix-school false positives.
       const rowTeamNorm = normalize(row.team || '');
       if (!nameVariantSet.has(rowTeamNorm)) {
-        // Substring fallback mirrors findNcaaTeamRow's Pass 2 so suffix
-        // variants (e.g. "Oklahoma Sooners" vs "Oklahoma") still resolve.
         let hit = false;
         if (rowTeamNorm.length >= 4) {
           for (const v of nameVariantSet) {
             if (v.length < 4) continue;
-            if (rowTeamNorm.includes(v) || v.includes(rowTeamNorm)) { hit = true; break; }
+            if (v.includes(rowTeamNorm)) { hit = true; break; }
           }
         }
         if (!hit) continue;
@@ -529,6 +536,7 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
           team: row.team,
           cls: row.cls || null,
           position: row.position || null,
+          jersey: null,
           gp: row.gp || null,
           sides: new Set(),
           rawMerged: {},
@@ -538,7 +546,6 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
       }
       rec.sides.add(cat.side);
       rec.appearances.add(cat.slug);
-      // Prefer richer non-empty values as we merge across leaderboards.
       if (!rec.cls && row.cls) rec.cls = row.cls;
       if (!rec.position && row.position) rec.position = row.position;
       // `gp` varies between batting (G) and pitching (App) in NCAA's
@@ -557,9 +564,59 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
           rec.rawMerged[k] = v;
         }
       }
-      // Also stash the category's primary-column value keyed by the
-      // category slug for easy per-stat lookup in the final shape build.
       rec.rawMerged[`__slug_${cat.slug}`] = row.primary;
+    }
+  }
+
+  // ── ESPN roster supplement ──────────────────────────────────────────
+  // 1. Enrich byPlayer entries with jersey/position from the ESPN roster.
+  // 2. Add athletes with full names who don't appear in any leaderboard
+  //    (they render with all-null stats so the full team roster is visible).
+  //    We skip last-name-only ESPN entries (displayName like " Adams") since
+  //    there's no safe way to match them to a specific player's stats.
+  let rosterAthletes = [];
+  try { rosterAthletes = (await getRoster(teamId))?.athletes || []; } catch {}
+
+  for (const athlete of rosterAthletes) {
+    const name = athlete.displayName || athlete.fullName || '';
+    const nameParts = splitName(name);
+    if (nameParts.length < 2) continue; // skip last-name-only entries
+
+    const targetParts = nameParts;
+    // Find the byPlayer record whose name best matches this roster athlete.
+    let bestRec = null;
+    let bestScore = 0;
+    for (const rec of byPlayer.values()) {
+      const fakeAthlete = { displayName: rec.name, fullName: rec.name };
+      const s = scoreMatch(fakeAthlete, targetParts);
+      if (s > bestScore) { bestScore = s; bestRec = rec; }
+    }
+
+    if (bestScore >= 70 && bestRec) {
+      // Enrich the leaderboard-matched entry with ESPN roster metadata.
+      if (!bestRec.jersey && athlete.jersey) bestRec.jersey = athlete.jersey;
+      if (!bestRec.position && athlete.position?.abbreviation) bestRec.position = athlete.position.abbreviation;
+      if (!bestRec.cls && athlete.experience?.displayValue) bestRec.cls = athlete.experience.displayValue;
+    } else {
+      // Athlete isn't in any leaderboard — add as roster-only entry.
+      const recKey = athlete.id ? String(athlete.id) : normalize(name);
+      if (byPlayer.has(recKey)) continue;
+      const position = athlete.position?.abbreviation || null;
+      const rec = {
+        key: recKey,
+        name,
+        team: null,
+        cls: athlete.experience?.displayValue || null,
+        position,
+        jersey: athlete.jersey || null,
+        gp: null,
+        sides: new Set(),
+        rawMerged: {},
+        appearances: new Set(),
+      };
+      // Assign to the correct table based on ESPN position.
+      rec.sides.add((position || '').toUpperCase() === 'P' ? 'pitching' : 'batting');
+      byPlayer.set(recKey, rec);
     }
   }
 
@@ -579,6 +636,7 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
     const shared = {
       id: rec.key,
       name: rec.name,
+      jersey: rec.jersey || null,
       position: rec.position || null,
       classYear: rec.cls || null,
       games,
@@ -641,10 +699,13 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
     return a.name.localeCompare(b.name);
   });
 
+  const leaderboardCount = [...byPlayer.values()].filter((r) => r.appearances.size > 0).length;
   return {
     batting,
     pitching,
     playerCount: byPlayer.size,
+    rosterTotal: rosterAthletes.length,
+    leaderboardMatched: leaderboardCount,
     attempted: cats.length,
     slugsOk,
     slugStatus,
@@ -935,6 +996,8 @@ async function computeTeamStats(teamId) {
       ncaaPlayerStats: ncaaPlayerStats
         ? {
             playerCount: ncaaPlayerStats.playerCount,
+            rosterTotal: ncaaPlayerStats.rosterTotal,
+            leaderboardMatched: ncaaPlayerStats.leaderboardMatched,
             attempted: ncaaPlayerStats.attempted,
             slugsOk: ncaaPlayerStats.slugsOk,
             timeExhausted: ncaaPlayerStats.timeExhausted,
