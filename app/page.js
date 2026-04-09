@@ -812,7 +812,7 @@ function StatsView({ onSelectTeam }) {
 const TEAM_MODAL_SUB_TABS = [
   { id: 'roster',  label: 'Roster' },
   { id: 'totals',  label: 'Team Totals' },
-  { id: 'players', label: 'Player Stats' },
+  { id: 'players', label: 'Full Roster Stats' },
 ];
 
 function TeamModal({ team, onClose }) {
@@ -971,7 +971,14 @@ function TeamModal({ team, onClose }) {
       );
     }
     if (!stats) {
-      return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading player stats…</div>;
+      return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading full roster stats…</div>;
+    }
+    // When a rich conference feed (currently SEC via wmt.games) is available,
+    // render the full-roster tables with every column the source publishes.
+    // Otherwise fall back to the NCAA top-50 narrow tables so the sub-tab is
+    // still useful for non-SEC teams.
+    if (stats.secWmt) {
+      return renderWmtFullRoster(stats.secWmt);
     }
     return (
       <div className="space-y-6">
@@ -1452,6 +1459,107 @@ function renderPlayerTable(stats, group) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Render a single full-roster stats table from a wmt.games-normalized table.
+// The row objects are keyed by column label (not opaque `column-N` ids) and
+// the column list is the ordered, label+helpText pairs from the source. We
+// skip the first "Team" column because the modal is already scoped to one
+// team — that duplicated column would just waste horizontal space.
+function renderWmtFullRosterTable(title, rows, columns, emptyCopy) {
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="rounded-lg border border-white/5 bg-white/[0.01] p-4 text-center">
+        <div className="text-white/40 text-xs mb-1">No {title.toLowerCase()} stats</div>
+        <div className="text-white/30 text-[10px] mono">{emptyCopy}</div>
+      </div>
+    );
+  }
+  const visibleCols = (columns || []).filter((c) => {
+    const label = (c?.label || '').toLowerCase();
+    return label !== 'team'; // modal is already team-scoped
+  });
+  return (
+    <div className="overflow-x-auto rounded-lg border border-white/5">
+      <table className="mono text-[11px] min-w-full whitespace-nowrap">
+        <thead>
+          <tr className="bg-white/[0.02] text-white/40 uppercase tracking-wider">
+            {visibleCols.map((c) => {
+              const isPlayer = (c.label || '').toLowerCase() === 'player';
+              return (
+                <th
+                  key={c.key || c.label}
+                  className={`py-1.5 px-2 font-normal ${isPlayer ? 'text-left sticky left-0 bg-[#141210]' : 'text-center'}`}
+                  title={c.helpText || undefined}
+                >
+                  {c.label}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-t border-white/5 hover:bg-white/[0.02]">
+              {visibleCols.map((c) => {
+                const isPlayer = (c.label || '').toLowerCase() === 'player';
+                const v = row[c.label];
+                return (
+                  <td
+                    key={c.key || c.label}
+                    className={
+                      isPlayer
+                        ? 'py-1.5 px-2 text-white text-left sticky left-0 bg-[#141210]'
+                        : 'py-1.5 px-2 text-white/70 text-center tabular-nums'
+                    }
+                  >
+                    {fmtOrDash(v)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Full-roster stats view driven by the conference-level wmt.games payload.
+// Renders all three sides (Hitting / Pitching / Fielding) with the entire
+// column set the source publishes — OPS, TB, HBP, GDP, SH, SF, SB-ATT on
+// the batting side; KL, WP, BK, BF, NP/STK on the pitching side; DP, SBA,
+// CSB, PB, CI on the fielding side. This is strictly more than the NCAA
+// top-50 leaderboard fallback.
+function renderWmtFullRoster(secWmt) {
+  const cols = secWmt?.columns || {};
+  const players = secWmt?.players || {};
+  return (
+    <div className="space-y-8">
+      <div>
+        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">
+          Hitting <span className="text-white/20">· {(players.hitting || []).length}</span>
+        </div>
+        {renderWmtFullRosterTable('Hitting', players.hitting, cols.hitting, 'No hitters on the current SEC roster feed.')}
+      </div>
+      <div>
+        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">
+          Pitching <span className="text-white/20">· {(players.pitching || []).length}</span>
+        </div>
+        {renderWmtFullRosterTable('Pitching', players.pitching, cols.individualPitching, 'No pitchers on the current SEC roster feed.')}
+      </div>
+      <div>
+        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">
+          Fielding <span className="text-white/20">· {(players.fielding || []).length}</span>
+        </div>
+        {renderWmtFullRosterTable('Fielding', players.fielding, cols.individualFielding, 'No fielders on the current SEC roster feed.')}
+      </div>
+      <div className="text-[10px] mono text-white/30 text-center leading-relaxed">
+        Full roster · every player who has appeared this season. Source:
+        secsports.com stats feed (wmt.games).
+      </div>
     </div>
   );
 }

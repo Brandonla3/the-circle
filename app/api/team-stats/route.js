@@ -47,6 +47,7 @@ import {
   fetchLeaderboard as fetchNcaaPlayerLeaderboard,
   normalizePlayerKey,
 } from '../_ncaa-player.js';
+import { getSecTeamStats } from '../sec-stats/route.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -730,10 +731,16 @@ async function computeTeamStats(teamId) {
   // time-exhausted slugs on cold-start. Sequencing them keeps cold-start
   // total under Vercel's 10s limit while still letting warm-cache calls
   // finish in ~1s (both aggregators hit their caches).
-  const [schedule, recordsRaw, ncaaTeamStats] = await Promise.all([
+  const [schedule, recordsRaw, ncaaTeamStats, secWmt] = await Promise.all([
     fetchWithRetry(scheduleUrl),
     fetchWithRetry(recordsUrl),
     aggregateNcaaTeamStats(teamId, nameVariantSet).catch(() => null),
+    // Conference-specific full-roster feed. Currently only the SEC is wired
+    // (via wmt.games, which ships the entire roster with a much richer
+    // column set than NCAA's top-50 leaderboards). getSecTeamStats swallows
+    // its own errors and returns null if the team isn't in the SEC payload,
+    // so non-SEC schools fall through to the NCAA-only path below.
+    getSecTeamStats(Array.from(nameVariantSet)).catch(() => null),
   ]);
   const ncaaPlayerStats = await aggregateNcaaPlayerStats(teamId, nameVariantSet).catch(() => null);
 
@@ -775,8 +782,14 @@ async function computeTeamStats(teamId) {
     teamMeta,
     totals,
     players,
+    // Rich conference-level payload when available. Currently populated for
+    // SEC teams from wmt.games — 25 batting / 24 pitching / 14 fielding team
+    // columns and the full roster (not a top-N slice) with 24 hitting /
+    // 31 pitching / 15 fielding player columns. The TeamModal renders this
+    // directly when present and falls back to the NCAA path otherwise.
+    secWmt: secWmt || null,
     meta: {
-      source: 'ncaa-team+ncaa-player',
+      source: secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
       scheduleEvents: events.length,
       completedEvents: completed.length,
       elapsedMs: Date.now() - startTime,
