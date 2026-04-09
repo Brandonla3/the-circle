@@ -48,6 +48,7 @@ import {
   normalizePlayerKey,
 } from '../_ncaa-player.js';
 import { getSecTeamStats } from '../sec-stats/route.js';
+import { getSecTeamSchedule } from '../_sec-schedule.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -731,7 +732,7 @@ async function computeTeamStats(teamId) {
   // time-exhausted slugs on cold-start. Sequencing them keeps cold-start
   // total under Vercel's 10s limit while still letting warm-cache calls
   // finish in ~1s (both aggregators hit their caches).
-  const [schedule, recordsRaw, ncaaTeamStats, secWmt] = await Promise.all([
+  const [schedule, recordsRaw, ncaaTeamStats, secWmt, secSchedule] = await Promise.all([
     fetchWithRetry(scheduleUrl),
     fetchWithRetry(recordsUrl),
     aggregateNcaaTeamStats(teamId, nameVariantSet).catch(() => null),
@@ -741,6 +742,12 @@ async function computeTeamStats(teamId) {
     // its own errors and returns null if the team isn't in the SEC payload,
     // so non-SEC schools fall through to the NCAA-only path below.
     getSecTeamStats(Array.from(nameVariantSet)).catch(() => null),
+    // Conference-specific schedule feed. The SEC secsports.com API is
+    // dramatically faster and more reliable than ESPN's softball schedule
+    // (broadcasts + venues populated for non-televised games, AP rank,
+    // is_conference flag, etc). Returns null for non-SEC teams so the
+    // caller falls back to the ESPN-derived scheduleGames below.
+    getSecTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
   ]);
   const ncaaPlayerStats = await aggregateNcaaPlayerStats(teamId, nameVariantSet).catch(() => null);
 
@@ -838,7 +845,13 @@ async function computeTeamStats(teamId) {
     // directly when present and falls back to the NCAA path otherwise.
     secWmt: secWmt || null,
     // Normalized per-game schedule for the TeamModal Schedule sub-tab.
-    schedule: scheduleGames,
+    // Conference feeds (currently SEC) win over ESPN when the team is
+    // actually a member of that conference — gated on secWmt because the
+    // secsports.com API also returns non-SEC teams that happened to play
+    // a SEC opponent, and we do NOT want to serve those teams a partial
+    // schedule that only contains their SEC crossovers.
+    schedule: secWmt && secSchedule && secSchedule.length > 0 ? secSchedule : scheduleGames,
+    scheduleSource: secWmt && secSchedule && secSchedule.length > 0 ? 'sec' : 'espn',
     meta: {
       source: secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
       scheduleEvents: events.length,
