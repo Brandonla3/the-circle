@@ -596,10 +596,35 @@ function RankingsView({ rankings, lastUpdate }) {
   );
 }
 
+// Defaults for the Teams tab conference multi-filter. These are the "power
+// four" D-I softball leagues — what most users care about out of the box.
+// Users can add/remove via the filter dropdown; the selection is persisted
+// in localStorage so it survives reloads.
+const TEAMS_DEFAULT_CONFERENCES = ['SEC', 'Big 12', 'Big Ten', 'ACC'];
+const TEAMS_CONF_STORAGE_KEY = 'teamsTab.conferenceFilter.v1';
+
 function StatsView({ onSelectTeam }) {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  // Selected conference names. `null` means "show all" — empty array is a
+  // distinct state meaning "user explicitly cleared every filter".
+  // Initial value is read lazily from localStorage so the first render
+  // already has the user's saved selection (no flash of the default set).
+  const [selectedConfs, setSelectedConfs] = useState(() => {
+    if (typeof window === 'undefined') return TEAMS_DEFAULT_CONFERENCES;
+    try {
+      const raw = window.localStorage.getItem(TEAMS_CONF_STORAGE_KEY);
+      if (raw == null) return TEAMS_DEFAULT_CONFERENCES;
+      const parsed = JSON.parse(raw);
+      if (parsed === null) return null; // explicit "all teams"
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+    return TEAMS_DEFAULT_CONFERENCES;
+  });
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef(null);
+
   useEffect(() => {
     (async () => {
       try {
@@ -611,22 +636,158 @@ function StatsView({ onSelectTeam }) {
       finally { setLoading(false); }
     })();
   }, []);
+
+  // Persist selection whenever it changes. `null` (show all) is stored as
+  // the literal "null" string so we can round-trip it cleanly.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(TEAMS_CONF_STORAGE_KEY, JSON.stringify(selectedConfs));
+    } catch {}
+  }, [selectedConfs]);
+
+  // Click-outside to close the filter popover.
+  useEffect(() => {
+    if (!filterOpen) return;
+    const onDown = (e) => {
+      if (filterRef.current && !filterRef.current.contains(e.target)) setFilterOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [filterOpen]);
+
+  // Decorate every team with its canonical conference once, then derive
+  // the per-conference histogram and the filtered list from that. Doing
+  // this in one pass (instead of recomputing conference inside the JSX
+  // map) keeps the filter dropdown totals in lockstep with the grid.
+  const decorated = React.useMemo(() => {
+    return teams.map((t) => ({
+      team: t,
+      conference:
+        lookupConference(t.location) ||
+        lookupConference(t.displayName) ||
+        lookupConference(t.shortDisplayName) ||
+        null,
+    }));
+  }, [teams]);
+
+  const conferenceCounts = React.useMemo(() => {
+    const counts = new Map();
+    for (const { conference } of decorated) {
+      const key = conference || '(No conference)';
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [decorated]);
+
+  const visible = React.useMemo(() => {
+    if (selectedConfs === null) return decorated;
+    if (selectedConfs.length === 0) return [];
+    const set = new Set(selectedConfs);
+    return decorated.filter(({ conference }) => conference && set.has(conference));
+  }, [decorated, selectedConfs]);
+
+  const toggleConf = (name) => {
+    setSelectedConfs((prev) => {
+      const base = prev === null ? [] : prev;
+      if (base.includes(name)) return base.filter((c) => c !== name);
+      return [...base, name];
+    });
+  };
+  const selectAll = () => setSelectedConfs(null);
+  const clearAll = () => setSelectedConfs([]);
+  const resetDefaults = () => setSelectedConfs(TEAMS_DEFAULT_CONFERENCES);
+
   if (loading) return <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading teams…</div>;
   if (err) return <div className="text-center py-20 text-red-400">Error: {err}</div>;
+
+  const filterLabel =
+    selectedConfs === null
+      ? 'All Conferences'
+      : selectedConfs.length === 0
+        ? 'No Conferences'
+        : selectedConfs.length === 1
+          ? selectedConfs[0]
+          : `${selectedConfs.length} Conferences`;
+
   return (
     <div>
-      <div className="mb-6 border-b border-white/10 pb-3">
-        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">Directory</div>
-        <h2 className="display text-white text-3xl font-bold">D1 Teams <span className="text-white/30 text-lg">· {teams.length}</span></h2>
-        <p className="text-white/40 text-xs mt-1">Click any team to view its full roster.</p>
+      <div className="mb-6 border-b border-white/10 pb-3 flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">Directory</div>
+          <h2 className="display text-white text-3xl font-bold">
+            D1 Teams <span className="text-white/30 text-lg">· {visible.length}{visible.length !== teams.length ? ` of ${teams.length}` : ''}</span>
+          </h2>
+          <p className="text-white/40 text-xs mt-1">Click any team to view its full roster.</p>
+        </div>
+
+        <div className="relative" ref={filterRef}>
+          <button
+            onClick={() => setFilterOpen((v) => !v)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 hover:border-white/30 text-white/70 hover:text-white text-[10px] mono uppercase tracking-widest transition"
+            style={{ background: '#1a1815' }}
+          >
+            <span>Filter · {filterLabel}</span>
+            <svg className="w-3 h-3 opacity-60" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+          </button>
+          {filterOpen && (
+            <div
+              className="absolute right-0 mt-2 w-72 rounded-lg border border-white/15 shadow-2xl z-20"
+              style={{ background: '#1a1815' }}
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+                <div className="text-[9px] mono uppercase tracking-widest text-white/40">Conferences</div>
+                <div className="flex gap-2 text-[9px] mono uppercase tracking-widest">
+                  <button onClick={selectAll} className="text-white/50 hover:text-white transition">All</button>
+                  <span className="text-white/20">·</span>
+                  <button onClick={clearAll} className="text-white/50 hover:text-white transition">None</button>
+                  <span className="text-white/20">·</span>
+                  <button onClick={resetDefaults} className="text-white/50 hover:text-white transition">Default</button>
+                </div>
+              </div>
+              <div className="max-h-80 overflow-y-auto py-1">
+                {conferenceCounts.map(([name, count]) => {
+                  const checked = selectedConfs === null || (selectedConfs || []).includes(name);
+                  const isUnknown = name === '(No conference)';
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => !isUnknown && toggleConf(name)}
+                      disabled={isUnknown}
+                      className="w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-white/5 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center"
+                          style={checked ? { background: '#ff6b1a', borderColor: '#ff6b1a' } : { borderColor: 'rgba(255,255,255,0.25)' }}
+                        >
+                          {checked && (
+                            <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className="text-white text-[11px] truncate">{name}</span>
+                      </div>
+                      <span className="text-white/30 text-[9px] mono ml-2">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-        {teams.map((t, i) => {
-          const conference =
-            lookupConference(t.location) ||
-            lookupConference(t.displayName) ||
-            lookupConference(t.shortDisplayName);
-          return (
+
+      {visible.length === 0 ? (
+        <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">
+          No teams match the current filter.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+          {visible.map(({ team: t, conference }, i) => (
             <button
               key={t.id}
               onClick={() => onSelectTeam && onSelectTeam(t)}
@@ -641,9 +802,9 @@ function StatsView({ onSelectTeam }) {
                 </div>
               </div>
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
