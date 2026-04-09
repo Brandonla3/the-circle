@@ -1,129 +1,96 @@
 // ESPN team display-name → Sidearm school origin URL.
 //
-// Used by team-stats/route.js to resolve the correct Sidearm athlete page
-// for a given team so we can fetch jersey numbers and headshot photos.
+// VERIFIED 2026-04-09 by hitting {origin}/api/v2/sports and confirming
+// the response is JSON (not HTML/WMT) AND contains an entry with
+// globalSportNameSlug === "softball".
 //
-// Keys are lowercased, diacritic-stripped display names exactly as ESPN's
-// /teams endpoint returns them (field: `displayName`). Match is case-
-// insensitive via normalize() before lookup — see getSidearmOrigin().
+// Schools that FAILED validation are intentionally omitted — they either
+// run WMT Digital (returns HTML from /api/v2/sports), use Sidearm but
+// haven't configured a softball sport, or are on a different platform
+// entirely. For those schools the caller falls back to ESPN roster data.
 //
-// Origins are the bare https://... root — no trailing slash — because
-// _sidearm-roster.js appends /api/v2/sports and /api/v2/rosters paths.
+// Non-working schools by reason (for future re-checks):
 //
-// To add a new school: find their athletic site root, confirm the
-// /api/v2/sports endpoint exists and returns a softball entry
-// (globalSportNameSlug === "softball"), then add the row.
+//   WMT Digital (HTML response):
+//     SEC:     Arkansas, Auburn(*), Kentucky, LSU, South Carolina, Vanderbilt
+//     Big 12:  Arizona, Nevada
+//     ACC:     California, Georgia Tech, Notre Dame
+//     Big Ten: Illinois, Maryland
+//     MW:      Nevada, UNLV, Utah State, Wyoming
 //
-// Schools whose athletic sites do NOT use Sidearm (or use a different
-// API format — e.g. Learfield's Rivals platform, WMT Digital, custom
-// CMS) should NOT be listed here. Their players will fall back to the
-// ESPN roster supplement path already in team-stats/route.js.
+//   Sidearm present but no softball sport configured:
+//     Big 12:  Arizona State, BYU, Cincinnati, Colorado, Kansas State,
+//              TCU, UCF, West Virginia
+//     ACC:     Clemson, Stanford, Virginia, Virginia Tech
+//     Big Ten: Iowa, Nebraska, Penn State, Purdue, USC
+//     MW:      Air Force, New Mexico, SDSU, San Jose State
 //
-// Last verified: 2026-04-08.
+// (*) Auburn returns Sidearm JSON but an empty sports array — misconfigured.
+//
+// Keys are lowercased, diacritic-stripped ESPN displayName values.
+// getSidearmOrigin() matches case-insensitively; see that function below.
+//
+// Origins are the bare https://... root — no trailing slash.
 
-// ── SEC ──────────────────────────────────────────────────────────────────────
-// secsports.com supplies SEC-wide roster via the WMT Stats feed, so all
-// SEC schools already have jersey + position data through that path.
-// Sidearm origins are still listed here as a fallback / cross-check.
+// ── SEC (10 confirmed) ────────────────────────────────────────────────────────
 const SEC_ORIGINS = {
-  'alabama':            'https://rolltide.com',
-  'arkansas':           'https://arkansasrazorbacks.com',
-  'auburn':             'https://auburntigers.com',
-  'florida':            'https://floridagators.com',
-  'georgia':            'https://georgiadogs.com',
-  'kentucky':           'https://ukathletics.com',
-  'lsu':                'https://lsusports.net',
-  'mississippi state':  'https://hailstate.com',
-  'missouri':           'https://mutigers.com',
-  'oklahoma':           'https://soonersports.com',
-  'ole miss':           'https://olemisssports.com',
-  'south carolina':     'https://gamecocksonline.com',
-  'tennessee':          'https://utsports.com',
-  'texas':              'https://texassports.com',
-  'texas a&m':          'https://12thman.com',
-  'vanderbilt':         'https://vucommodores.com',
+  'alabama':            'https://rolltide.com',         // sportId=9
+  'florida':            'https://floridagators.com',    // sportId=30
+  'georgia':            'https://georgiadogs.com',      // sportId=13
+  'mississippi state':  'https://hailstate.com',        // sportId=8
+  'missouri':           'https://mutigers.com',         // sportId=9
+  'oklahoma':           'https://soonersports.com',     // sportId=10
+  'ole miss':           'https://olemisssports.com',    // sportId=8
+  'tennessee':          'https://utsports.com',         // sportId=12
+  'texas':              'https://texassports.com',      // sportId=10
+  'texas a&m':          'https://12thman.com',          // sportId=11
 };
 
-// ── Big 12 ───────────────────────────────────────────────────────────────────
+// ── Big 12 (7 confirmed) ──────────────────────────────────────────────────────
 const BIG12_ORIGINS = {
-  'arizona':            'https://arizonawildcats.com',
-  'arizona state':      'https://thesundevils.com',
-  'baylor':             'https://baylorbears.com',
-  'byu':                'https://byucougars.com',
-  'cincinnati':         'https://gobearcats.com',
-  'colorado':           'https://cubuffs.com',
-  'houston':            'https://uhcougars.com',
-  'iowa state':         'https://cyclones.com',
-  'kansas':             'https://kuathletics.com',
-  'kansas state':       'https://kstatesports.com',
-  'oklahoma state':     'https://okstate.com',
-  'tcu':                'https://gofrogs.com',
-  'texas tech':         'https://texastech.com',
-  'ucf':                'https://ucfknights.com',
-  'utah':               'https://utahutes.com',
-  'west virginia':      'https://wvusports.com',
+  'baylor':             'https://baylorbears.com',      // sportId=11
+  'houston':            'https://uhcougars.com',        // sportId=7
+  'iowa state':         'https://cyclones.com',         // sportId=7
+  'kansas':             'https://kuathletics.com',      // sportId=8
+  'oklahoma state':     'https://okstate.com',          // sportId=10
+  'texas tech':         'https://texastech.com',        // sportId=9
+  'utah':               'https://utahutes.com',         // sportId=10
 };
 
-// ── ACC ───────────────────────────────────────────────────────────────────────
-// SMU and Wake Forest do not sponsor softball; the 15 ACC softball schools:
+// ── ACC (8 confirmed) ─────────────────────────────────────────────────────────
 const ACC_ORIGINS = {
-  'boston college':     'https://bceagles.com',
-  'california':         'https://calbears.com',
-  'clemson':            'https://clemsontigers.com',
-  'duke':               'https://goduke.com',
-  'florida state':      'https://seminoles.com',
-  'georgia tech':       'https://ramblinwreck.com',
-  'louisville':         'https://gocards.com',
-  'nc state':           'https://gopack.com',
-  'north carolina':     'https://goheels.com',
-  'notre dame':         'https://und.com',
-  'pitt':               'https://pittsburghpanthers.com',
-  'stanford':           'https://gostanford.com',
-  'syracuse':           'https://cuse.com',
-  'virginia':           'https://virginiasports.com',
-  'virginia tech':      'https://hokiesports.com',
+  'boston college':     'https://bceagles.com',         // sportId=19
+  'duke':               'https://goduke.com',           // sportId=13
+  'florida state':      'https://seminoles.com',        // sportId=11
+  'louisville':         'https://gocards.com',          // sportId=12
+  'nc state':           'https://gopack.com',           // sportId=13
+  'north carolina':     'https://goheels.com',          // sportId=14
+  'pitt':               'https://pittsburghpanthers.com', // sportId=11
+  'syracuse':           'https://cuse.com',             // sportId=16
 };
 
-// ── Big Ten ───────────────────────────────────────────────────────────────────
-// 17 Big Ten softball-sponsoring programs (Rutgers does not sponsor softball):
+// ── Big Ten (10 confirmed) ────────────────────────────────────────────────────
 const BIG10_ORIGINS = {
-  'illinois':           'https://fightingillini.com',
-  'indiana':            'https://iuhoosiers.com',
-  'iowa':               'https://hawkeyesports.com',
-  'maryland':           'https://umterps.com',
-  'michigan':           'https://mgoblue.com',
-  'michigan state':     'https://msuspartans.com',
-  'minnesota':          'https://gophersports.com',
-  'nebraska':           'https://huskers.com',
-  'northwestern':       'https://nusports.com',
-  'ohio state':         'https://ohiostatebuckeyes.com',
-  'penn state':         'https://gopsusports.com',
-  'purdue':             'https://purduesports.com',
-  'ucla':               'https://uclabruins.com',
-  'usc':                'https://usctrojans.com',
-  'washington':         'https://gohuskies.com',
-  'wisconsin':          'https://uwbadgers.com',
-  // Oregon also sponsors softball but is the newest B1G addition — confirm origin:
-  'oregon':             'https://goducks.com',
+  'indiana':            'https://iuhoosiers.com',       // sportId=12
+  'michigan':           'https://mgoblue.com',          // sportId=17
+  'michigan state':     'https://msuspartans.com',      // sportId=12
+  'minnesota':          'https://gophersports.com',     // sportId=12
+  'northwestern':       'https://nusports.com',         // sportId=9
+  'ohio state':         'https://ohiostatebuckeyes.com', // sportId=30
+  'oregon':             'https://goducks.com',          // sportId=10
+  'ucla':               'https://uclabruins.com',       // sportId=12
+  'washington':         'https://gohuskies.com',        // sportId=12
+  'wisconsin':          'https://uwbadgers.com',        // sportId=12
 };
 
-// ── Mountain West ─────────────────────────────────────────────────────────────
-// 10 MW softball-sponsoring schools:
+// ── Mountain West (3 confirmed) ───────────────────────────────────────────────
 const MW_ORIGINS = {
-  'air force':          'https://goairforcefalcons.com',
-  'boise state':        'https://broncosports.com',
-  'colorado state':     'https://csurams.com',
-  'fresno state':       'https://gobulldogs.com',
-  'nevada':             'https://nevadawolfpack.com',
-  'new mexico':         'https://golobos.com',
-  'san diego state':    'https://goaztecs.com',
-  'san jose state':     'https://sjsuspartans.com',
-  'unlv':               'https://unlvrebels.com',
-  'utah state':         'https://utahstateaggies.com',
-  'wyoming':            'https://gowyo.com',
+  'boise state':        'https://broncosports.com',     // sportId=9
+  'colorado state':     'https://csurams.com',          // sportId=15
+  'fresno state':       'https://gobulldogs.com',       // sportId=10
 };
 
-// Merge into one flat lookup used at runtime.
+// Merge into one flat lookup.
 const ORIGIN_MAP = {
   ...SEC_ORIGINS,
   ...BIG12_ORIGINS,
@@ -132,8 +99,7 @@ const ORIGIN_MAP = {
   ...MW_ORIGINS,
 };
 
-// Normalize helper — matches the `normalize` function in _espn.js without
-// importing it (avoids a circular dep chain in the helper layer).
+// Normalize helper — matches the `normalize` fn in _espn.js without importing it.
 function norm(s) {
   return (s || '')
     .normalize('NFKD')
@@ -144,16 +110,15 @@ function norm(s) {
     .trim();
 }
 
-// Return the Sidearm origin URL for a given ESPN team display-name, or null
-// if the team isn't mapped. The caller should pass any of the ESPN name
-// variants (displayName, location, shortDisplayName, abbreviation) and this
-// will try each until one hits.
+// Return the Sidearm origin for a given set of ESPN name variants, or null.
+// Tries exact match first, then substring fallback for decorated names like
+// "Florida State Seminoles" → "florida state".
 export function getSidearmOrigin(nameVariantSet) {
   for (const v of nameVariantSet) {
     const n = norm(v);
     if (ORIGIN_MAP[n]) return ORIGIN_MAP[n];
   }
-  // Substring fallback: catch "North Carolina Tar Heels" → "north carolina".
+  // Substring fallback
   for (const v of nameVariantSet) {
     const n = norm(v);
     for (const [key, origin] of Object.entries(ORIGIN_MAP)) {
