@@ -980,7 +980,7 @@ function TeamModal({ team, onClose }) {
                       const hometown  = p.hometown || p.birthPlace || null;
                       const side      = (['P','RHP','LHP'].includes(pos.toUpperCase())) ? 'pitching' : 'batting';
                       return (
-                        <tr key={p.id || playerName} className="border-t border-white/5 hover:bg-white/[0.02]">
+                        <tr key={p.id || playerName} style={classYearStyle(cls)} className="border-t border-white/5 hover:bg-white/[0.02]">
                           <td className="py-2 px-3 text-white/50 tabular-nums">{jersey || '—'}</td>
                           <td className="py-2 px-3">
                             <div className="flex items-center gap-2">
@@ -1499,6 +1499,18 @@ function playerTableEmptyDetail(stats, group) {
 // individual leaderboards don't ship raw BB (walks allowed) or a working
 // WHIP for softball at the individual level, so those were dropped from
 // the column set rather than displayed as permanent dashes.
+// Returns an inline style object that applies a dim background tint to table rows
+// for Seniors (warm silver) and Freshmen (dim red). Applies to all player tables
+// and the roster view so class status is scannable at a glance.
+function classYearStyle(classYear) {
+  const yr = (classYear || '').trim().toLowerCase().replace(/\.$/, '');
+  if (yr === 'sr' || yr === 'senior')
+    return { background: 'rgba(176, 148, 96, 0.07)', borderLeft: '2px solid rgba(176, 148, 96, 0.22)' };
+  if (yr === 'fr' || yr === 'freshman')
+    return { background: 'rgba(160, 32, 32, 0.07)', borderLeft: '2px solid rgba(160, 32, 32, 0.22)' };
+  return {};
+}
+
 function renderPlayerTable(stats, group, onSelectPlayer) {
   const rows = stats?.players?.[group] || [];
   if (rows.length === 0) {
@@ -1540,6 +1552,7 @@ function renderPlayerTable(stats, group, onSelectPlayer) {
           {rows.map((p) => (
             <tr
               key={p.id}
+              style={classYearStyle(p.classYear)}
               className={`border-t border-white/5 hover:bg-white/[0.02]${onSelectPlayer ? ' cursor-pointer hover:bg-white/[0.04]' : ''}`}
               onClick={onSelectPlayer ? () => onSelectPlayer({
                 name: p.name,
@@ -1638,7 +1651,7 @@ function renderWmtFullRosterTable(title, rows, columns, emptyCopy) {
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className="border-t border-white/5 hover:bg-white/[0.02]">
+            <tr key={i} style={classYearStyle(row['Yr'])} className="border-t border-white/5 hover:bg-white/[0.02]">
               {visibleCols.map((c) => {
                 const isPlayer = (c.label || '').toLowerCase() === 'player';
                 const v = row[c.label];
@@ -2466,9 +2479,8 @@ function TeamCompareTab({ home, away, rankings }) {
         </div>
 
         <div className="text-[10px] mono text-white/30 text-center">
-          Per-player stats from NCAA individual leaderboards (top 50 per
-          category). Role players who aren't ranked in any top-50 stat
-          won't appear here. Missing stat cells render as —.
+          SEC teams use the full secsports.com roster feed (all players who appeared this season).
+          Other conferences use NCAA individual leaderboards. Missing stat cells render as —.
         </div>
       </div>
     );
@@ -3152,8 +3164,18 @@ function PlayerModal({ player, onClose }) {
             </div>
           </div>
           {/* Bio details row */}
-          {(player.hometown || player.highSchool || player.previousSchool || player.heightDisplay || player.batThrows) && (
+          {(player.classYear || player.hometown || player.highSchool || player.previousSchool || player.heightDisplay || player.batThrows) && (
             <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs mono">
+              {player.classYear && (() => {
+                const yr = (player.classYear || '').trim().toLowerCase().replace(/\.$/, '');
+                const isSr = yr === 'sr' || yr === 'senior';
+                const isFr = yr === 'fr' || yr === 'freshman';
+                return (
+                  <span style={isSr ? { color: 'rgba(200,170,110,0.9)' } : isFr ? { color: 'rgba(200,80,80,0.85)' } : { color: 'rgba(255,255,255,0.4)' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.25)', marginRight: '4px' }}>CLASS</span>{player.classYear}
+                  </span>
+                );
+              })()}
               {player.heightDisplay && (
                 <span className="text-white/40">
                   <span className="text-white/25 mr-1">HT</span>{player.heightDisplay}

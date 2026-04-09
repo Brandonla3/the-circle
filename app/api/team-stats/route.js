@@ -870,6 +870,109 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
   };
 }
 
+// Convert WMT class-year short code to the dot-suffix format used by Sidearm.
+function wmtNormalizeYear(yr) {
+  const y = (yr || '').trim().toLowerCase();
+  if (y === 'sr') return 'Sr.';
+  if (y === 'jr') return 'Jr.';
+  if (y === 'so') return 'So.';
+  if (y === 'fr') return 'Fr.';
+  return yr || null;
+}
+
+// Merge WMT individual player rows into the standard players.batting / players.pitching
+// format, enriching with Sidearm bio/photo data from the existing ncaaPlayerLists.
+// WMT rows are keyed by column label (e.g. row['AVG'], row['ERA']).
+// This returns all players who appeared this season — not just top-50 nationally.
+function mergeWmtPlayers(wmtPlayers, ncaaPlayerLists) {
+  // Build a name lookup from the existing (Sidearm-enriched) player arrays.
+  const lookup = new Map();
+  for (const p of [...(ncaaPlayerLists.batting || []), ...(ncaaPlayerLists.pitching || [])]) {
+    if (p.name) lookup.set(normalize(p.name), p);
+  }
+
+  const batting  = [];
+  const pitching = [];
+
+  // ── Hitting rows → batting ──────────────────────────────────────────────
+  for (const row of wmtPlayers.hitting || []) {
+    const rawName = row['Player'] || row['Name'] || '';
+    if (!rawName) continue;
+    const bio = lookup.get(normalize(rawName)) || {};
+    batting.push({
+      id:             bio.id           || normalize(rawName),
+      name:           bio.name         || rawName,
+      jersey:         bio.jersey       || row['#']  || null,
+      photoUrl:       bio.photoUrl     || null,
+      position:       bio.position     || row['Pos'] || null,
+      classYear:      bio.classYear    || wmtNormalizeYear(row['Yr']),
+      hometown:       bio.hometown     || null,
+      highSchool:     bio.highSchool   || null,
+      previousSchool: bio.previousSchool || null,
+      heightDisplay:  bio.heightDisplay  || null,
+      weight:         bio.weight         || null,
+      batThrows:      bio.batThrows      || null,
+      games:  parseInt(row['G']  || row['GP'] || '0', 10) || null,
+      AB:     parseFloat(row['AB'])              || null,
+      R:      parseFloat(row['R'])               || null,
+      H:      parseFloat(row['H'])               || null,
+      RBI:    parseFloat(row['RBI'])             || null,
+      HR:     parseFloat(row['HR'])              || null,
+      BB:     parseFloat(row['BB'])              || null,
+      K:      parseFloat(row['SO'] ?? row['K'])  || null,
+      SB:     parseFloat(row['SB'])              || null,
+      '2B':   parseFloat(row['2B'])              || null,
+      '3B':   parseFloat(row['3B'])              || null,
+      BA:     row['AVG']  || null,
+      OBP:    row['OBP']  || null,
+      SLG:    row['SLG']  || null,
+    });
+  }
+
+  // ── Pitching rows → pitching ────────────────────────────────────────────
+  for (const row of wmtPlayers.pitching || []) {
+    const rawName = row['Player'] || row['Name'] || '';
+    if (!rawName) continue;
+    const bio = lookup.get(normalize(rawName)) || {};
+    pitching.push({
+      id:             bio.id           || normalize(rawName),
+      name:           bio.name         || rawName,
+      jersey:         bio.jersey       || row['#']  || null,
+      photoUrl:       bio.photoUrl     || null,
+      position:       'P',
+      classYear:      bio.classYear    || wmtNormalizeYear(row['Yr']),
+      hometown:       bio.hometown     || null,
+      highSchool:     bio.highSchool   || null,
+      previousSchool: bio.previousSchool || null,
+      heightDisplay:  bio.heightDisplay  || null,
+      weight:         bio.weight         || null,
+      batThrows:      bio.batThrows      || null,
+      games:  parseInt(row['App'] ?? row['G'] ?? row['GP'] ?? '0', 10) || null,
+      IP:     row['IP']                              || null,
+      K:      parseFloat(row['SO'] ?? row['K'])      || null,
+      BB:     parseFloat(row['BB'])                  || null,
+      ER:     parseFloat(row['ER'])                  || null,
+      H:      parseFloat(row['H'])                   || null,
+      R:      parseFloat(row['R'])                   || null,
+      W:      parseFloat(row['W'])                   || null,
+      L:      parseFloat(row['L'])                   || null,
+      SV:     parseFloat(row['SV'])                  || null,
+      SHO:    parseFloat(row['SHO'])                 || null,
+      ERA:    row['ERA']  || null,
+      WHIP:   row['WHIP'] || null,
+      'K/7':  null,
+    });
+  }
+
+  // Sort: batters by BA desc; pitchers by ERA asc (nulls last).
+  const baNum  = (p) => parseFloat(p.BA)  || 0;
+  const eraNum = (p) => { const v = parseFloat(p.ERA); return Number.isFinite(v) ? v : 99; };
+  batting.sort( (a, b) => baNum(b)  - baNum(a)  || a.name.localeCompare(b.name));
+  pitching.sort((a, b) => eraNum(a) - eraNum(b) || a.name.localeCompare(b.name));
+
+  return { batting, pitching };
+}
+
 // 30-minute in-process cache. Stats update once daily; 30 min is fine and
 // avoids redundant re-scans from the same warm Lambda instance.
 const TEAM_TTL_MS = 30 * 60 * 1000;
@@ -1083,10 +1186,19 @@ async function computeTeamStats(teamId) {
     batting: ncaaTeamStats?.batting || {},
     pitching: ncaaTeamStats?.pitching || {},
   };
-  const players = {
-    batting: ncaaPlayerStats?.batting || [],
+  // For SEC teams the WMT feed covers all players who appeared this season
+  // (not just the top-50-nationally slice from NCAA leaderboards).
+  // Sidearm bio/photo data from ncaaPlayerStats is preserved via name lookup.
+  const basePlayers = {
+    batting:  ncaaPlayerStats?.batting  || [],
     pitching: ncaaPlayerStats?.pitching || [],
   };
+  const players = (
+    secWmt?.players &&
+    ((secWmt.players.hitting?.length  ?? 0) > 0 ||
+     (secWmt.players.pitching?.length ?? 0) > 0)
+  ) ? mergeWmtPlayers(secWmt.players, basePlayers)
+    : basePlayers;
 
   return {
     teamId: String(teamId),
