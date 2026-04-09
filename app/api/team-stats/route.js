@@ -49,6 +49,7 @@ import {
 } from '../_ncaa-player.js';
 import { getSecTeamStats } from '../sec-stats/route.js';
 import { getSecTeamSchedule } from '../_sec-schedule.js';
+import { getBig12TeamSchedule } from '../_big12-schedule.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -732,7 +733,7 @@ async function computeTeamStats(teamId) {
   // time-exhausted slugs on cold-start. Sequencing them keeps cold-start
   // total under Vercel's 10s limit while still letting warm-cache calls
   // finish in ~1s (both aggregators hit their caches).
-  const [schedule, recordsRaw, ncaaTeamStats, secWmt, secSchedule] = await Promise.all([
+  const [schedule, recordsRaw, ncaaTeamStats, secWmt, secSchedule, big12Schedule] = await Promise.all([
     fetchWithRetry(scheduleUrl),
     fetchWithRetry(recordsUrl),
     aggregateNcaaTeamStats(teamId, nameVariantSet).catch(() => null),
@@ -748,6 +749,12 @@ async function computeTeamStats(teamId) {
     // is_conference flag, etc). Returns null for non-SEC teams so the
     // caller falls back to the ESPN-derived scheduleGames below.
     getSecTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
+    // Big 12 schedule feed via big12sports.com's Sidearm responsive-calendar
+    // service. Same coverage-per-request win as the SEC feed. Returns null
+    // for non-Big-12 teams; unlike the SEC helper this is safely
+    // self-gating because the API only lists games with a Big 12 school as
+    // the `school` side, so name-matching is the membership test.
+    getBig12TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
   ]);
   const ncaaPlayerStats = await aggregateNcaaPlayerStats(teamId, nameVariantSet).catch(() => null);
 
@@ -845,13 +852,27 @@ async function computeTeamStats(teamId) {
     // directly when present and falls back to the NCAA path otherwise.
     secWmt: secWmt || null,
     // Normalized per-game schedule for the TeamModal Schedule sub-tab.
-    // Conference feeds (currently SEC) win over ESPN when the team is
-    // actually a member of that conference — gated on secWmt because the
-    // secsports.com API also returns non-SEC teams that happened to play
-    // a SEC opponent, and we do NOT want to serve those teams a partial
-    // schedule that only contains their SEC crossovers.
-    schedule: secWmt && secSchedule && secSchedule.length > 0 ? secSchedule : scheduleGames,
-    scheduleSource: secWmt && secSchedule && secSchedule.length > 0 ? 'sec' : 'espn',
+    // Conference feeds win over ESPN when the team is actually a member
+    // of that conference. Order matters here:
+    //   - SEC is gated on secWmt because the secsports.com API also
+    //     returns non-SEC teams that happened to play a SEC opponent,
+    //     and we do NOT want to serve those teams a partial schedule.
+    //   - Big 12 is self-gating: the Sidearm responsive-calendar endpoint
+    //     only emits events with a Big 12 school as the `school` side,
+    //     so name-matching inside getBig12TeamSchedule IS the membership
+    //     test — a non-empty array means the team is a Big 12 member.
+    schedule:
+      secWmt && secSchedule && secSchedule.length > 0
+        ? secSchedule
+        : big12Schedule && big12Schedule.length > 0
+        ? big12Schedule
+        : scheduleGames,
+    scheduleSource:
+      secWmt && secSchedule && secSchedule.length > 0
+        ? 'sec'
+        : big12Schedule && big12Schedule.length > 0
+        ? 'big12'
+        : 'espn',
     meta: {
       source: secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
       scheduleEvents: events.length,
