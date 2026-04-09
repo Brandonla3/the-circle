@@ -873,26 +873,6 @@ function TeamModal({ team, onClose }) {
     lookupConference(team?.shortDisplayName) ||
     null;
 
-  // Group athletes by primary position bucket so scouts can scan quickly.
-  const grouped = (() => {
-    if (!roster?.athletes) return null;
-    const buckets = {
-      Pitchers: [],
-      Catchers: [],
-      Infielders: [],
-      Outfielders: [],
-      'Utility / Other': [],
-    };
-    for (const a of roster.athletes) {
-      const pos = (a.position || '').toUpperCase();
-      if (pos === 'P' || pos === 'RHP' || pos === 'LHP') buckets.Pitchers.push(a);
-      else if (pos === 'C') buckets.Catchers.push(a);
-      else if (pos === '1B' || pos === '2B' || pos === '3B' || pos === 'SS' || pos === 'IF') buckets.Infielders.push(a);
-      else if (pos === 'OF' || pos === 'LF' || pos === 'CF' || pos === 'RF') buckets.Outfielders.push(a);
-      else buckets['Utility / Other'].push(a);
-    }
-    return buckets;
-  })();
 
   // ---------------- Render helpers ----------------
   // Plain functions that return JSX — NOT `const Foo = () => ...` inner
@@ -903,29 +883,66 @@ function TeamModal({ team, onClose }) {
   // resolves and triggers a re-render.
 
   const renderRosterView = () => {
-    // Full Sidearm player data keyed by lowercased name
-    const rosterMap = new Map();
-    if (stats) {
-      for (const p of [...(stats.players?.batting || []), ...(stats.players?.pitching || [])]) {
-        if (p.name) rosterMap.set(p.name.toLowerCase(), p);
+    // Prefer stats.players as the source — it contains every Sidearm player
+    // (including bench/non-leaderboard entries) with photos, real position
+    // codes, and full bio data. ESPN's softball roster is notoriously bad:
+    // many schools return last-name-only stubs (e.g. "Alldredge") with no
+    // position, no photo, and sometimes 90+ ghost entries. Using stats as
+    // primary and ESPN as a loading fallback solves all three problems.
+    const statsPlayers = (() => {
+      if (!stats?.players) return null;
+      const seen = new Set();
+      const out = [];
+      for (const p of [...(stats.players.batting || []), ...(stats.players.pitching || [])]) {
+        const key = p.id || p.name;
+        if (key && !seen.has(key)) { seen.add(key); out.push(p); }
       }
-    }
+      return out.length > 0 ? out : null;
+    })();
 
-    if (!roster && !rosterErr) {
+    // Which list to render: stats (preferred) or ESPN athletes (loading fallback).
+    const source = statsPlayers || roster?.athletes;
+
+    if (!source && !rosterErr && !statsErr) {
       return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading roster…</div>;
     }
-    if (rosterErr) {
+    if (!source) {
       return (
         <div className="text-center py-12">
           <div className="text-white/40 text-sm mb-2">Couldn't load roster.</div>
-          <div className="text-white/30 text-xs mono">{rosterErr}</div>
+          <div className="text-white/30 text-xs mono">{rosterErr || statsErr}</div>
         </div>
       );
     }
-    if (!grouped) return null;
+
+    // Group by position bucket.
+    const buckets = {
+      Pitchers: [],
+      Catchers: [],
+      Infielders: [],
+      Outfielders: [],
+      'Utility / Other': [],
+    };
+    for (const p of source) {
+      const pos = (p.position || '').toUpperCase();
+      if (['P','RHP','LHP'].includes(pos)) buckets.Pitchers.push(p);
+      else if (pos === 'C') buckets.Catchers.push(p);
+      else if (['1B','2B','3B','SS','IF'].includes(pos)) buckets.Infielders.push(p);
+      else if (['OF','LF','CF','RF'].includes(pos)) buckets.Outfielders.push(p);
+      else buckets['Utility / Other'].push(p);
+    }
+    // Sort each bucket by jersey number ascending; null jersey sorts last.
+    for (const list of Object.values(buckets)) {
+      list.sort((a, b) => {
+        const aj = parseInt(a.jersey ?? '999', 10);
+        const bj = parseInt(b.jersey ?? '999', 10);
+        return aj - bj || (a.name || '').localeCompare(b.name || '');
+      });
+    }
+
     return (
       <div className="space-y-8">
-        {Object.entries(grouped).map(([label, list]) => {
+        {Object.entries(buckets).map(([label, list]) => {
           if (list.length === 0) return null;
           return (
             <div key={label}>
@@ -949,58 +966,69 @@ function TeamModal({ team, onClose }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {list.map((a) => {
-                      const sd = rosterMap.get((a.name || '').toLowerCase());
+                    {list.map((p) => {
+                      // Normalize fields across stats-player and ESPN-athlete shapes.
+                      const playerName = p.name || p.displayName || '';
+                      const jersey    = p.jersey ?? null;
+                      const pos       = p.position || '';
+                      const cls       = p.classYear || null;
+                      // batThrows: stats players have a combined field; ESPN has separate bats/throws.
+                      const bt        = p.batThrows || ([p.bats, p.throws].filter(Boolean).join('/')) || null;
+                      const ht        = p.heightDisplay || null;
+                      const wt        = p.weight || p.weightDisplay || null;
+                      // hometown: stats players have p.hometown; ESPN athletes have p.birthPlace (already a string).
+                      const hometown  = p.hometown || p.birthPlace || null;
+                      const side      = (['P','RHP','LHP'].includes(pos.toUpperCase())) ? 'pitching' : 'batting';
                       return (
-                      <tr key={a.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                        <td className="py-2 px-3 text-white/50 tabular-nums">{a.jersey || sd?.jersey || '—'}</td>
-                        <td className="py-2 px-3">
-                          <div className="flex items-center gap-2">
-                            {sd?.photoUrl ? (
-                              <img
-                                src={sd.photoUrl}
-                                alt={a.name}
-                                className="h-7 w-7 rounded-full object-cover flex-shrink-0 border border-white/10"
-                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                              />
-                            ) : (
-                              <div className="h-7 w-7 rounded-full bg-white/5 flex-shrink-0" />
-                            )}
-                            <span
-                              className="text-white whitespace-nowrap cursor-pointer hover:text-white/70"
-                              onClick={() => setSelectedPlayer({
-                                name: a.name,
-                                team: displayName,
-                                side: (['P','RHP','LHP'].includes((a.position || sd?.position || '').toUpperCase())) ? 'pitching' : 'batting',
-                                jersey: a.jersey || sd?.jersey || null,
-                                photoUrl: sd?.photoUrl || null,
-                                position: a.position || sd?.position || null,
-                                classYear: a.classYear || sd?.classYear || null,
-                                hometown: sd?.hometown || a.birthPlace || null,
-                                highSchool: sd?.highSchool || null,
-                                previousSchool: sd?.previousSchool || null,
-                                heightDisplay: a.heightDisplay || sd?.heightDisplay || null,
-                                weight: a.weightDisplay || sd?.weight || null,
-                                batThrows: [a.bats, a.throws].filter(Boolean).join('/') || sd?.batThrows || null,
-                              })}
-                            >
-                              {a.name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="text-center py-2 px-2 text-white/60">{a.position || sd?.position || '—'}</td>
-                        <td className="text-center py-2 px-2 text-white/60">{a.classYear || sd?.classYear || '—'}</td>
-                        <td className="text-center py-2 px-2 text-white/50">{[a.bats, a.throws].filter(Boolean).join('/') || sd?.batThrows || '—'}</td>
-                        <td className="text-center py-2 px-2 text-white/50">{a.heightDisplay || sd?.heightDisplay || '—'}</td>
-                        <td className="text-center py-2 px-2 text-white/50">{a.weightDisplay || sd?.weight || '—'}</td>
-                        <td className="py-2 px-3 text-white/50 truncate max-w-[180px]">{sd?.hometown || a.birthPlace || '—'}</td>
-                        <td className="py-2 px-3 text-white/50 truncate max-w-[160px]">{sd?.highSchool || '—'}</td>
-                        <td className="py-2 px-3 text-white/50 whitespace-nowrap">
-                          {sd?.previousSchool
-                            ? <span className="text-orange-400 text-[11px] font-medium">{sd.previousSchool}</span>
-                            : '—'}
-                        </td>
-                      </tr>
+                        <tr key={p.id || playerName} className="border-t border-white/5 hover:bg-white/[0.02]">
+                          <td className="py-2 px-3 text-white/50 tabular-nums">{jersey || '—'}</td>
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-2">
+                              {p.photoUrl ? (
+                                <img
+                                  src={p.photoUrl}
+                                  alt={playerName}
+                                  className="h-7 w-7 rounded-full object-cover flex-shrink-0 border border-white/10"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              ) : (
+                                <div className="h-7 w-7 rounded-full bg-white/5 flex-shrink-0" />
+                              )}
+                              <span
+                                className="text-white whitespace-nowrap cursor-pointer hover:text-white/70"
+                                onClick={() => setSelectedPlayer({
+                                  name: playerName,
+                                  team: displayName,
+                                  side,
+                                  jersey,
+                                  photoUrl: p.photoUrl || null,
+                                  position: pos || null,
+                                  classYear: cls,
+                                  hometown,
+                                  highSchool: p.highSchool || null,
+                                  previousSchool: p.previousSchool || null,
+                                  heightDisplay: ht,
+                                  weight: wt,
+                                  batThrows: bt,
+                                })}
+                              >
+                                {playerName}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="text-center py-2 px-2 text-white/60">{pos || '—'}</td>
+                          <td className="text-center py-2 px-2 text-white/60">{cls || '—'}</td>
+                          <td className="text-center py-2 px-2 text-white/50">{bt || '—'}</td>
+                          <td className="text-center py-2 px-2 text-white/50">{ht || '—'}</td>
+                          <td className="text-center py-2 px-2 text-white/50">{wt || '—'}</td>
+                          <td className="py-2 px-3 text-white/50 truncate max-w-[180px]">{hometown || '—'}</td>
+                          <td className="py-2 px-3 text-white/50 truncate max-w-[160px]">{p.highSchool || '—'}</td>
+                          <td className="py-2 px-3 text-white/50 whitespace-nowrap">
+                            {p.previousSchool
+                              ? <span className="text-orange-400 text-[11px] font-medium">{p.previousSchool}</span>
+                              : '—'}
+                          </td>
+                        </tr>
                       );
                     })}
                   </tbody>
