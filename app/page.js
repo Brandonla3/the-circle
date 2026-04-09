@@ -822,6 +822,7 @@ function TeamModal({ team, onClose }) {
   const [rosterErr, setRosterErr] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsErr, setStatsErr] = useState(null);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
 
   // Fetch roster + team-stats in parallel on mount. Dependency list is ONLY
   // [team.id] — derived strings would cause the effect to re-run every time
@@ -902,6 +903,14 @@ function TeamModal({ team, onClose }) {
   // resolves and triggers a re-render.
 
   const renderRosterView = () => {
+    // Build name -> photoUrl map from stats players (Sidearm enriched)
+    const photoMap = new Map();
+    if (stats) {
+      for (const p of [...(stats.players?.batting || []), ...(stats.players?.pitching || [])]) {
+        if (p.photoUrl && p.name) photoMap.set(p.name.toLowerCase(), p.photoUrl);
+      }
+    }
+
     if (!roster && !rosterErr) {
       return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading roster…</div>;
     }
@@ -941,7 +950,34 @@ function TeamModal({ team, onClose }) {
                     {list.map((a) => (
                       <tr key={a.id} className="border-t border-white/5 hover:bg-white/[0.02]">
                         <td className="py-2 px-3 text-white/50 tabular-nums">{a.jersey || '—'}</td>
-                        <td className="py-2 px-3 text-white whitespace-nowrap">{a.name}</td>
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            {photoMap.get((a.name || '').toLowerCase()) ? (
+                              <img
+                                src={photoMap.get((a.name || '').toLowerCase())}
+                                alt={a.name}
+                                className="h-7 w-7 rounded-full object-cover flex-shrink-0 border border-white/10"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="h-7 w-7 rounded-full bg-white/5 flex-shrink-0" />
+                            )}
+                            <span
+                              className="text-white whitespace-nowrap cursor-pointer hover:text-white/70"
+                              onClick={() => setSelectedPlayer({
+                                name: a.name,
+                                team: displayName,
+                                side: (['P','RHP','LHP'].includes((a.position || '').toUpperCase())) ? 'pitching' : 'batting',
+                                jersey: a.jersey,
+                                photoUrl: photoMap.get((a.name || '').toLowerCase()) || null,
+                                position: a.position,
+                                classYear: a.classYear,
+                              })}
+                            >
+                              {a.name}
+                            </span>
+                          </div>
+                        </td>
                         <td className="text-center py-2 px-2 text-white/60">{a.position || '—'}</td>
                         <td className="text-center py-2 px-2 text-white/60">{a.classYear || '—'}</td>
                         <td className="text-center py-2 px-2 text-white/50">{[a.bats, a.throws].filter(Boolean).join('/') || '—'}</td>
@@ -1000,15 +1036,14 @@ function TeamModal({ team, onClose }) {
       <div className="space-y-6">
         <div>
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Batters</div>
-          {renderPlayerTable(stats, 'batting')}
+          {renderPlayerTable(stats, 'batting', (p) => setSelectedPlayer({ ...p, team: p.team || displayName }))}
         </div>
         <div>
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Pitchers</div>
-          {renderPlayerTable(stats, 'pitching')}
+          {renderPlayerTable(stats, 'pitching', (p) => setSelectedPlayer({ ...p, team: p.team || displayName }))}
         </div>
         <div className="text-[10px] mono text-white/30 text-center">
-          Via NCAA top-50 individual leaderboards. Role players outside every
-          top 50 won't appear here.
+          Stats from NCAA leaderboards + full school roster via Sidearm. Click any player for their profile.
         </div>
       </div>
     );
@@ -1073,6 +1108,12 @@ function TeamModal({ team, onClose }) {
           Roster via ESPN · Stats via NCAA · Press Esc to close
         </div>
       </div>
+      {selectedPlayer && (
+        <PlayerModal
+          player={selectedPlayer}
+          onClose={() => setSelectedPlayer(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1413,7 +1454,7 @@ function playerTableEmptyDetail(stats, group) {
 // individual leaderboards don't ship raw BB (walks allowed) or a working
 // WHIP for softball at the individual level, so those were dropped from
 // the column set rather than displayed as permanent dashes.
-function renderPlayerTable(stats, group) {
+function renderPlayerTable(stats, group, onSelectPlayer) {
   const rows = stats?.players?.[group] || [];
   if (rows.length === 0) {
     return (
@@ -1452,7 +1493,11 @@ function renderPlayerTable(stats, group) {
         </thead>
         <tbody>
           {rows.map((p) => (
-            <tr key={p.id} className="border-t border-white/5 hover:bg-white/[0.02]">
+            <tr
+              key={p.id}
+              className={`border-t border-white/5 hover:bg-white/[0.02]${onSelectPlayer ? ' cursor-pointer hover:bg-white/[0.04]' : ''}`}
+              onClick={onSelectPlayer ? () => onSelectPlayer({ name: p.name, team: p.team, side: group, jersey: p.jersey, photoUrl: p.photoUrl, position: p.position, classYear: p.classYear }) : undefined}
+            >
               <td className="py-1 px-2 whitespace-nowrap max-w-[160px]">
                 <div className="flex items-center gap-1.5">
                   {p.photoUrl ? (
@@ -1909,7 +1954,8 @@ function TeamCompareTab({ home, away, rankings }) {
   const [awayStatsErr, setAwayStatsErr] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
-  const [subTab, setSubTab] = useState('totals'); // 'totals' | 'leaders' | 'players'
+  const [subTab, setSubTab] = useState('totals'); // 'totals' | 'players'
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
 
   const homeName = home?.team?.displayName || home?.team?.name || '';
   const awayName = away?.team?.displayName || away?.team?.name || '';
@@ -2311,7 +2357,7 @@ function TeamCompareTab({ home, away, rankings }) {
     if (!stats) {
       return <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-4">Loading…</div>;
     }
-    return renderPlayerTable(stats, group);
+    return renderPlayerTable(stats, group, (p) => setSelectedPlayer({ ...p, team: p.team || teamLabel }));
   };
 
   const renderPlayers = () => {
@@ -2371,7 +2417,6 @@ function TeamCompareTab({ home, away, rankings }) {
 
   const SUB_TABS = [
     { id: 'totals',  label: 'Team Totals' },
-    { id: 'leaders', label: 'NCAA Leaders' },
     { id: 'players', label: 'Player Compare' },
   ];
 
@@ -2397,12 +2442,17 @@ function TeamCompareTab({ home, away, rankings }) {
       </div>
 
       {subTab === 'totals' && renderTotals()}
-      {subTab === 'leaders' && renderLeaders()}
       {subTab === 'players' && renderPlayers()}
 
       <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center pt-4 border-t border-white/5">
-        Records via ESPN · Leaders from NCAA · Box scores via ESPN
+        Records via ESPN · Stats via NCAA
       </div>
+      {selectedPlayer && (
+        <PlayerModal
+          player={selectedPlayer}
+          onClose={() => setSelectedPlayer(null)}
+        />
+      )}
     </div>
   );
 }
@@ -2968,6 +3018,11 @@ function PlayerModal({ player, onClose }) {
   useEffect(() => {
     let cancelled = false;
     setPhoto(null); setPhotoBroken(false);
+    // If the player row already has a Sidearm photo, use it directly.
+    if (player.photoUrl) {
+      setPhoto({ matched: true, photoUrl: player.photoUrl, teamLogo: null });
+      return;
+    }
     if (!player.name || !player.team) return;
     const url = `/api/player-photo?name=${encodeURIComponent(player.name)}&team=${encodeURIComponent(player.team)}`;
     fetch(url)
@@ -2975,7 +3030,7 @@ function PlayerModal({ player, onClose }) {
       .then((j) => { if (!cancelled && j && !j.error) setPhoto(j); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [player.name, player.team]);
+  }, [player.name, player.team, player.photoUrl]);
 
   // Esc closes
   useEffect(() => {
@@ -2992,7 +3047,10 @@ function PlayerModal({ player, onClose }) {
         </button>
 
         <div className="px-6 pt-6 pb-4">
-          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">{player.side === 'pitching' ? 'Pitching Profile' : 'Batting Profile'}</div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-2">
+            {player.position ? `${player.position} · ` : ''}{player.side === 'pitching' ? 'Pitching Profile' : 'Batting Profile'}
+            {player.jersey ? <span className="ml-2 opacity-60">#{player.jersey}</span> : null}
+          </div>
           <div className="flex items-center gap-5">
             {/* Headshot column: ESPN photo if we matched, else team logo, else nothing. */}
             {photo?.matched && photo.photoUrl && !photoBroken ? (
