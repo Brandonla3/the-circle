@@ -7,6 +7,8 @@
 // Module-scope caches live for the lifetime of a warm Vercel instance, so
 // repeated lookups of the same team / player resolve entirely in memory.
 
+import { lookupConference } from './_conferences.js';
+
 export const ESPN_SITE = 'https://site.api.espn.com/apis/site/v2/sports/baseball/college-softball';
 
 export const ESPN_HEADERS = {
@@ -55,6 +57,14 @@ export async function getTeamDirectory() {
     for (const w of wrappers) {
       const t = w.team;
       if (!t) continue;
+      // Attach the canonical D-I softball conference from the static lookup
+      // table (sourced from the NCAA Statistics spreadsheet — see
+      // _conferences.js). This is `null` for ESPN teams that don't sponsor
+      // D-I softball (e.g. Air Force, American, dropped programs). Prefer
+      // location over displayName because location is mascot-free, which
+      // matters for the lookup — "Eastern Michigan" cleanly resolves but
+      // "Eastern Michigan Eagles" would need a separate mascot strip.
+      t.conference = lookupConference(t.location) || lookupConference(t.displayName) || null;
       teams.push(t);
       // Index every plausible name variant so different spellings collide on the same team.
       const variants = [

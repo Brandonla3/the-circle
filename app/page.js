@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, Activity, Users } from 'lucide-react';
+import { lookupConference } from './api/_conferences.js';
 
 const ESPN_SITE = 'https://site.api.espn.com/apis/site/v2/sports/baseball/college-softball';
 const ESPN_WEBAPI = 'https://site.web.api.espn.com/apis/site/v2/sports/baseball/college-softball';
@@ -448,20 +449,28 @@ function StatsView({ onSelectTeam }) {
         <p className="text-white/40 text-xs mt-1">Click any team to view its full roster.</p>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-        {teams.map((t, i) => (
-          <button
-            key={t.id}
-            onClick={() => onSelectTeam && onSelectTeam(t)}
-            className="card-enter flex items-center gap-3 p-3 rounded-lg border border-white/5 hover:border-white/30 hover:bg-white/[0.03] transition text-left"
-            style={{ animationDelay: `${Math.min(i * 8, 600)}ms`, borderLeft: `3px solid ${t.color ? '#' + t.color : '#ff6b1a'}` }}
-          >
-            {t.logos?.[0]?.href && <img src={t.logos[0].href} alt="" className="h-8 w-8 object-contain flex-shrink-0" />}
-            <div className="min-w-0">
-              <div className="text-white text-xs font-semibold truncate">{t.shortDisplayName || t.displayName}</div>
-              <div className="text-[9px] mono text-white/30 uppercase truncate">{t.abbreviation}</div>
-            </div>
-          </button>
-        ))}
+        {teams.map((t, i) => {
+          const conference =
+            lookupConference(t.location) ||
+            lookupConference(t.displayName) ||
+            lookupConference(t.shortDisplayName);
+          return (
+            <button
+              key={t.id}
+              onClick={() => onSelectTeam && onSelectTeam(t)}
+              className="card-enter flex items-center gap-3 p-3 rounded-lg border border-white/5 hover:border-white/30 hover:bg-white/[0.03] transition text-left"
+              style={{ animationDelay: `${Math.min(i * 8, 600)}ms`, borderLeft: `3px solid ${t.color ? '#' + t.color : '#ff6b1a'}` }}
+            >
+              {t.logos?.[0]?.href && <img src={t.logos[0].href} alt="" className="h-8 w-8 object-contain flex-shrink-0" />}
+              <div className="min-w-0">
+                <div className="text-white text-xs font-semibold truncate">{t.shortDisplayName || t.displayName}</div>
+                <div className="text-[9px] mono text-white/30 uppercase truncate">
+                  {conference || t.abbreviation || '—'}
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -521,6 +530,13 @@ function TeamModal({ team, onClose }) {
   const displayName = roster?.team?.displayName || team?.displayName;
   const abbrev = roster?.team?.abbreviation || team?.abbreviation;
   const color = roster?.team?.color || (team?.color ? `#${team.color}` : '#ff6b1a');
+  // Canonical conference from the NCAA Statistics table. Use the team prop's
+  // own location/displayName because it's available before any fetch resolves.
+  const conference =
+    lookupConference(team?.location) ||
+    lookupConference(team?.displayName) ||
+    lookupConference(team?.shortDisplayName) ||
+    null;
 
   // Group athletes by primary position bucket so scouts can scan quickly.
   const grouped = (() => {
@@ -660,7 +676,9 @@ function TeamModal({ team, onClose }) {
               />
             )}
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-1">Team</div>
+              <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-1">
+                {conference || 'Team'}
+              </div>
               <div className="display text-white text-3xl font-bold leading-tight truncate">{displayName || 'Team'}</div>
               <div className="text-white/50 text-xs mono mt-1">
                 {abbrev && <span>{abbrev}</span>}
@@ -1373,10 +1391,13 @@ function TeamCompareTab({ home, away, rankings }) {
     return () => { cancelled = true; };
   }, [homeId, awayId]);
 
-  // ESPN already attaches season records, rank, and conference metadata to the
-  // scoreboard competitor objects, so we read straight off `home`/`away` rather
-  // than going through /api/standings (which depends on an unreliable upstream
-  // and was returning stale data).
+  // ESPN attaches season records, rank, and conference metadata to the
+  // scoreboard competitor objects, so we read those straight off `home`/`away`.
+  // Conference is the one field we DON'T trust ESPN for — they ship inconsistent
+  // values across endpoints (sometimes the football conference, sometimes a
+  // stale label). The canonical D-I softball conference comes from the
+  // hardcoded NCAA Statistics table in api/_conferences.js, looked up by the
+  // mascot-free team location.
   const extractEspn = (competitor) => {
     if (!competitor) return null;
     const t = competitor.team || {};
@@ -1399,10 +1420,18 @@ function TeamCompareTab({ home, away, rankings }) {
     const pct = totalWL.w != null && (totalWL.w + totalWL.l) > 0
       ? totalWL.w / (totalWL.w + totalWL.l)
       : null;
+    // Canonical conference lookup from the spreadsheet table. ESPN's
+    // location field is mascot-free which is what lookupConference wants;
+    // fall back to displayName for the rare team where location is missing.
+    const canonicalConf =
+      lookupConference(t.location) ||
+      lookupConference(t.displayName) ||
+      lookupConference(t.shortDisplayName) ||
+      null;
     return {
       name: t.displayName || t.name || '',
       logo: t.logo || t.logos?.[0]?.href || null,
-      conference: competitor.conference?.name || t.conferenceAbbreviation || '',
+      conference: canonicalConf || competitor.conference?.name || t.conferenceAbbreviation || '',
       total: total?.summary || '',
       totalW: totalWL.w,
       totalL: totalWL.l,
