@@ -903,11 +903,11 @@ function TeamModal({ team, onClose }) {
   // resolves and triggers a re-render.
 
   const renderRosterView = () => {
-    // Build name -> photoUrl map from stats players (Sidearm enriched)
-    const photoMap = new Map();
+    // Full Sidearm player data keyed by lowercased name
+    const rosterMap = new Map();
     if (stats) {
       for (const p of [...(stats.players?.batting || []), ...(stats.players?.pitching || [])]) {
-        if (p.photoUrl && p.name) photoMap.set(p.name.toLowerCase(), p.photoUrl);
+        if (p.name) rosterMap.set(p.name.toLowerCase(), p);
       }
     }
 
@@ -944,17 +944,21 @@ function TeamModal({ team, onClose }) {
                       <th className="text-center py-2 px-2 font-normal">Ht</th>
                       <th className="text-center py-2 px-2 font-normal">Wt</th>
                       <th className="text-left py-2 px-3 font-normal">Hometown</th>
+                      <th className="text-left py-2 px-3 font-normal">Prep</th>
+                      <th className="text-left py-2 px-3 font-normal">Transfer</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {list.map((a) => (
+                    {list.map((a) => {
+                      const sd = rosterMap.get((a.name || '').toLowerCase());
+                      return (
                       <tr key={a.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                        <td className="py-2 px-3 text-white/50 tabular-nums">{a.jersey || '—'}</td>
+                        <td className="py-2 px-3 text-white/50 tabular-nums">{a.jersey || sd?.jersey || '—'}</td>
                         <td className="py-2 px-3">
                           <div className="flex items-center gap-2">
-                            {photoMap.get((a.name || '').toLowerCase()) ? (
+                            {sd?.photoUrl ? (
                               <img
-                                src={photoMap.get((a.name || '').toLowerCase())}
+                                src={sd.photoUrl}
                                 alt={a.name}
                                 className="h-7 w-7 rounded-full object-cover flex-shrink-0 border border-white/10"
                                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -967,25 +971,38 @@ function TeamModal({ team, onClose }) {
                               onClick={() => setSelectedPlayer({
                                 name: a.name,
                                 team: displayName,
-                                side: (['P','RHP','LHP'].includes((a.position || '').toUpperCase())) ? 'pitching' : 'batting',
-                                jersey: a.jersey,
-                                photoUrl: photoMap.get((a.name || '').toLowerCase()) || null,
-                                position: a.position,
-                                classYear: a.classYear,
+                                side: (['P','RHP','LHP'].includes((a.position || sd?.position || '').toUpperCase())) ? 'pitching' : 'batting',
+                                jersey: a.jersey || sd?.jersey || null,
+                                photoUrl: sd?.photoUrl || null,
+                                position: a.position || sd?.position || null,
+                                classYear: a.classYear || sd?.classYear || null,
+                                hometown: sd?.hometown || a.birthPlace || null,
+                                highSchool: sd?.highSchool || null,
+                                previousSchool: sd?.previousSchool || null,
+                                heightDisplay: a.heightDisplay || sd?.heightDisplay || null,
+                                weight: a.weightDisplay || sd?.weight || null,
+                                batThrows: [a.bats, a.throws].filter(Boolean).join('/') || sd?.batThrows || null,
                               })}
                             >
                               {a.name}
                             </span>
                           </div>
                         </td>
-                        <td className="text-center py-2 px-2 text-white/60">{a.position || '—'}</td>
-                        <td className="text-center py-2 px-2 text-white/60">{a.classYear || '—'}</td>
-                        <td className="text-center py-2 px-2 text-white/50">{[a.bats, a.throws].filter(Boolean).join('/') || '—'}</td>
-                        <td className="text-center py-2 px-2 text-white/50">{a.heightDisplay || '—'}</td>
-                        <td className="text-center py-2 px-2 text-white/50">{a.weightDisplay || '—'}</td>
-                        <td className="py-2 px-3 text-white/50 truncate max-w-[180px]">{a.birthPlace || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/60">{a.position || sd?.position || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/60">{a.classYear || sd?.classYear || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/50">{[a.bats, a.throws].filter(Boolean).join('/') || sd?.batThrows || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/50">{a.heightDisplay || sd?.heightDisplay || '—'}</td>
+                        <td className="text-center py-2 px-2 text-white/50">{a.weightDisplay || sd?.weight || '—'}</td>
+                        <td className="py-2 px-3 text-white/50 truncate max-w-[180px]">{sd?.hometown || a.birthPlace || '—'}</td>
+                        <td className="py-2 px-3 text-white/50 truncate max-w-[160px]">{sd?.highSchool || '—'}</td>
+                        <td className="py-2 px-3 text-white/50 whitespace-nowrap">
+                          {sd?.previousSchool
+                            ? <span className="text-orange-400 text-[11px] font-medium">{sd.previousSchool}</span>
+                            : '—'}
+                        </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1496,7 +1513,21 @@ function renderPlayerTable(stats, group, onSelectPlayer) {
             <tr
               key={p.id}
               className={`border-t border-white/5 hover:bg-white/[0.02]${onSelectPlayer ? ' cursor-pointer hover:bg-white/[0.04]' : ''}`}
-              onClick={onSelectPlayer ? () => onSelectPlayer({ name: p.name, team: p.team, side: group, jersey: p.jersey, photoUrl: p.photoUrl, position: p.position, classYear: p.classYear }) : undefined}
+              onClick={onSelectPlayer ? () => onSelectPlayer({
+                name: p.name,
+                team: p.team,
+                side: group,
+                jersey: p.jersey,
+                photoUrl: p.photoUrl,
+                position: p.position,
+                classYear: p.classYear,
+                hometown: p.hometown || null,
+                highSchool: p.highSchool || null,
+                previousSchool: p.previousSchool || null,
+                heightDisplay: p.heightDisplay || null,
+                weight: p.weight || null,
+                batThrows: p.batThrows || null,
+              }) : undefined}
             >
               <td className="py-1 px-2 whitespace-nowrap max-w-[160px]">
                 <div className="flex items-center gap-1.5">
@@ -3092,6 +3123,31 @@ function PlayerModal({ player, onClose }) {
               </div>
             </div>
           </div>
+          {/* Bio details row */}
+          {(player.hometown || player.highSchool || player.previousSchool || player.heightDisplay || player.batThrows) && (
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs mono">
+              {player.heightDisplay && (
+                <span className="text-white/40">
+                  <span className="text-white/25 mr-1">HT</span>{player.heightDisplay}
+                  {player.weight ? <span className="text-white/25 mx-1">·</span> : null}
+                  {player.weight ? <span className="text-white/25 mr-1">WT</span> : null}
+                  {player.weight ? player.weight + ' lbs' : null}
+                </span>
+              )}
+              {player.batThrows && (
+                <span className="text-white/40"><span className="text-white/25 mr-1">B/T</span>{player.batThrows}</span>
+              )}
+              {player.hometown && (
+                <span className="text-white/40"><span className="text-white/25 mr-1">FROM</span>{player.hometown}</span>
+              )}
+              {player.highSchool && (
+                <span className="text-white/40"><span className="text-white/25 mr-1">PREP</span>{player.highSchool}</span>
+              )}
+              {player.previousSchool && (
+                <span className="text-orange-400/80"><span className="text-orange-400/40 mr-1">TRANSFER</span>{player.previousSchool}</span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="p-6 pt-0">

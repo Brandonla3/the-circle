@@ -70,30 +70,50 @@ async function discoverSoftballSportId(origin) {
   return id;
 }
 
-// Normalize one Sidearm player object into the shape we use throughout the app.
+// Normalize one Sidearm player object into the full shape used throughout the app.
 function normalizePlayer(p) {
   const firstName = (p.firstName || '').trim();
   const lastName  = (p.lastName  || '').trim();
   const name = [firstName, lastName].filter(Boolean).join(' ') || p.name || '';
 
-  // positions: Sidearm returns an array of { name, abbreviation } or
-  // sometimes a flat string. Extract abbreviation from first entry.
-  let position = null;
-  if (Array.isArray(p.positions) && p.positions.length > 0) {
-    position = p.positions[0].abbreviation || p.positions[0].name || null;
-  } else if (typeof p.position === 'string') {
-    position = p.position || null;
+  // positionShort is the reliable v2 field; fall back to legacy positions array.
+  let position = p.positionShort || null;
+  if (!position) {
+    if (Array.isArray(p.positions) && p.positions.length > 0) {
+      position = p.positions[0].abbreviation || p.positions[0].name || null;
+    } else if (typeof p.position === 'string') {
+      position = p.position || null;
+    }
   }
 
   const photoUrl = p.image?.absoluteUrl || p.headshot?.url || null;
+
+  // Height — combine feet + inches into a display string, e.g. "5'4\""
+  const hFt = p.heightFeet  != null ? Number(p.heightFeet)  : null;
+  const hIn = p.heightInches != null ? Number(p.heightInches) : null;
+  const heightDisplay = (hFt != null && hIn != null)
+    ? `${hFt}'${String(hIn).padStart(2, '0')}"`
+    : null;
+
+  // Bats/Throws — stored in custom2 on most Sidearm softball sites ("L/R", "R/R", etc.)
+  const batThrows = p.custom2 && p.custom2.trim() ? p.custom2.trim() : null;
 
   return {
     firstName,
     lastName,
     name,
-    jerseyNumber: p.jerseyNumber != null ? String(p.jerseyNumber) : null,
+    jerseyNumber:   p.jerseyNumber != null ? String(p.jerseyNumber) : null,
     position,
     photoUrl,
+    hometown:       (p.hometown       || '').trim() || null,
+    highSchool:     (p.highSchool      || '').trim() || null,
+    previousSchool: (p.previousSchool  || '').trim() || null,
+    heightFeet:     hFt,
+    heightInches:   hIn,
+    heightDisplay,
+    weight:         p.weight != null ? String(p.weight) : null,
+    academicYear:   p.academicYearShort || null,  // "Fr." "So." "Jr." "Sr."
+    batThrows,
   };
 }
 

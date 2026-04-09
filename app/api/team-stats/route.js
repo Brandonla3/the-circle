@@ -544,6 +544,12 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
           position: row.position || null,
           jersey: null,
           photoUrl: null,
+          hometown: null,
+          highSchool: null,
+          previousSchool: null,
+          heightDisplay: null,
+          weight: null,
+          batThrows: null,
           gp: row.gp || null,
           sides: new Set(),
           rawMerged: {},
@@ -586,12 +592,18 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
   //   b) If no leaderboard match, add the athlete as a roster-only entry
   //      so the full team roster is visible in the Player Compare tab.
   //
-  // Sidearm player shape: { name, firstName, lastName, jerseyNumber, position, photoUrl }
-  // ESPN athlete shape:   { displayName, fullName, jersey, position: { abbreviation },
-  //                         experience: { displayValue }, id }
+  // Sidearm player shape: { name, jerseyNumber, position, photoUrl, academicYear,
+  //                          hometown, highSchool, previousSchool, heightDisplay,
+  //                          weight, batThrows }
+  // ESPN athlete shape:   { displayName, fullName, jersey, position.abbreviation,
+  //                         experience.displayValue, id, displayHeight, displayWeight,
+  //                         bats.abbreviation, throws.abbreviation, birthPlace }
 
   // Helper: match one roster player into byPlayer, enrich or add.
-  function applyRosterPlayer({ name, jerseyNumber, position, photoUrl, cls, espnId }) {
+  function applyRosterPlayer({
+    name, jerseyNumber, position, photoUrl, cls, espnId,
+    hometown, highSchool, previousSchool, heightDisplay, weight, batThrows,
+  }) {
     const nameParts = splitName(name);
     if (nameParts.length < 2) return; // skip last-name-only entries
 
@@ -604,10 +616,16 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
     }
 
     if (bestScore >= 70 && bestRec) {
-      if (!bestRec.jersey   && jerseyNumber) bestRec.jersey   = jerseyNumber;
-      if (!bestRec.position && position)     bestRec.position = position;
-      if (!bestRec.cls      && cls)          bestRec.cls      = cls;
-      if (!bestRec.photoUrl && photoUrl)     bestRec.photoUrl = photoUrl;
+      if (!bestRec.jersey         && jerseyNumber)   bestRec.jersey         = jerseyNumber;
+      if (!bestRec.position       && position)        bestRec.position       = position;
+      if (!bestRec.cls            && cls)             bestRec.cls            = cls;
+      if (!bestRec.photoUrl       && photoUrl)        bestRec.photoUrl       = photoUrl;
+      if (!bestRec.hometown       && hometown)        bestRec.hometown       = hometown;
+      if (!bestRec.highSchool     && highSchool)      bestRec.highSchool     = highSchool;
+      if (!bestRec.previousSchool && previousSchool)  bestRec.previousSchool = previousSchool;
+      if (!bestRec.heightDisplay  && heightDisplay)   bestRec.heightDisplay  = heightDisplay;
+      if (!bestRec.weight         && weight)          bestRec.weight         = weight;
+      if (!bestRec.batThrows      && batThrows)       bestRec.batThrows      = batThrows;
     } else {
       // Not in any leaderboard — add as roster-only entry.
       const recKey = espnId ? String(espnId) : normalize(name);
@@ -620,6 +638,12 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
         position: position || null,
         jersey: jerseyNumber || null,
         photoUrl: photoUrl || null,
+        hometown: hometown || null,
+        highSchool: highSchool || null,
+        previousSchool: previousSchool || null,
+        heightDisplay: heightDisplay || null,
+        weight: weight || null,
+        batThrows: batThrows || null,
         gp: null,
         sides: new Set(),
         rawMerged: {},
@@ -630,7 +654,7 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
     }
   }
 
-  // 1. Try Sidearm first.
+  // 1. Try Sidearm first — full bio data including photos, jersey, hometown, HS, transfers.
   const sidearmOrigin = getSidearmOrigin(nameVariantSet);
   let usedSidearm = false;
   let rosterPlayerCount = 0;
@@ -642,12 +666,18 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
         rosterPlayerCount = idx.players.length;
         for (const p of idx.players) {
           applyRosterPlayer({
-            name:         p.name,
-            jerseyNumber: p.jerseyNumber,
-            position:     p.position,
-            photoUrl:     p.photoUrl,
-            cls:          null, // Sidearm v2 API doesn't expose class year
-            espnId:       null,
+            name:           p.name,
+            jerseyNumber:   p.jerseyNumber,
+            position:       p.position,
+            photoUrl:       p.photoUrl,
+            cls:            p.academicYear,   // "Fr." "So." "Jr." "Sr."
+            espnId:         null,
+            hometown:       p.hometown,
+            highSchool:     p.highSchool,
+            previousSchool: p.previousSchool,
+            heightDisplay:  p.heightDisplay,
+            weight:         p.weight,
+            batThrows:      p.batThrows,
           });
         }
       }
@@ -664,19 +694,34 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
 
   for (const athlete of rosterAthletes) {
     const name = athlete.displayName || athlete.fullName || '';
+    // Build ESPN birthPlace string for hometown fallback.
+    const espnBirthPlace = athlete.birthPlace?.city
+      ? `${athlete.birthPlace.city}${athlete.birthPlace.state ? ', ' + athlete.birthPlace.state : ''}`
+      : null;
+    const espnBatThrows = [
+      athlete.bats?.abbreviation || athlete.bats?.displayValue,
+      athlete.throws?.abbreviation || athlete.throws?.displayValue,
+    ].filter(Boolean).join('/') || null;
+
     if (!usedSidearm) {
       // Primary enrichment from ESPN when Sidearm wasn't available.
       applyRosterPlayer({
         name,
-        jerseyNumber: athlete.jersey || null,
-        position:     athlete.position?.abbreviation || null,
-        photoUrl:     null,
-        cls:          athlete.experience?.displayValue || null,
-        espnId:       athlete.id,
+        jerseyNumber:  athlete.jersey || null,
+        position:      athlete.position?.abbreviation || null,
+        photoUrl:      null,
+        cls:           athlete.experience?.displayValue || null,
+        espnId:        athlete.id,
+        hometown:      espnBirthPlace,   // ESPN birthPlace as hometown fallback
+        highSchool:    null,             // ESPN doesn't provide high school
+        previousSchool: null,            // ESPN doesn't provide transfer info
+        heightDisplay: athlete.displayHeight || null,
+        weight:        athlete.displayWeight || null,
+        batThrows:     espnBatThrows,
       });
     } else {
-      // Secondary pass: only fill in class year (the one field Sidearm
-      // doesn't expose) on already-matched entries.
+      // Secondary pass when Sidearm was used: fill in any gaps ESPN knows
+      // about (class year from experience, height, B/T) for non-Sidearm schools.
       const nameParts = splitName(name);
       if (nameParts.length < 2) continue;
       let bestRec = null; let bestScore = 0;
@@ -684,8 +729,11 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
         const s = scoreMatch({ displayName: rec.name, fullName: rec.name }, nameParts);
         if (s > bestScore) { bestScore = s; bestRec = rec; }
       }
-      if (bestScore >= 70 && bestRec && !bestRec.cls && athlete.experience?.displayValue) {
-        bestRec.cls = athlete.experience.displayValue;
+      if (bestScore >= 70 && bestRec) {
+        if (!bestRec.cls         && athlete.experience?.displayValue) bestRec.cls         = athlete.experience.displayValue;
+        if (!bestRec.heightDisplay && athlete.displayHeight)          bestRec.heightDisplay = athlete.displayHeight;
+        if (!bestRec.weight      && athlete.displayWeight)            bestRec.weight        = athlete.displayWeight;
+        if (!bestRec.batThrows   && espnBatThrows)                    bestRec.batThrows     = espnBatThrows;
       }
     }
   }
@@ -710,6 +758,12 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
       photoUrl: rec.photoUrl || null,
       position: rec.position || null,
       classYear: rec.cls || null,
+      hometown: rec.hometown || null,
+      highSchool: rec.highSchool || null,
+      previousSchool: rec.previousSchool || null,
+      heightDisplay: rec.heightDisplay || null,
+      weight: rec.weight || null,
+      batThrows: rec.batThrows || null,
       games,
     };
 
