@@ -751,6 +751,55 @@ async function computeTeamStats(teamId) {
     return st?.state === 'post' || st?.completed === true;
   });
 
+  // Normalized per-game schedule for the TeamModal Schedule tab. The ESPN
+  // site-API schedule response ships everything we need (opponent id +
+  // logo + score + status + venue + broadcast) so no second network call
+  // is required — we just flatten the competition shape into something
+  // the UI can render directly.
+  const scheduleGames = events.map((ev) => {
+    const comp = ev.competitions?.[0] || {};
+    const st = comp.status?.type || ev.status?.type || {};
+    const competitors = comp.competitors || [];
+    const self = competitors.find((c) => String(c.team?.id) === String(teamId)) || null;
+    const opp = competitors.find((c) => String(c.team?.id) !== String(teamId)) || null;
+    const selfScore = self?.score?.value;
+    const oppScore = opp?.score?.value;
+    const finished = st.state === 'post' || st.completed === true;
+    let result = null;
+    if (finished && selfScore != null && oppScore != null) {
+      result = selfScore > oppScore ? 'W' : selfScore < oppScore ? 'L' : 'T';
+    }
+    return {
+      id: ev.id,
+      date: ev.date || comp.date || null,
+      status: {
+        state: st.state || null,          // 'pre' | 'in' | 'post'
+        completed: !!st.completed,
+        detail: st.shortDetail || st.detail || null,
+      },
+      homeAway: self?.homeAway || null,    // 'home' | 'away'
+      neutralSite: !!comp.neutralSite,
+      opponent: opp
+        ? {
+            id: opp.team?.id ? String(opp.team.id) : null,
+            name: opp.team?.displayName || opp.team?.shortDisplayName || null,
+            abbreviation: opp.team?.abbreviation || null,
+            logo: opp.team?.logos?.[0]?.href || opp.team?.logo || null,
+            rank: opp.curatedRank?.current && opp.curatedRank.current < 99 ? opp.curatedRank.current : null,
+          }
+        : null,
+      score: finished && selfScore != null && oppScore != null
+        ? { self: selfScore, opp: oppScore, display: `${selfScore}-${oppScore}` }
+        : null,
+      result,
+      venue: comp.venue?.fullName || null,
+      venueCity:
+        [comp.venue?.address?.city, comp.venue?.address?.state].filter(Boolean).join(', ') || null,
+      broadcast: comp.broadcasts?.[0]?.media?.shortName
+        || (comp.broadcasts?.[0]?.names?.[0] || null),
+    };
+  });
+
   // teamMeta comes from the ESPN records endpoint — NCAA doesn't publish a
   // clean W/L/runs/streak rollup, and ESPN's core.v2 endpoint is reliable
   // for every D1 team regardless of television coverage.
@@ -788,6 +837,8 @@ async function computeTeamStats(teamId) {
     // 31 pitching / 15 fielding player columns. The TeamModal renders this
     // directly when present and falls back to the NCAA path otherwise.
     secWmt: secWmt || null,
+    // Normalized per-game schedule for the TeamModal Schedule sub-tab.
+    schedule: scheduleGames,
     meta: {
       source: secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
       scheduleEvents: events.length,

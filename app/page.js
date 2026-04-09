@@ -810,9 +810,10 @@ function StatsView({ onSelectTeam }) {
 }
 
 const TEAM_MODAL_SUB_TABS = [
-  { id: 'roster',  label: 'Roster' },
-  { id: 'totals',  label: 'Team Totals' },
-  { id: 'players', label: 'Full Roster Stats' },
+  { id: 'roster',   label: 'Roster' },
+  { id: 'schedule', label: 'Schedule' },
+  { id: 'totals',   label: 'Team Totals' },
+  { id: 'players',  label: 'Full Roster Stats' },
 ];
 
 function TeamModal({ team, onClose }) {
@@ -961,6 +962,21 @@ function TeamModal({ team, onClose }) {
 
   const renderTotalsView = () => renderSingleTeamTotals(stats, statsErr);
 
+  const renderScheduleView = () => {
+    if (statsErr) {
+      return (
+        <div className="text-center py-12">
+          <div className="text-white/40 text-sm mb-2">Couldn't load schedule.</div>
+          <div className="text-white/30 text-xs mono">{statsErr}</div>
+        </div>
+      );
+    }
+    if (!stats) {
+      return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading schedule…</div>;
+    }
+    return renderTeamSchedule(stats);
+  };
+
   const renderPlayersView = () => {
     if (statsErr) {
       return (
@@ -1048,6 +1064,7 @@ function TeamModal({ team, onClose }) {
 
         <div className="p-6">
           {subTab === 'roster' && renderRosterView()}
+          {subTab === 'schedule' && renderScheduleView()}
           {subTab === 'totals' && renderTotalsView()}
           {subTab === 'players' && renderPlayersView()}
         </div>
@@ -1559,6 +1576,116 @@ function renderWmtFullRoster(secWmt) {
       <div className="text-[10px] mono text-white/30 text-center leading-relaxed">
         Full roster · every player who has appeared this season. Source:
         secsports.com stats feed (wmt.games).
+      </div>
+    </div>
+  );
+}
+
+// Render a team's season schedule grouped by month. Status-aware: posted
+// games show the result (W/L) and score, upcoming games show the formatted
+// date/time from ESPN's status.shortDetail, in-progress games show the
+// live detail string. Opponents with a team id link to the opponent's
+// modal via a custom event that the Teams view listens for.
+const SCHEDULE_MONTH_FMT = { month: 'long', year: 'numeric' };
+const SCHEDULE_DAY_FMT = { weekday: 'short', month: 'short', day: 'numeric' };
+function renderTeamSchedule(stats) {
+  const games = stats?.schedule || [];
+  if (games.length === 0) {
+    return (
+      <div className="rounded-lg border border-white/5 bg-white/[0.01] p-6 text-center">
+        <div className="text-white/40 text-sm mb-1">No games scheduled</div>
+        <div className="text-white/30 text-[10px] mono">ESPN hasn't published a schedule for this team.</div>
+      </div>
+    );
+  }
+  // Group by YYYY-MM so months render in chronological order regardless of
+  // how the source ordered them.
+  const byMonth = new Map();
+  for (const g of games) {
+    if (!g.date) continue;
+    const d = new Date(g.date);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    if (!byMonth.has(key)) byMonth.set(key, { date: d, games: [] });
+    byMonth.get(key).games.push(g);
+  }
+  const months = Array.from(byMonth.entries()).sort(([a], [b]) => a.localeCompare(b));
+  return (
+    <div className="space-y-6">
+      {months.map(([key, { date, games: monthGames }]) => (
+        <div key={key}>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">
+            {date.toLocaleDateString('en-US', SCHEDULE_MONTH_FMT)}
+            <span className="text-white/20"> · {monthGames.length}</span>
+          </div>
+          <div className="rounded-lg border border-white/5 overflow-hidden">
+            {monthGames.map((g) => renderScheduleRow(g))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderScheduleRow(g) {
+  const d = g.date ? new Date(g.date) : null;
+  const dayLabel = d ? d.toLocaleDateString('en-US', SCHEDULE_DAY_FMT) : '—';
+  const state = g.status?.state;
+  const isFinal = state === 'post';
+  const isLive = state === 'in';
+  // W / L / T / (location prefix)
+  let resultBadge = null;
+  if (isFinal && g.result) {
+    const cls =
+      g.result === 'W' ? 'bg-emerald-500/20 text-emerald-300' :
+      g.result === 'L' ? 'bg-rose-500/20 text-rose-300' :
+      'bg-white/10 text-white/60';
+    resultBadge = (
+      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] mono font-bold tracking-wider ${cls}`}>
+        {g.result}
+      </span>
+    );
+  } else if (isLive) {
+    resultBadge = (
+      <span className="inline-block px-1.5 py-0.5 rounded text-[9px] mono font-bold tracking-wider bg-orange-500/20 text-orange-300 animate-pulse">
+        LIVE
+      </span>
+    );
+  }
+  const locPrefix = g.neutralSite ? 'vs' : g.homeAway === 'away' ? '@' : 'vs';
+  const rightText = isFinal && g.score
+    ? g.score.display
+    : (g.status?.detail || '—');
+  return (
+    <div key={g.id} className="grid grid-cols-[auto_1fr_auto] gap-3 items-center px-4 py-2.5 border-t border-white/5 first:border-t-0 hover:bg-white/[0.02]">
+      <div className="flex items-center gap-2 w-[6.5rem] flex-shrink-0">
+        <div className="text-[10px] mono text-white/40 uppercase tracking-wider w-16">{dayLabel}</div>
+        <div className="w-7">{resultBadge}</div>
+      </div>
+      <div className="flex items-center gap-2 min-w-0">
+        {g.opponent?.logo && (
+          <img
+            src={g.opponent.logo}
+            alt=""
+            className="h-5 w-5 object-contain flex-shrink-0"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        )}
+        <div className="text-[10px] mono text-white/40 uppercase w-5 flex-shrink-0">{locPrefix}</div>
+        <div className="text-sm text-white truncate">
+          {g.opponent?.rank != null && (
+            <span className="text-white/40 mono text-[10px] mr-1">#{g.opponent.rank}</span>
+          )}
+          {g.opponent?.name || 'TBD'}
+        </div>
+        {g.broadcast && (
+          <div className="text-[9px] mono text-white/30 uppercase tracking-wider hidden sm:inline-block border border-white/10 rounded px-1.5 py-0.5">
+            {g.broadcast}
+          </div>
+        )}
+      </div>
+      <div className={`text-xs mono tabular-nums whitespace-nowrap text-right ${isFinal ? 'text-white' : 'text-white/40'}`}>
+        {rightText}
       </div>
     </div>
   );
