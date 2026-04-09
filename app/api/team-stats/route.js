@@ -58,6 +58,7 @@ import { getBig10TeamSchedule } from '../_big10-schedule.js';
 import { getMwTeamSchedule } from '../_mw-schedule.js';
 import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
 import { getSidearmOrigin } from '../_sidearm-roster-map.js';
+import { getStaticRoster } from '../_static-rosters.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -686,11 +687,38 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
     }
   }
 
-  // 2. ESPN roster as fallback (and secondary enrichment for any fields
-  //    Sidearm didn't provide — e.g. class year).
+  // 2. Static hand-curated roster — for WMT Digital schools whose sites don't
+  //    expose a server-side API (e.g. LSU). Only runs when Sidearm wasn't used.
+  let usedStatic = false;
+  if (!usedSidearm) {
+    const staticPlayers = getStaticRoster(nameVariantSet);
+    if (staticPlayers && staticPlayers.length > 0) {
+      usedStatic = true;
+      rosterPlayerCount = staticPlayers.length;
+      for (const p of staticPlayers) {
+        applyRosterPlayer({
+          name:           p.name,
+          jerseyNumber:   p.number,
+          position:       p.position,
+          photoUrl:       p.photoUrl,
+          cls:            null,
+          espnId:         null,
+          hometown:       null,
+          highSchool:     null,
+          previousSchool: null,
+          heightDisplay:  null,
+          weight:         null,
+          batThrows:      null,
+        });
+      }
+    }
+  }
+
+  // 3. ESPN roster as fallback (and secondary enrichment for any fields
+  //    Sidearm/static didn't provide — e.g. class year, height, B/T).
   let rosterAthletes = [];
   try { rosterAthletes = (await getRoster(teamId))?.athletes || []; } catch {}
-  if (!usedSidearm) rosterPlayerCount = rosterAthletes.length;
+  if (!usedSidearm && !usedStatic) rosterPlayerCount = rosterAthletes.length;
 
   for (const athlete of rosterAthletes) {
     const name = athlete.displayName || athlete.fullName || '';
@@ -703,8 +731,9 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
       athlete.throws?.abbreviation || athlete.throws?.displayValue,
     ].filter(Boolean).join('/') || null;
 
-    if (!usedSidearm) {
-      // Primary enrichment from ESPN when Sidearm wasn't available.
+    if (!usedSidearm && !usedStatic) {
+      // Primary enrichment from ESPN when neither Sidearm nor a static roster
+      // was available — ESPN jersey/position/class but no photos.
       applyRosterPlayer({
         name,
         jerseyNumber:  athlete.jersey || null,
@@ -720,8 +749,9 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
         batThrows:     espnBatThrows,
       });
     } else {
-      // Secondary pass when Sidearm was used: fill in any gaps ESPN knows
-      // about (class year from experience, height, B/T) for non-Sidearm schools.
+      // Secondary pass when Sidearm or static roster was used: fill in any
+      // gaps ESPN knows about (class year, height, B/T) that the primary
+      // source didn't have.
       const nameParts = splitName(name);
       if (nameParts.length < 2) continue;
       let bestRec = null; let bestScore = 0;
