@@ -144,6 +144,19 @@ function teamMatches(team, nameKeySet) {
   return false;
 }
 
+// The Boost Sport feed contains every Big Ten game, which means
+// non-conference opponents (e.g. Fresno State that played Oregon)
+// appear in the away_team/home_team slots. We must only treat the
+// matched side as "us" if it's actually a Big Ten program — otherwise
+// a non-B1G team will silently accept a truncated schedule composed
+// only of its B1G crossover games.
+function isBig10Team(team) {
+  if (!team) return false;
+  if (team.conference === 'Big Ten') return true;
+  if (team.conf?.title?.includes('Big Ten')) return true;
+  return false;
+}
+
 function toNum(v) {
   if (v == null || v === '') return null;
   const n = Number(v);
@@ -159,8 +172,8 @@ function normalizeEventForTeam(g, nameKeySet) {
   if (!away || !home) return null;
 
   let selfSide = null;
-  if (teamMatches(home, nameKeySet)) selfSide = 'home';
-  else if (teamMatches(away, nameKeySet)) selfSide = 'away';
+  if (teamMatches(home, nameKeySet) && isBig10Team(home)) selfSide = 'home';
+  else if (teamMatches(away, nameKeySet) && isBig10Team(away)) selfSide = 'away';
   if (!selfSide) return null;
 
   const selfTeam = selfSide === 'home' ? home : away;

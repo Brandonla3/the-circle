@@ -52,6 +52,7 @@ import { getSecTeamSchedule } from '../_sec-schedule.js';
 import { getBig12TeamSchedule } from '../_big12-schedule.js';
 import { getAccTeamSchedule } from '../_acc-schedule.js';
 import { getBig10TeamSchedule } from '../_big10-schedule.js';
+import { getMwTeamSchedule } from '../_mw-schedule.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -744,6 +745,7 @@ async function computeTeamStats(teamId) {
     big12Schedule,
     accSchedule,
     big10Schedule,
+    mwSchedule,
   ] = await Promise.all([
     fetchWithRetry(scheduleUrl),
     fetchWithRetry(recordsUrl),
@@ -775,6 +777,13 @@ async function computeTeamStats(teamId) {
     // for the 16–17 softball-sponsoring B1G programs. Self-gating on
     // market/name match, same as Big 12/ACC.
     getBig10TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
+    // Mountain West schedule feed via themw.com's WMT Stats WordPress
+    // plugin. Paginated at 100/page across ~4 pages. Self-gates on
+    // school_category.id being non-null so a non-MW opponent with a
+    // matching name (e.g. Abilene Christian, which appears in the
+    // feed only because they played Utah State) correctly falls back
+    // to ESPN.
+    getMwTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
   ]);
   const ncaaPlayerStats = await aggregateNcaaPlayerStats(teamId, nameVariantSet).catch(() => null);
 
@@ -891,6 +900,8 @@ async function computeTeamStats(teamId) {
         ? accSchedule
         : big10Schedule && big10Schedule.length > 0
         ? big10Schedule
+        : mwSchedule && mwSchedule.length > 0
+        ? mwSchedule
         : scheduleGames,
     scheduleSource:
       secWmt && secSchedule && secSchedule.length > 0
@@ -901,6 +912,8 @@ async function computeTeamStats(teamId) {
         ? 'acc'
         : big10Schedule && big10Schedule.length > 0
         ? 'big10'
+        : mwSchedule && mwSchedule.length > 0
+        ? 'mw'
         : 'espn',
     meta: {
       source: secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
