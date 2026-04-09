@@ -1453,7 +1453,22 @@ function renderPlayerTable(stats, group) {
         <tbody>
           {rows.map((p) => (
             <tr key={p.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-              <td className="py-1.5 px-2 text-white whitespace-nowrap truncate max-w-[140px]">{p.name}</td>
+              <td className="py-1 px-2 whitespace-nowrap max-w-[160px]">
+                <div className="flex items-center gap-1.5">
+                  {p.photoUrl ? (
+                    <img
+                      src={p.photoUrl}
+                      alt={p.name}
+                      className="h-6 w-6 rounded-full object-cover flex-shrink-0 border border-white/10"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  ) : null}
+                  <span className="text-white truncate">{p.name}</span>
+                  {p.jersey ? (
+                    <span className="text-white/30 text-[10px] flex-shrink-0">#{p.jersey}</span>
+                  ) : null}
+                </div>
+              </td>
               <td className="text-center py-1.5 px-1 text-white/50 tabular-nums">{fmtOrDash(p.games)}</td>
               {isBatting ? (
                 <>

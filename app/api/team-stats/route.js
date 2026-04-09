@@ -56,6 +56,8 @@ import { getBig12TeamSchedule } from '../_big12-schedule.js';
 import { getAccTeamSchedule } from '../_acc-schedule.js';
 import { getBig10TeamSchedule } from '../_big10-schedule.js';
 import { getMwTeamSchedule } from '../_mw-schedule.js';
+import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
+import { getSidearmOrigin } from '../_sidearm-roster-map.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -537,6 +539,7 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
           cls: row.cls || null,
           position: row.position || null,
           jersey: null,
+          photoUrl: null,
           gp: row.gp || null,
           sides: new Set(),
           rawMerged: {},
@@ -568,55 +571,118 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
     }
   }
 
-  // ── ESPN roster supplement ──────────────────────────────────────────
-  // 1. Enrich byPlayer entries with jersey/position from the ESPN roster.
-  // 2. Add athletes with full names who don't appear in any leaderboard
-  //    (they render with all-null stats so the full team roster is visible).
-  //    We skip last-name-only ESPN entries (displayName like " Adams") since
-  //    there's no safe way to match them to a specific player's stats.
-  let rosterAthletes = [];
-  try { rosterAthletes = (await getRoster(teamId))?.athletes || []; } catch {}
+  // ── Roster supplement (Sidearm-first, ESPN fallback) ──────────────────
+  // Priority:
+  //   1. Sidearm school API — has jersey numbers + headshot URLs.
+  //   2. ESPN roster API   — fallback; often last-name-only for softball.
+  //
+  // For each roster athlete we:
+  //   a) Try to match to a byPlayer entry (from leaderboards) and enrich it
+  //      with jersey / position / photo.
+  //   b) If no leaderboard match, add the athlete as a roster-only entry
+  //      so the full team roster is visible in the Player Compare tab.
+  //
+  // Sidearm player shape: { name, firstName, lastName, jerseyNumber, position, photoUrl }
+  // ESPN athlete shape:   { displayName, fullName, jersey, position: { abbreviation },
+  //                         experience: { displayValue }, id }
 
-  for (const athlete of rosterAthletes) {
-    const name = athlete.displayName || athlete.fullName || '';
+  // Helper: match one roster player into byPlayer, enrich or add.
+  function applyRosterPlayer({ name, jerseyNumber, position, photoUrl, cls, espnId }) {
     const nameParts = splitName(name);
-    if (nameParts.length < 2) continue; // skip last-name-only entries
+    if (nameParts.length < 2) return; // skip last-name-only entries
 
-    const targetParts = nameParts;
-    // Find the byPlayer record whose name best matches this roster athlete.
     let bestRec = null;
     let bestScore = 0;
     for (const rec of byPlayer.values()) {
       const fakeAthlete = { displayName: rec.name, fullName: rec.name };
-      const s = scoreMatch(fakeAthlete, targetParts);
+      const s = scoreMatch(fakeAthlete, nameParts);
       if (s > bestScore) { bestScore = s; bestRec = rec; }
     }
 
     if (bestScore >= 70 && bestRec) {
-      // Enrich the leaderboard-matched entry with ESPN roster metadata.
-      if (!bestRec.jersey && athlete.jersey) bestRec.jersey = athlete.jersey;
-      if (!bestRec.position && athlete.position?.abbreviation) bestRec.position = athlete.position.abbreviation;
-      if (!bestRec.cls && athlete.experience?.displayValue) bestRec.cls = athlete.experience.displayValue;
+      if (!bestRec.jersey   && jerseyNumber) bestRec.jersey   = jerseyNumber;
+      if (!bestRec.position && position)     bestRec.position = position;
+      if (!bestRec.cls      && cls)          bestRec.cls      = cls;
+      if (!bestRec.photoUrl && photoUrl)     bestRec.photoUrl = photoUrl;
     } else {
-      // Athlete isn't in any leaderboard — add as roster-only entry.
-      const recKey = athlete.id ? String(athlete.id) : normalize(name);
-      if (byPlayer.has(recKey)) continue;
-      const position = athlete.position?.abbreviation || null;
+      // Not in any leaderboard — add as roster-only entry.
+      const recKey = espnId ? String(espnId) : normalize(name);
+      if (byPlayer.has(recKey)) return;
       const rec = {
         key: recKey,
         name,
         team: null,
-        cls: athlete.experience?.displayValue || null,
-        position,
-        jersey: athlete.jersey || null,
+        cls: cls || null,
+        position: position || null,
+        jersey: jerseyNumber || null,
+        photoUrl: photoUrl || null,
         gp: null,
         sides: new Set(),
         rawMerged: {},
         appearances: new Set(),
       };
-      // Assign to the correct table based on ESPN position.
       rec.sides.add((position || '').toUpperCase() === 'P' ? 'pitching' : 'batting');
       byPlayer.set(recKey, rec);
+    }
+  }
+
+  // 1. Try Sidearm first.
+  const sidearmOrigin = getSidearmOrigin(nameVariantSet);
+  let usedSidearm = false;
+  let rosterPlayerCount = 0;
+  if (sidearmOrigin) {
+    try {
+      const idx = await buildSidearmRosterIndex(sidearmOrigin);
+      if (idx && idx.players.length > 0) {
+        usedSidearm = true;
+        rosterPlayerCount = idx.players.length;
+        for (const p of idx.players) {
+          applyRosterPlayer({
+            name:         p.name,
+            jerseyNumber: p.jerseyNumber,
+            position:     p.position,
+            photoUrl:     p.photoUrl,
+            cls:          null, // Sidearm v2 API doesn't expose class year
+            espnId:       null,
+          });
+        }
+      }
+    } catch {
+      // Fall through to ESPN.
+    }
+  }
+
+  // 2. ESPN roster as fallback (and secondary enrichment for any fields
+  //    Sidearm didn't provide — e.g. class year).
+  let rosterAthletes = [];
+  try { rosterAthletes = (await getRoster(teamId))?.athletes || []; } catch {}
+  if (!usedSidearm) rosterPlayerCount = rosterAthletes.length;
+
+  for (const athlete of rosterAthletes) {
+    const name = athlete.displayName || athlete.fullName || '';
+    if (!usedSidearm) {
+      // Primary enrichment from ESPN when Sidearm wasn't available.
+      applyRosterPlayer({
+        name,
+        jerseyNumber: athlete.jersey || null,
+        position:     athlete.position?.abbreviation || null,
+        photoUrl:     null,
+        cls:          athlete.experience?.displayValue || null,
+        espnId:       athlete.id,
+      });
+    } else {
+      // Secondary pass: only fill in class year (the one field Sidearm
+      // doesn't expose) on already-matched entries.
+      const nameParts = splitName(name);
+      if (nameParts.length < 2) continue;
+      let bestRec = null; let bestScore = 0;
+      for (const rec of byPlayer.values()) {
+        const s = scoreMatch({ displayName: rec.name, fullName: rec.name }, nameParts);
+        if (s > bestScore) { bestScore = s; bestRec = rec; }
+      }
+      if (bestScore >= 70 && bestRec && !bestRec.cls && athlete.experience?.displayValue) {
+        bestRec.cls = athlete.experience.displayValue;
+      }
     }
   }
 
@@ -637,6 +703,7 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
       id: rec.key,
       name: rec.name,
       jersey: rec.jersey || null,
+      photoUrl: rec.photoUrl || null,
       position: rec.position || null,
       classYear: rec.cls || null,
       games,
@@ -704,7 +771,8 @@ async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
     batting,
     pitching,
     playerCount: byPlayer.size,
-    rosterTotal: rosterAthletes.length,
+    rosterTotal: rosterPlayerCount,
+    rosterSource: usedSidearm ? 'sidearm' : 'espn',
     leaderboardMatched: leaderboardCount,
     attempted: cats.length,
     slugsOk,
@@ -997,6 +1065,7 @@ async function computeTeamStats(teamId) {
         ? {
             playerCount: ncaaPlayerStats.playerCount,
             rosterTotal: ncaaPlayerStats.rosterTotal,
+            rosterSource: ncaaPlayerStats.rosterSource,
             leaderboardMatched: ncaaPlayerStats.leaderboardMatched,
             attempted: ncaaPlayerStats.attempted,
             slugsOk: ncaaPlayerStats.slugsOk,
