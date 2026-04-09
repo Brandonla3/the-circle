@@ -50,6 +50,7 @@ import {
 import { getSecTeamStats } from '../sec-stats/route.js';
 import { getSecTeamSchedule } from '../_sec-schedule.js';
 import { getBig12TeamSchedule } from '../_big12-schedule.js';
+import { getAccTeamSchedule } from '../_acc-schedule.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -733,7 +734,15 @@ async function computeTeamStats(teamId) {
   // time-exhausted slugs on cold-start. Sequencing them keeps cold-start
   // total under Vercel's 10s limit while still letting warm-cache calls
   // finish in ~1s (both aggregators hit their caches).
-  const [schedule, recordsRaw, ncaaTeamStats, secWmt, secSchedule, big12Schedule] = await Promise.all([
+  const [
+    schedule,
+    recordsRaw,
+    ncaaTeamStats,
+    secWmt,
+    secSchedule,
+    big12Schedule,
+    accSchedule,
+  ] = await Promise.all([
     fetchWithRetry(scheduleUrl),
     fetchWithRetry(recordsUrl),
     aggregateNcaaTeamStats(teamId, nameVariantSet).catch(() => null),
@@ -755,6 +764,9 @@ async function computeTeamStats(teamId) {
     // self-gating because the API only lists games with a Big 12 school as
     // the `school` side, so name-matching is the membership test.
     getBig12TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
+    // ACC schedule feed via theacc.com — identical Sidearm endpoint as
+    // Big 12, different host + sport_id. Also self-gating on name match.
+    getAccTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
   ]);
   const ncaaPlayerStats = await aggregateNcaaPlayerStats(teamId, nameVariantSet).catch(() => null);
 
@@ -857,21 +869,26 @@ async function computeTeamStats(teamId) {
     //   - SEC is gated on secWmt because the secsports.com API also
     //     returns non-SEC teams that happened to play a SEC opponent,
     //     and we do NOT want to serve those teams a partial schedule.
-    //   - Big 12 is self-gating: the Sidearm responsive-calendar endpoint
-    //     only emits events with a Big 12 school as the `school` side,
-    //     so name-matching inside getBig12TeamSchedule IS the membership
-    //     test — a non-empty array means the team is a Big 12 member.
+    //   - Big 12 / ACC are self-gating: the Sidearm responsive-calendar
+    //     endpoint only emits events with a conference school as the
+    //     `school` side, so name-matching inside the helper IS the
+    //     membership test — a non-empty array means the team is in that
+    //     conference.
     schedule:
       secWmt && secSchedule && secSchedule.length > 0
         ? secSchedule
         : big12Schedule && big12Schedule.length > 0
         ? big12Schedule
+        : accSchedule && accSchedule.length > 0
+        ? accSchedule
         : scheduleGames,
     scheduleSource:
       secWmt && secSchedule && secSchedule.length > 0
         ? 'sec'
         : big12Schedule && big12Schedule.length > 0
         ? 'big12'
+        : accSchedule && accSchedule.length > 0
+        ? 'acc'
         : 'espn',
     meta: {
       source: secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
