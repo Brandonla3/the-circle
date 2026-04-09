@@ -28,6 +28,12 @@ export default function Page() {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [error, setError] = useState(null);
+  // Scoreboard filters: mode = 'all' | 'top25' | 'conference' | 'team'.
+  // Conference/team filters store their selected value alongside so a single
+  // URL-style `filter` object captures the whole scoreboard view state.
+  const [filterMode, setFilterMode] = useState('all');
+  const [filterConference, setFilterConference] = useState('');
+  const [filterTeam, setFilterTeam] = useState('');
   const pollRef = useRef(null);
 
   const fetchScores = useCallback(async (silent = false) => {
@@ -73,6 +79,69 @@ export default function Page() {
   const shiftDate = (days) => { const d = new Date(date); d.setDate(d.getDate() + days); setDate(d); };
   const liveCount = games.filter((g) => g.status?.type?.state === 'in').length;
   const finalCount = games.filter((g) => g.status?.type?.state === 'post').length;
+
+  // Build a conference + team index from the games list so the filter selects
+  // reflect whatever's actually on the slate for the current date. Using
+  // `team.location` is important — lookupConference expects a mascot-free name.
+  const scoreboardIndex = React.useMemo(() => {
+    const confs = new Set();
+    const teams = new Map(); // canonical name -> { name, logo }
+    for (const g of games) {
+      const comp = g.competitions?.[0]; if (!comp) continue;
+      for (const c of comp.competitors || []) {
+        const t = c?.team; if (!t) continue;
+        const conf = lookupConference(t.location) || lookupConference(t.displayName) || lookupConference(t.shortDisplayName);
+        if (conf) confs.add(conf);
+        const name = t.displayName || t.shortDisplayName;
+        if (name && !teams.has(name)) teams.set(name, { name, logo: t.logos?.[0]?.href || t.logo || null });
+      }
+    }
+    return {
+      conferences: Array.from(confs).sort((a, b) => a.localeCompare(b)),
+      teams: Array.from(teams.values()).sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  }, [games]);
+
+  // Filter the games list down to what the user asked for. Each mode picks
+  // competitors off the game and tests them; any-match wins so a Top-25 team
+  // playing an unranked opponent still surfaces.
+  const filteredGames = React.useMemo(() => {
+    if (filterMode === 'all') return games;
+    return games.filter((g) => {
+      const comp = g.competitions?.[0]; if (!comp) return false;
+      const competitors = comp.competitors || [];
+      if (filterMode === 'top25') {
+        return competitors.some((c) => {
+          const rank = c?.curatedRank?.current;
+          return typeof rank === 'number' && rank > 0 && rank <= 25;
+        });
+      }
+      if (filterMode === 'conference') {
+        if (!filterConference) return true;
+        return competitors.some((c) => {
+          const t = c?.team; if (!t) return false;
+          const conf = lookupConference(t.location) || lookupConference(t.displayName) || lookupConference(t.shortDisplayName);
+          return conf === filterConference;
+        });
+      }
+      if (filterMode === 'team') {
+        if (!filterTeam) return true;
+        return competitors.some((c) => {
+          const t = c?.team; if (!t) return false;
+          return (t.displayName === filterTeam) || (t.shortDisplayName === filterTeam);
+        });
+      }
+      return true;
+    });
+  }, [games, filterMode, filterConference, filterTeam]);
+
+  // Reset the dependent filter value when switching modes so a stale
+  // conference/team selection doesn't hide all games after a mode flip.
+  const changeFilterMode = (next) => {
+    setFilterMode(next);
+    if (next !== 'conference') setFilterConference('');
+    if (next !== 'team') setFilterTeam('');
+  };
 
   return (
     <div className="min-h-screen w-full">
@@ -131,20 +200,33 @@ export default function Page() {
 
         {tab === 'scores' && (
           <div>
-            <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <button onClick={() => shiftDate(-1)} className="p-2 rounded-full border border-white/10 hover:border-white/30 text-white/60 hover:text-white transition"><ChevronLeft className="h-4 w-4" /></button>
-                <div className="px-4 py-2 text-center min-w-[260px]">
-                  <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40">{liveCount > 0 ? 'Live Now' : 'Date'}</div>
-                  <div className="display text-white text-xl">{prettyDate(date)}</div>
+                <div className="px-3 py-1.5 text-center min-w-[220px]">
+                  <div className="text-[9px] mono tracking-[0.25em] uppercase text-white/40">{liveCount > 0 ? 'Live Now' : 'Date'}</div>
+                  <div className="display text-white text-base md:text-lg">{prettyDate(date)}</div>
                 </div>
                 <button onClick={() => shiftDate(1)} className="p-2 rounded-full border border-white/10 hover:border-white/30 text-white/60 hover:text-white transition"><ChevronRight className="h-4 w-4" /></button>
-                <button onClick={() => setDate(new Date())} className="ml-2 px-3 py-1.5 text-[10px] mono uppercase tracking-widest rounded-full border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition">Today</button>
+                <button onClick={() => setDate(new Date())} className="ml-1 px-3 py-1.5 text-[10px] mono uppercase tracking-widest rounded-full border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition">Today</button>
               </div>
-              <div className="text-[10px] mono tracking-widest uppercase text-white/30">
-                {lastUpdate && `Updated ${lastUpdate.toLocaleTimeString()}`} {liveCount > 0 && '· Auto-refresh 20s'}
+              <div className="text-[9px] mono tracking-widest uppercase text-white/30">
+                {lastUpdate && `Updated ${lastUpdate.toLocaleTimeString()}`} {liveCount > 0 && '· Auto 20s'}
               </div>
             </div>
+
+            <ScoreboardFilterBar
+              mode={filterMode}
+              onChangeMode={changeFilterMode}
+              conference={filterConference}
+              onChangeConference={setFilterConference}
+              team={filterTeam}
+              onChangeTeam={setFilterTeam}
+              conferenceOptions={scoreboardIndex.conferences}
+              teamOptions={scoreboardIndex.teams}
+              matchCount={filteredGames.length}
+              totalCount={games.length}
+            />
 
             {loading && games.length === 0 ? (
               <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading scoreboard…</div>
@@ -153,19 +235,25 @@ export default function Page() {
                 <div className="display text-white/20 text-4xl mb-2">No games scheduled</div>
                 <div className="text-white/40 text-sm">Try a different date — softball season runs Feb–June.</div>
               </div>
+            ) : filteredGames.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="display text-white/20 text-3xl mb-2">No games match this filter</div>
+                <div className="text-white/40 text-sm">{games.length} games on this slate — try a different filter.</div>
+              </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {games.map((g, i) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredGames.map((g, i) => (
                   <GameCard key={g.id} game={g} index={i} onClick={() => { setSelectedGame(g); fetchGameDetail(g.id); }} />
                 ))}
               </div>
             )}
 
             {(liveCount > 0 || finalCount > 0) && (
-              <div className="mt-10 pt-6 border-t border-white/5 flex gap-8 text-[10px] mono uppercase tracking-widest text-white/30">
+              <div className="mt-8 pt-4 border-t border-white/5 flex gap-6 text-[9px] mono uppercase tracking-widest text-white/30">
                 <span>{games.length} Total</span>
                 <span className="text-red-400/60">{liveCount} Live</span>
                 <span>{finalCount} Final</span>
+                {filterMode !== 'all' && <span>· {filteredGames.length} Filtered</span>}
               </div>
             )}
           </div>
@@ -231,6 +319,90 @@ function CountOuts({ balls = 0, strikes = 0, outs = 0 }) {
   );
 }
 
+// Filter bar that sits above the scoreboard grid. Three modes:
+//   - top25: show only games where at least one team is ranked 1-25
+//   - conference: show only games involving teams from the selected conference
+//   - team: show only games involving the selected team
+// The secondary select (conference/team) appears inline next to the mode
+// pills when its mode is active, so the bar is compact on mobile. Uses a
+// solid-dark select background so iOS Safari doesn't flash a white <option>
+// panel — `colorScheme: 'dark'` alone isn't enough on older iOS versions.
+function ScoreboardFilterBar({
+  mode, onChangeMode,
+  conference, onChangeConference,
+  team, onChangeTeam,
+  conferenceOptions, teamOptions,
+  matchCount, totalCount,
+}) {
+  const modes = [
+    { id: 'all',        label: 'All' },
+    { id: 'top25',      label: 'Top 25' },
+    { id: 'conference', label: 'Conference' },
+    { id: 'team',       label: 'Team' },
+  ];
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="flex gap-1 p-1 rounded-full border border-white/10 bg-white/[0.02]">
+        {modes.map((m) => {
+          const active = mode === m.id;
+          return (
+            <button
+              key={m.id}
+              onClick={() => onChangeMode(m.id)}
+              className={`px-3 py-1.5 rounded-full text-[10px] mono uppercase tracking-widest transition ${active ? 'text-white' : 'text-white/40 hover:text-white/70'}`}
+              style={active ? { background: '#ff6b1a' } : {}}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {mode === 'conference' && (
+        <div className="relative">
+          <select
+            value={conference}
+            onChange={(e) => onChangeConference(e.target.value)}
+            className="appearance-none pl-3 pr-9 py-1.5 rounded-full border border-white/10 text-white text-[10px] mono uppercase tracking-widest cursor-pointer focus:outline-none focus:border-white/40"
+            style={{ background: '#1a1815', colorScheme: 'dark' }}
+          >
+            <option value="" style={{ background: '#1a1815', color: 'white' }}>All Conferences</option>
+            {conferenceOptions.map((c) => (
+              <option key={c} value={c} style={{ background: '#1a1815', color: 'white' }}>{c}</option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-white/50">
+            <svg width="8" height="5" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </div>
+        </div>
+      )}
+
+      {mode === 'team' && (
+        <div className="relative">
+          <select
+            value={team}
+            onChange={(e) => onChangeTeam(e.target.value)}
+            className="appearance-none pl-3 pr-9 py-1.5 rounded-full border border-white/10 text-white text-[10px] mono uppercase tracking-widest cursor-pointer focus:outline-none focus:border-white/40 max-w-[240px]"
+            style={{ background: '#1a1815', colorScheme: 'dark' }}
+          >
+            <option value="" style={{ background: '#1a1815', color: 'white' }}>All Teams</option>
+            {teamOptions.map((t) => (
+              <option key={t.name} value={t.name} style={{ background: '#1a1815', color: 'white' }}>{t.name}</option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-white/50">
+            <svg width="8" height="5" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </div>
+        </div>
+      )}
+
+      <div className="ml-auto text-[9px] mono uppercase tracking-widest text-white/30">
+        {mode === 'all' ? `${totalCount} games` : `${matchCount} of ${totalCount}`}
+      </div>
+    </div>
+  );
+}
+
 function GameCard({ game, index, onClick }) {
   const comp = game.competitions?.[0]; if (!comp) return null;
   const home = comp.competitors?.find((c) => c.homeAway === 'home');
@@ -245,18 +417,18 @@ function GameCard({ game, index, onClick }) {
     const rank = team?.curatedRank?.current;
     const dim = winner && winner !== side;
     return (
-      <div className={`flex items-center justify-between py-2 ${dim ? 'opacity-40' : ''}`}>
-        <div className="flex items-center gap-3 min-w-0">
-          {t.logo && <img src={t.logo} alt="" className="h-7 w-7 object-contain" />}
+      <div className={`flex items-center justify-between py-1.5 ${dim ? 'opacity-40' : ''}`}>
+        <div className="flex items-center gap-2 min-w-0">
+          {t.logo && <img src={t.logo} alt="" className="h-5 w-5 object-contain flex-shrink-0" />}
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              {rank && rank < 99 && <span className="text-[10px] mono text-white/40">#{rank}</span>}
-              <span className="text-white font-semibold truncate text-sm">{t.shortDisplayName || t.displayName}</span>
+            <div className="flex items-center gap-1.5">
+              {rank && rank < 99 && <span className="text-[9px] mono text-white/40">#{rank}</span>}
+              <span className="text-white font-semibold truncate text-xs">{t.shortDisplayName || t.displayName}</span>
             </div>
-            <div className="text-[10px] text-white/30 mono uppercase">{team?.records?.[0]?.summary || ''}</div>
+            <div className="text-[9px] text-white/30 mono uppercase truncate">{team?.records?.[0]?.summary || ''}</div>
           </div>
         </div>
-        <div className={`mono text-2xl font-bold tabular-nums ${winner === side ? 'text-white' : 'text-white/70'}`}>{team?.score ?? '—'}</div>
+        <div className={`mono text-lg font-bold tabular-nums flex-shrink-0 pl-2 ${winner === side ? 'text-white' : 'text-white/70'}`}>{team?.score ?? '—'}</div>
       </div>
     );
   };
@@ -272,33 +444,33 @@ function GameCard({ game, index, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="card-enter group relative rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.03] to-transparent p-5 cursor-pointer hover:border-white/30 hover:from-white/[0.06] transition-all"
+      className="card-enter group relative rounded-lg border border-white/10 bg-gradient-to-br from-white/[0.03] to-transparent p-3 cursor-pointer hover:border-white/30 hover:from-white/[0.06] transition-all"
       style={{ animationDelay: `${Math.min(index * 40, 400)}ms`, ...coverageGlow }}
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          {isLive && <span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500"></span>}
-          <span className={`text-[10px] mono uppercase tracking-widest ${isLive ? 'text-red-400' : isFinal ? 'text-white/50' : 'text-white/30'}`}>{detail}</span>
+      <div className="flex items-center justify-between mb-1.5 gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {isLive && <span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0"></span>}
+          <span className={`text-[9px] mono uppercase tracking-widest truncate ${isLive ? 'text-red-400' : isFinal ? 'text-white/50' : 'text-white/30'}`}>{detail}</span>
           {isTop10 && (
-            <span className="text-[9px] mono uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,107,26,0.12)', color: '#ff6b1a', border: '1px solid rgba(255,107,26,0.3)' }}>
-              Top 10
+            <span className="text-[8px] mono uppercase tracking-widest px-1 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(255,107,26,0.12)', color: '#ff6b1a', border: '1px solid rgba(255,107,26,0.3)' }}>
+              T10
             </span>
           )}
         </div>
-        {comp.broadcasts?.[0]?.names?.[0] && <span className="text-[9px] mono uppercase text-white/30">{comp.broadcasts[0].names[0]}</span>}
+        {comp.broadcasts?.[0]?.names?.[0] && <span className="text-[8px] mono uppercase text-white/30 flex-shrink-0 truncate max-w-[60px]">{comp.broadcasts[0].names[0]}</span>}
       </div>
-      <div className="space-y-1">
+      <div>
         <TeamRow team={away} side="away" />
         <div className="h-px bg-white/5"></div>
         <TeamRow team={home} side="home" />
       </div>
       {isLive && comp.situation && (
-        <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-4">
+        <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-3">
           <Diamond
             onFirst={!!comp.situation.onFirst}
             onSecond={!!comp.situation.onSecond}
             onThird={!!comp.situation.onThird}
-            size={56}
+            size={40}
           />
           <CountOuts
             balls={comp.situation.balls}
@@ -307,19 +479,19 @@ function GameCard({ game, index, onClick }) {
           />
           <div className="flex-1 min-w-0">
             {comp.situation.batter?.athlete && (
-              <div className="text-[10px] mono uppercase tracking-widest text-white/40">At Bat</div>
+              <div className="text-[9px] mono uppercase tracking-widest text-white/40">At Bat</div>
             )}
             {comp.situation.batter?.athlete && (
-              <div className="text-white text-xs font-semibold truncate">{comp.situation.batter.athlete.shortName || comp.situation.batter.athlete.displayName}</div>
+              <div className="text-white text-[11px] font-semibold truncate">{comp.situation.batter.athlete.shortName || comp.situation.batter.athlete.displayName}</div>
             )}
             {comp.situation.pitcher?.athlete && (
-              <div className="text-white/50 text-[10px] mono truncate">P: {comp.situation.pitcher.athlete.shortName || comp.situation.pitcher.athlete.displayName}</div>
+              <div className="text-white/50 text-[9px] mono truncate">P: {comp.situation.pitcher.athlete.shortName || comp.situation.pitcher.athlete.displayName}</div>
             )}
           </div>
         </div>
       )}
       {comp.venue?.fullName && (
-        <div className="mt-3 pt-3 border-t border-white/5 text-[10px] text-white/30 mono uppercase tracking-wide truncate">
+        <div className="mt-2 pt-2 border-t border-white/5 text-[9px] text-white/30 mono uppercase tracking-wide truncate">
           {comp.venue.fullName}{comp.venue.address?.city ? ` · ${comp.venue.address.city}` : ''}
         </div>
       )}
@@ -2047,13 +2219,35 @@ function StandingsView() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch('/api/standings');
-        const json = await r.json().catch(() => ({}));
-        if (!r.ok || json.error) {
-          setDebug(json.debug || null);
-          throw new Error(json.error || `HTTP ${r.status}`);
+        // Pull both sources in parallel. The official conference feeds
+        // (/api/conference-standings) cover SEC/Big 12/ACC/Big Ten/MW with
+        // up-to-the-minute data scraped from each league's own site. The
+        // NCAA-derived feed (/api/standings) fills in every other league.
+        // Official wins on any name collision so we aren't double-listing.
+        const [officialRes, ncaaRes] = await Promise.all([
+          fetch('/api/conference-standings').then((r) => r.json()).catch(() => ({ conferences: [] })),
+          fetch('/api/standings').then((r) => r.json()).catch(() => ({ conferences: [] })),
+        ]);
+        const official = officialRes.conferences || [];
+        // NCAA fallback can legitimately return { error, debug } when the
+        // scoreboard scan times out — treat that as an empty fallback list
+        // rather than a hard failure, so the official feeds still render.
+        const ncaa = Array.isArray(ncaaRes.conferences) ? ncaaRes.conferences : [];
+        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const taken = new Set();
+        for (const c of official) {
+          taken.add(norm(c.name));
+          taken.add(norm(c.abbreviation));
         }
-        setData(json);
+        const merged = [
+          ...official,
+          ...ncaa.filter((c) => !taken.has(norm(c.name)) && !taken.has(norm(c.abbreviation))),
+        ];
+        if (merged.length === 0 && ncaaRes.error) {
+          setDebug(ncaaRes.debug || null);
+          throw new Error(ncaaRes.error);
+        }
+        setData({ conferences: merged, officialCount: official.length });
       } catch (e) { setError(e.message); }
     })();
   }, []);
@@ -2072,7 +2266,7 @@ function StandingsView() {
 
   const conferences = data.conferences || [];
   if (conferences.length === 0) {
-    return <EmptyState text="No standings parsed from ESPN's page. They may have changed their HTML structure." />;
+    return <EmptyState text="No standings available right now. Check back in a few minutes." />;
   }
 
   const isMajor = (g) =>
@@ -2230,18 +2424,22 @@ function LeadersView({ onSelectPlayer }) {
       <div className="mb-6 flex items-center gap-3">
         <label htmlFor="leaders-category" className="text-[10px] mono tracking-[0.25em] uppercase text-white/40">Stat</label>
         <div className="relative">
+          {/* Solid-dark background + per-option inline style is what kills the
+              white flash on iOS Safari — colorScheme alone is not respected by
+              older iOS releases and Tailwind's bg-white/[0.03] renders as
+              actual white when Safari paints the native picker. */}
           <select
             id="leaders-category"
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
             disabled={!categories || sideCats.length === 0}
-            className="appearance-none pl-4 pr-10 py-2 rounded-lg border border-white/10 bg-white/[0.03] hover:border-white/30 focus:border-white/40 focus:outline-none text-white text-sm mono tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            style={{ colorScheme: 'dark' }}
+            className="appearance-none pl-4 pr-10 py-2 rounded-lg border border-white/10 hover:border-white/30 focus:border-white/40 focus:outline-none text-white text-sm mono tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            style={{ background: '#1a1815', colorScheme: 'dark' }}
           >
-            {!categories && <option>Loading categories…</option>}
-            {categories && sideCats.length === 0 && <option>No {side} categories available</option>}
+            {!categories && <option style={{ background: '#1a1815', color: 'white' }}>Loading categories…</option>}
+            {categories && sideCats.length === 0 && <option style={{ background: '#1a1815', color: 'white' }}>No {side} categories available</option>}
             {sideCats.map((c) => (
-              <option key={c.slug} value={c.slug}>{c.label}</option>
+              <option key={c.slug} value={c.slug} style={{ background: '#1a1815', color: 'white' }}>{c.label}</option>
             ))}
           </select>
           <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-white/50">
