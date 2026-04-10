@@ -1910,37 +1910,6 @@ function renderSingleTeamTotals(stats, err) {
   );
 }
 
-// Curated categories the Team Compare tab scouts. Must stay in sync with the
-// slugs the player-stats route actually matches — these are the same slugs
-// surfaced in the Players tab. `lowerIsBetter` flags the two pitching stats
-// (ERA, WHIP) where a smaller number is the good number; everything else
-// higher-wins.
-const COMPARE_BATTING = [
-  { slug: 'batting-avg',  short: 'BA'  },
-  { slug: 'home-runs',    short: 'HR'  },
-  { slug: 'rbi',          short: 'RBI' },
-  { slug: 'hits',         short: 'H'   },
-  { slug: 'runs-scored',  short: 'R'   },
-  { slug: 'stolen-bases', short: 'SB'  },
-  { slug: 'on-base-pct',  short: 'OBP' },
-  { slug: 'slugging-pct', short: 'SLG' },
-  { slug: 'doubles',      short: '2B'  },
-  { slug: 'triples',      short: '3B'  },
-];
-// `whip` previously lived in this list but the henrygd wrapper returns 500
-// "Could not parse data" for NCAA stat id 1237 (individual WHIP), which is
-// the only id NCAA exposes for it in softball. The Leaders sub-tab row
-// showed dashes for both teams; dropping it makes the list honest.
-const COMPARE_PITCHING = [
-  { slug: 'era',             short: 'ERA',  lowerIsBetter: true },
-  { slug: 'wins',            short: 'W'    },
-  { slug: 'strikeouts',      short: 'K'    },
-  { slug: 'saves',           short: 'SV'   },
-  { slug: 'k-per-7',         short: 'K/7'  },
-  { slug: 'innings-pitched', short: 'IP'   },
-  { slug: 'shutouts',        short: 'SHO'  },
-];
-
 // Map the NCAA short-code column headers to human-readable names. Several
 // codes (R, H, BB, SO) mean different things for batters vs pitchers, so the
 // lookup is side-aware.
@@ -2024,13 +1993,10 @@ function fullStatName(short, side) {
 }
 
 function TeamCompareTab({ home, away, rankings }) {
-  const [leaders, setLeaders] = useState(null); // { [slug]: { rows, short, label } }
   const [homeStats, setHomeStats] = useState(null);  // /api/team-stats payload for home
   const [awayStats, setAwayStats] = useState(null);  // /api/team-stats payload for away
   const [homeStatsErr, setHomeStatsErr] = useState(null);
   const [awayStatsErr, setAwayStatsErr] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(null);
   const [subTab, setSubTab] = useState('totals'); // 'totals' | 'players'
   const [selectedPlayer, setSelectedPlayer] = useState(null);
 
@@ -2039,41 +2005,13 @@ function TeamCompareTab({ home, away, rankings }) {
   const homeId = home?.team?.id ? String(home.team.id) : null;
   const awayId = away?.team?.id ? String(away.team.id) : null;
 
-  // Fetch NCAA leaders (existing) + team box-score aggregates for both teams.
-  // Dependency list is JUST the team ids so the effect doesn't accidentally
-  // re-fire every time the parent GameModal re-renders with new prop object
-  // references (which it does whenever the scoreboard polls or the summary
-  // fetch resolves). Earlier versions depended on derived name strings too
-  // and got caught by that exact flicker loop.
+  // Fetch team-stats for both teams so we can compare totals + individual
+  // players side-by-side. Only depends on the numeric team ids so the effect
+  // doesn't re-fire on scoreboard polls or summary fetch re-renders.
   useEffect(() => {
     let cancelled = false;
-    const allSlugs = [...COMPARE_BATTING, ...COMPARE_PITCHING].map((c) => c.slug);
-    setLoading(true); setErr(null);
     setHomeStats(null); setAwayStats(null);
     setHomeStatsErr(null); setAwayStatsErr(null);
-    Promise.all(
-      allSlugs.map((slug) =>
-        fetch(`/api/player-stats?category=${encodeURIComponent(slug)}`)
-          .then((r) => r.json())
-          .then((d) => ({ slug, data: d }))
-          .catch((e) => ({ slug, data: { error: e.message } }))
-      )
-    )
-      .then((catResults) => {
-        if (cancelled) return;
-        const map = {};
-        for (const { slug, data } of catResults) {
-          if (data && !data.error) map[slug] = data;
-        }
-        setLeaders(map);
-      })
-      .catch((e) => { if (!cancelled) setErr(e.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
-    // Fire team-stats independently so slow box-score aggregation doesn't
-    // block the leaders section from rendering. Errors are recorded in
-    // per-team error state so the UI can show them instead of silently
-    // leaving the column stuck on "Loading…".
     if (homeId) {
       fetch(`/api/team-stats?teamId=${encodeURIComponent(homeId)}`)
         .then(async (r) => {
@@ -2150,20 +2088,6 @@ function TeamCompareTab({ home, away, rankings }) {
     };
   };
 
-  // The top player on a given team in a given category, matched by normalized
-  // team name. The leaderboard is already rank-sorted, so .find() gives us #1.
-  const findLeader = (slug, teamName) => {
-    const data = leaders?.[slug];
-    if (!data?.rows || !teamName) return null;
-    const key = normalizeTeamName(teamName);
-    if (!key) return null;
-    return data.rows.find((r) => normalizeTeamName(r.team) === key)
-      || data.rows.find((r) => {
-        const n = normalizeTeamName(r.team);
-        return n.includes(key) || key.includes(n);
-      }) || null;
-  };
-
   // Pull poll rank/trend for a team out of the rankings prop (fallback if the
   // scoreboard's curatedRank isn't set on this competitor).
   const pollRank = (teamName) => {
@@ -2191,10 +2115,6 @@ function TeamCompareTab({ home, away, rankings }) {
     : pollRank(homeName);
 
   const pctStr = (n) => (n != null ? n.toFixed(3).replace(/^0/, '') : '—');
-
-  if (err) {
-    return <EmptyState text={`Error loading team compare: ${err}`} />;
-  }
 
   // ---------------- Render helpers ----------------
   // Everything below is plain functions that RETURN JSX, not inner React
@@ -2243,46 +2163,6 @@ function TeamCompareTab({ home, away, rankings }) {
             <span className="text-white/30">no season data</span>
           )}
         </div>
-      </div>
-    );
-  };
-
-  // Decide who's better in a given stat row. Returns 'home' | 'away' | null.
-  const pickWinner = (awayLeader, homeLeader, lowerIsBetter) => {
-    const a = awayLeader ? parseFloat(awayLeader.primary) : NaN;
-    const h = homeLeader ? parseFloat(homeLeader.primary) : NaN;
-    if (!Number.isFinite(a) && !Number.isFinite(h)) return null;
-    if (!Number.isFinite(a)) return 'home';
-    if (!Number.isFinite(h)) return 'away';
-    if (a === h) return null;
-    return (lowerIsBetter ? a < h : a > h) ? 'away' : 'home';
-  };
-
-  const renderLeaderCell = (leader, align, isWinner) => {
-    if (!leader) {
-      return <div className={`text-white/20 text-xs mono ${align === 'right' ? 'text-right' : 'text-left'}`}>—</div>;
-    }
-    const winnerStyle = isWinner ? { color: '#ff6b1a' } : {};
-    return (
-      <div className={`min-w-0 ${align === 'right' ? 'text-right' : 'text-left'}`}>
-        <div className={`text-sm font-semibold truncate ${isWinner ? '' : 'text-white'}`} style={winnerStyle}>
-          <span className={`mono text-[10px] mr-1.5 ${isWinner ? 'text-white/50' : 'text-white/40'}`}>#{leader.rank}</span>
-          {leader.name}
-        </div>
-        <div className={`mono text-[11px] tabular-nums font-bold ${isWinner ? '' : 'text-white/50'}`} style={winnerStyle}>{leader.primary}</div>
-      </div>
-    );
-  };
-
-  const renderStatRow = (slug, short, lowerIsBetter) => {
-    const awayLeader = findLeader(slug, awayName);
-    const homeLeader = findLeader(slug, homeName);
-    const winner = pickWinner(awayLeader, homeLeader, lowerIsBetter);
-    return (
-      <div key={slug} className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center py-2.5 border-b border-white/5">
-        {renderLeaderCell(awayLeader, 'right', winner === 'away')}
-        <div className="text-center text-[10px] mono uppercase tracking-widest text-white/40 w-14">{short}</div>
-        {renderLeaderCell(homeLeader, 'left', winner === 'home')}
       </div>
     );
   };
@@ -2390,33 +2270,6 @@ function TeamCompareTab({ home, away, rankings }) {
       </div>
     );
   };
-
-  // ---------------- Leaders sub-tab ----------------
-  const renderLeaders = () => (
-    <div className="space-y-8">
-      <div>
-        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Top Hitters</div>
-        {loading && !leaders ? (
-          <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-6">Loading leaders…</div>
-        ) : (
-          <div>
-            {COMPARE_BATTING.map((c) => renderStatRow(c.slug, c.short, c.lowerIsBetter))}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Ace Pitchers</div>
-        {loading && !leaders ? (
-          <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-6">Loading leaders…</div>
-        ) : (
-          <div>
-            {COMPARE_PITCHING.map((c) => renderStatRow(c.slug, c.short, c.lowerIsBetter))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
 
   // ---------------- Players sub-tab ----------------
   // The actual table JSX lives in the module-scope `renderPlayerTable`
