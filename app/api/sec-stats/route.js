@@ -182,7 +182,7 @@ export async function GET(request) {
         return Response.json({ error: `SEC team not found: ${team}` }, { status: 404 });
       }
       return Response.json(single, {
-        headers: { 'Cache-Control': 'public, max-age=900, s-maxage=900' },
+        headers: { 'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800' },
       });
     }
     const payload = await getSecStatsCached();
@@ -197,7 +197,7 @@ export async function GET(request) {
       }, { headers: { 'Cache-Control': 'no-store' } });
     }
     return Response.json(payload, {
-      headers: { 'Cache-Control': 'public, max-age=900, s-maxage=900' },
+      headers: { 'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800' },
     });
   } catch (e) {
     return Response.json({ error: e?.message || String(e) }, { status: 500 });

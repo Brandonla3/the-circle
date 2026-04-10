@@ -67,14 +67,19 @@ export default function Page() {
 
   useEffect(() => { fetchScores(); fetchRankings(); }, [fetchScores, fetchRankings]);
 
+  // Derive hasLive as a boolean ref so the polling effect only re-fires when
+  // the live/not-live state actually changes, not on every games array update.
+  const hasLiveRef = useRef(false);
+  const hasLive = games.some((g) => g.status?.type?.state === 'in');
+  hasLiveRef.current = hasLive;
+
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
-    const hasLive = games.some((g) => g.status?.type?.state === 'in');
     if (hasLive && tab === 'scores') {
       pollRef.current = setInterval(() => fetchScores(true), 20000);
     }
     return () => pollRef.current && clearInterval(pollRef.current);
-  }, [games, tab, fetchScores]);
+  }, [hasLive, tab, fetchScores]);
 
   const shiftDate = (days) => { const d = new Date(date); d.setDate(d.getDate() + days); setDate(d); };
   const liveCount = games.filter((g) => g.status?.type?.state === 'in').length;

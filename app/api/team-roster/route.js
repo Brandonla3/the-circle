@@ -108,7 +108,7 @@ export async function GET(request) {
           fetchedAt: new Date(rosterEntry.fetchedAt).toISOString(),
         },
       },
-      { headers: { 'Cache-Control': 'public, max-age=3600, s-maxage=3600' } }
+      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=7200' } }
     );
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });

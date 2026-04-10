@@ -64,7 +64,16 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 // --- Caches ---------------------------------------------------------------
+// Evict oldest entries when a Map exceeds its size cap.
+function pruneMap(map, max) {
+  if (map.size <= max) return;
+  const excess = map.size - max;
+  const iter = map.keys();
+  for (let i = 0; i < excess; i++) map.delete(iter.next().value);
+}
+
 const teamStatsCache = new Map();    // teamId  -> { fetchedAt, data }
+const TEAM_STATS_CACHE_MAX = 100;    // prevent unbounded growth
 const inFlight = new Map();          // teamId  -> Promise
 
 // --- NCAA team-leaderboard sourcing --------------------------------------
@@ -87,6 +96,7 @@ const NCAA_TEAM_LB_TTL_MS = 60 * 60 * 1000;
 // cached page entries after a scan walks a leaderboard in search of a
 // specific team.
 const ncaaTeamLbCache = new Map();
+const NCAA_TEAM_LB_CACHE_MAX = 500;  // prevent unbounded growth
 
 // ncaa-api.henrygd.me throttles with HTTP 428 after ~5-6 parallel requests,
 // same pattern the standings route documented in commit 5b32d2d. We batch
@@ -139,6 +149,18 @@ async function fetchNcaaWithRetry(url) {
 // space, doubles leaderboard is sorted per-game but we read the "2B" total
 // column), so the generic candidate-list fallback in pickNcaaPrimaryValue
 // would pick the wrong column for several slugs.
+//
+// ┌───────────────────────────────────────────────────────────────────────┐
+// │  MANUAL MAINTENANCE REQUIRED — re-sweep if NCAA renumbers stats.   │
+// │  Last verified: 2026-04-08                                           │
+// │                                                                       │
+// │  How to update:                                                       │
+// │    Sweep ncaa-api.henrygd.me /stats/softball/d1/current/team/1..3500 │
+// │    and record every 200 response. Update ids below.                  │
+// │  How to detect staleness:                                             │
+// │    GET /api/team-stats-probe — slugStatus shows 'empty-leaderboard' │
+// │    for any slug whose NCAA id has changed.                           │
+// └───────────────────────────────────────────────────────────────────────┘
 //
 // Additional team stat IDs found during the sweep that we may want to
 // curate later: 283 Fielding%, 284 Scoring (runs/game), 320 WL%, 345 HR/G,
@@ -227,6 +249,7 @@ async function fetchNcaaTeamLeaderboardPage(cat, page) {
     rows: json.data || [],
   };
   ncaaTeamLbCache.set(key, { fetchedAt: Date.now(), data });
+  pruneMap(ncaaTeamLbCache, NCAA_TEAM_LB_CACHE_MAX);
   return data;
 }
 
@@ -1291,7 +1314,15 @@ async function getTeamStats(teamId) {
 
   const promise = (async () => {
     const data = await computeTeamStats(id);
-    teamStatsCache.set(id, { fetchedAt: Date.now(), data });
+    // Don't cache partial results — subsequent requests should re-fetch the
+    // missing NCAA leaderboard pages once they've had time to warm up.
+    const partial =
+      data.meta?.ncaaTeamStats?.timeExhausted ||
+      data.meta?.ncaaPlayerStats?.timeExhausted;
+    if (!partial) {
+      teamStatsCache.set(id, { fetchedAt: Date.now(), data });
+      pruneMap(teamStatsCache, TEAM_STATS_CACHE_MAX);
+    }
     return data;
   })();
 
@@ -1312,12 +1343,13 @@ export async function GET(request) {
   // Resolves through the shared team directory the same way the player-photo
   // and team-roster routes do.
   if (!teamId && teamName) {
+    const safeName = String(teamName).slice(0, 100);
     try {
       const dir = await getTeamDirectory();
       const t = findTeam(dir, teamName);
       if (!t) {
         return Response.json(
-          { error: `team '${teamName}' not found in ESPN directory` },
+          { error: `team '${safeName}' not found in ESPN directory` },
           { status: 404 }
         );
       }

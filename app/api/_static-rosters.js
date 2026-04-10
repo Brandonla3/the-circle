@@ -1,6 +1,18 @@
 // Hand-curated static rosters for schools whose sites aren't accessible
 // via a server-side API (WMT Digital, etc.).
 //
+// ┌───────────────────────────────────────────────────────────────────────┐
+// │  MANUAL MAINTENANCE REQUIRED — update at the start of each season.  │
+// │  Last updated: 2025-2026 season                                      │
+// │                                                                       │
+// │  What to update:                                                      │
+// │    • Replace each school's players array with the current roster      │
+// │    • Update photoUrls from the school's CDN                           │
+// │  What breaks if stale:                                                │
+// │    • Roster tab shows graduated/transferred players                   │
+// │    • Photo URLs may 404 when the CDN path changes                     │
+// └───────────────────────────────────────────────────────────────────────┘
+//
 // Each entry shape matches what applyRosterPlayer() expects:
 //   { number, name, position, photoUrl }
 //

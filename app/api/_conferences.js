@@ -2,6 +2,19 @@
 // Source: C:/Users/brand/OneDrive/Desktop/NCAA Statistics (1).xlsx
 // Regenerate via: python scripts/build_conferences.py [xlsx-path]
 //
+// ┌───────────────────────────────────────────────────────────────────────┐
+// │  MANUAL MAINTENANCE REQUIRED — re-run when conferences realign.     │
+// │  Last regenerated: 2025-2026 season                                  │
+// │                                                                       │
+// │  How to update:                                                       │
+// │    1. Download fresh NCAA Statistics xlsx from NCAA.com               │
+// │    2. Run: python scripts/build_conferences.py <xlsx-path>           │
+// │    3. Run: node scripts/test_conferences.mjs (verify 0 failures)     │
+// │  What breaks if stale:                                                │
+// │    • Transferred schools show under their old conference              │
+// │    • New D-I programs are missing entirely                            │
+// └───────────────────────────────────────────────────────────────────────┘
+//
 // This file ships the canonical school -> conference table for D-I softball.
 // It is the source of truth for any place the app displays a conference label.
 //
