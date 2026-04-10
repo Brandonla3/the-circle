@@ -1065,7 +1065,7 @@ async function getTeamNameVariantSet(teamId) {
 // every school's starters; the tradeoff is that role players who don't
 // appear in any top-50 won't show up in Player Compare. That's an honest
 // coverage limitation instead of misleading zeros.
-async function computeTeamStats(teamId) {
+async function computeTeamStats(teamId, { skipPlayers = false } = {}) {
   const startTime = Date.now();
   const scheduleUrl = `${ESPN_SITE}/teams/${teamId}/schedule`;
   const season = new Date().getUTCFullYear();
@@ -1130,7 +1130,9 @@ async function computeTeamStats(teamId) {
     // to ESPN.
     getMwTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
   ]);
-  const ncaaPlayerStats = await aggregateNcaaPlayerStats(teamId, nameVariantSet).catch(() => null);
+  const ncaaPlayerStats = skipPlayers
+    ? null
+    : await aggregateNcaaPlayerStats(teamId, nameVariantSet).catch(() => null);
 
   const events = schedule?.events || [];
   const completed = events.filter((ev) => {
@@ -1270,7 +1272,9 @@ async function computeTeamStats(teamId) {
         ? 'mw'
         : 'espn',
     meta: {
-      source: secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
+      source: skipPlayers
+        ? 'ncaa-team+quick'
+        : secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
       scheduleEvents: events.length,
       completedEvents: completed.length,
       elapsedMs: Date.now() - startTime,
@@ -1302,6 +1306,19 @@ async function computeTeamStats(teamId) {
         : null,
     },
   };
+}
+
+// Quick path: return team totals without the slow player-leaderboard scan.
+// Checks the full cache and inFlight promise first so warm instances still
+// serve complete data instantly. Only runs the abbreviated compute when
+// nothing is cached — and deliberately does NOT cache the partial result
+// so subsequent full requests don't get poisoned.
+async function getTeamStatsQuick(teamId) {
+  const id = String(teamId);
+  const cached = teamStatsCache.get(id);
+  if (cached && Date.now() - cached.fetchedAt < TEAM_TTL_MS) return cached.data;
+  if (inFlight.has(id)) return inFlight.get(id);
+  return computeTeamStats(id, { skipPlayers: true });
 }
 
 async function getTeamStats(teamId) {
@@ -1363,14 +1380,22 @@ export async function GET(request) {
     return Response.json({ error: 'teamId or team query param required' }, { status: 400 });
   }
 
+  const quick = searchParams.get('quick') === '1';
+
   try {
-    const data = await getTeamStats(teamId);
+    const data = quick
+      ? await getTeamStatsQuick(teamId)
+      : await getTeamStats(teamId);
     return Response.json(data, {
-      // s-maxage=1800: Vercel's CDN edge holds the response for 30 min.
-      // stale-while-revalidate=3600: edge serves stale data instantly while
-      // fetching a fresh copy in the background — users never wait on a
-      // cache miss after the first request per team.
-      headers: { 'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600' },
+      // Full responses: s-maxage=1800 (30 min edge cache).
+      // Quick responses: s-maxage=300 (5 min) — partial data, shorter shelf life.
+      // stale-while-revalidate lets the edge serve stale data instantly while
+      // fetching a fresh copy in the background.
+      headers: {
+        'Cache-Control': quick
+          ? 'public, s-maxage=300, stale-while-revalidate=600'
+          : 'public, s-maxage=1800, stale-while-revalidate=3600',
+      },
     });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });

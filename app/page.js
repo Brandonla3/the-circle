@@ -1993,8 +1993,10 @@ function fullStatName(short, side) {
 }
 
 function TeamCompareTab({ home, away, rankings }) {
-  const [homeStats, setHomeStats] = useState(null);  // /api/team-stats payload for home
-  const [awayStats, setAwayStats] = useState(null);  // /api/team-stats payload for away
+  const [homeQuick, setHomeQuick] = useState(null);  // fast partial (team totals only)
+  const [awayQuick, setAwayQuick] = useState(null);
+  const [homeStats, setHomeStats] = useState(null);  // full payload (totals + players)
+  const [awayStats, setAwayStats] = useState(null);
   const [homeStatsErr, setHomeStatsErr] = useState(null);
   const [awayStatsErr, setAwayStatsErr] = useState(null);
   const [subTab, setSubTab] = useState('totals'); // 'totals' | 'players'
@@ -2005,33 +2007,47 @@ function TeamCompareTab({ home, away, rankings }) {
   const homeId = home?.team?.id ? String(home.team.id) : null;
   const awayId = away?.team?.id ? String(away.team.id) : null;
 
-  // Fetch team-stats for both teams so we can compare totals + individual
-  // players side-by-side. Only depends on the numeric team ids so the effect
-  // doesn't re-fire on scoreboard polls or summary fetch re-renders.
+  // Two-phase progressive fetch: quick (team totals, ~2-4s cold) then full
+  // (adds player stats, ~3-7s more). Both teams run in parallel. The quick
+  // fetch skips the slow NCAA player-leaderboard scan so the Totals tab
+  // renders immediately; the full fetch fires after quick returns so the
+  // NCAA team-leaderboard pages are already cached, and only the player
+  // scan adds time.
   useEffect(() => {
     let cancelled = false;
+    setHomeQuick(null); setAwayQuick(null);
     setHomeStats(null); setAwayStats(null);
     setHomeStatsErr(null); setAwayStatsErr(null);
-    if (homeId) {
-      fetch(`/api/team-stats?teamId=${encodeURIComponent(homeId)}`)
-        .then(async (r) => {
-          const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
-          if (cancelled) return;
-          if (!r.ok || j.error) setHomeStatsErr(j.error || `HTTP ${r.status}`);
-          else setHomeStats(j);
-        })
-        .catch((e) => { if (!cancelled) setHomeStatsErr(e.message); });
-    }
-    if (awayId) {
-      fetch(`/api/team-stats?teamId=${encodeURIComponent(awayId)}`)
-        .then(async (r) => {
-          const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
-          if (cancelled) return;
-          if (!r.ok || j.error) setAwayStatsErr(j.error || `HTTP ${r.status}`);
-          else setAwayStats(j);
-        })
-        .catch((e) => { if (!cancelled) setAwayStatsErr(e.message); });
-    }
+
+    const fetchTeam = async (teamId, setQuick, setFull, setErr) => {
+      try {
+        // Phase 1: quick — skip player leaderboard scan
+        const qr = await fetch(`/api/team-stats?teamId=${encodeURIComponent(teamId)}&quick=1`);
+        const qj = await qr.json().catch(() => ({ error: `HTTP ${qr.status}` }));
+        if (cancelled) return;
+        if (!qr.ok || qj.error) {
+          setErr(qj.error || `HTTP ${qr.status}`);
+          return; // don't attempt full if quick failed entirely
+        }
+        setQuick(qj);
+
+        // Phase 2: full — includes player stats (team pages now cached)
+        const fr = await fetch(`/api/team-stats?teamId=${encodeURIComponent(teamId)}`);
+        const fj = await fr.json().catch(() => ({ error: `HTTP ${fr.status}` }));
+        if (cancelled) return;
+        if (!fr.ok || fj.error) {
+          // Totals still visible from quick; only flag the error for players
+          setErr(fj.error || `HTTP ${fr.status}`);
+          return;
+        }
+        setFull(fj);
+      } catch (e) {
+        if (!cancelled) setErr(e.message);
+      }
+    };
+
+    if (homeId) fetchTeam(homeId, setHomeQuick, setHomeStats, setHomeStatsErr);
+    if (awayId) fetchTeam(awayId, setAwayQuick, setAwayStats, setAwayStatsErr);
     return () => { cancelled = true; };
   }, [homeId, awayId]);
 
@@ -2178,9 +2194,13 @@ function TeamCompareTab({ home, away, rankings }) {
     return (lowerIsBetter ? a < h : a > h) ? 'away' : 'home';
   };
 
+  // Use full data when available, fall back to quick (team totals only).
+  const awayData = awayStats || awayQuick;
+  const homeData = homeStats || homeQuick;
+
   const renderTotalRow = (key, label, short, get, lowerIsBetter) => {
-    const av = awayStats ? get(awayStats) : null;
-    const hv = homeStats ? get(homeStats) : null;
+    const av = awayData ? get(awayData) : null;
+    const hv = homeData ? get(homeData) : null;
     const winner = pickNumericWinner(av, hv, lowerIsBetter);
     const fmt = (v) => (v == null || v === '' ? '—' : v);
     const cls = (side) =>
@@ -2202,8 +2222,8 @@ function TeamCompareTab({ home, away, rankings }) {
 
   // ---------------- Totals sub-tab ----------------
   const renderTotals = () => {
-    // If both teams have definite errors, surface them.
-    if (homeStatsErr && awayStatsErr && !homeStats && !awayStats) {
+    // If both teams have definite errors and no data at all, surface them.
+    if (homeStatsErr && awayStatsErr && !homeData && !awayData) {
       return (
         <div className="text-center py-10">
           <div className="text-white/40 text-sm mb-2">Couldn't load team stats for either team.</div>
@@ -2212,7 +2232,7 @@ function TeamCompareTab({ home, away, rankings }) {
         </div>
       );
     }
-    if (!homeStats && !awayStats) {
+    if (!homeData && !awayData) {
       return <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-10">Loading team totals…</div>;
     }
 
@@ -2291,7 +2311,7 @@ function TeamCompareTab({ home, away, rankings }) {
   };
 
   const renderPlayers = () => {
-    // Both teams failed — show the most prominent error state.
+    // Both teams failed with no full data — show error.
     if (homeStatsErr && awayStatsErr && !homeStats && !awayStats) {
       return (
         <div className="text-center py-10">
@@ -2301,7 +2321,8 @@ function TeamCompareTab({ home, away, rankings }) {
         </div>
       );
     }
-    // Neither team loaded yet (both still pending).
+    // Full data not yet available for either team — show loading.
+    // Quick data (homeQuick/awayQuick) only has totals, not players.
     if (!homeStats && !awayStats && !homeStatsErr && !awayStatsErr) {
       return <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-10">Loading player stats…</div>;
     }
