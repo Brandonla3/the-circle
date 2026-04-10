@@ -8,15 +8,14 @@
     "start": "next start"
   },
   "dependencies": {
-    "lucide-react": "^0.400.0",
     "next": "14.2.5",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "lucide-react": "^0.400.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.39",
-    "tailwindcss": "^3.4.4",
-    "xlsx": "^0.18.5"
+    "tailwindcss": "^3.4.4"
   }
 }
