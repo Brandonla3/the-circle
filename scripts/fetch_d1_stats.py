@@ -161,6 +161,7 @@ def flatten_record(rec):
     """
     Flatten one API record dict.  Nested sub-dicts (e.g. player: {name, team})
     get merged into the top level; sub-keys that collide keep the parent key name.
+    Lists of single-key dicts are also flattened into individual keys.
     """
     flat = {}
     for k, v in rec.items():
@@ -168,6 +169,16 @@ def flatten_record(rec):
             for sub_k, sub_v in v.items():
                 flat_key = sub_k if sub_k not in rec else f"{k}_{sub_k}"
                 flat[flat_key] = sub_v
+        elif isinstance(v, list):
+            # List of single-key dicts -> merge each dict
+            if v and isinstance(v[0], dict):
+                for item in v:
+                    if isinstance(item, dict):
+                        for sub_k, sub_v in item.items():
+                            flat_key = sub_k if sub_k not in flat else f"{k}_{sub_k}"
+                            flat[flat_key] = sub_v
+            else:
+                flat[k] = str(v)
         else:
             flat[k] = v
     return flat
