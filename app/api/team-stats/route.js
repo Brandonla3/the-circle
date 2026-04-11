@@ -438,9 +438,26 @@ async function computeTeamStats(teamId) {
   // fields (hometown, highSchool, previousSchool, height, weight,
   // batThrows). This makes the PlayerModal from Player Compare identical
   // to the one opened from the Teams tab roster view.
+  //
+  // Conference stats rows use "Last, First" format; Sidearm map keys are
+  // "first last". Try both formats so neither source misses.
+  function sidearmLookup(name) {
+    if (!sidearmRoster) return null;
+    const lo = (name || '').toLowerCase();
+    const direct = sidearmRoster.map.get(lo);
+    if (direct) return direct;
+    // Try reversing "Last, First" → "First Last"
+    if (lo.includes(',')) {
+      const [last, ...firstParts] = lo.split(',');
+      const reversed = `${firstParts.join(',').trim()} ${last.trim()}`;
+      return sidearmRoster.map.get(reversed) || null;
+    }
+    return null;
+  }
+
   if (sidearmRoster) {
     for (const p of [...players.batting, ...players.pitching]) {
-      const sr = sidearmRoster.map.get(p.name.toLowerCase());
+      const sr = sidearmLookup(p.name);
       if (!sr) continue;
       if (!p.photoUrl && sr.photoUrl)             p.photoUrl         = sr.photoUrl;
       if (!p.hometown && sr.hometown)             p.hometown         = sr.hometown;
