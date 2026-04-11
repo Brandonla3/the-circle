@@ -38,15 +38,15 @@ export default function Page() {
 
   const fetchScores = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    setError(null);
+    if (!silent) setError(null);
     try {
       const r = await fetch(proxy(`${ESPN_SITE}/scoreboard?dates=${fmtDate(date)}&limit=200`));
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       setGames(d.events || []);
-      setLastUpdate(new Date());
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
+      if (!silent) setLastUpdate(new Date());
+    } catch (e) { if (!silent) setError(e.message); }
+    finally { if (!silent) setLoading(false); }
   }, [date]);
 
   const fetchRankings = useCallback(async () => {
@@ -76,7 +76,9 @@ export default function Page() {
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (hasLive && tab === 'scores') {
-      pollRef.current = setInterval(() => fetchScores(true), 20000);
+      // 45s is fast enough for live softball updates without causing frequent
+      // re-renders that visibly flash the background behind open modals.
+      pollRef.current = setInterval(() => fetchScores(true), 45000);
     }
     return () => pollRef.current && clearInterval(pollRef.current);
   }, [hasLive, tab, fetchScores]);
@@ -147,6 +149,16 @@ export default function Page() {
     if (next !== 'conference') setFilterConference('');
     if (next !== 'team') setFilterTeam('');
   };
+
+  // Stable callbacks for GameModal so live-game polling (setGames) doesn't
+  // create new function references on every render and cause modal re-renders.
+  const onGameRefresh = useCallback(() => {
+    if (selectedGame) fetchGameDetail(selectedGame.id);
+  }, [selectedGame, fetchGameDetail]);
+  const onGameClose = useCallback(() => {
+    setSelectedGame(null);
+    setGameDetail(null);
+  }, []);
 
   return (
     <div className="min-h-screen w-full">
@@ -270,7 +282,7 @@ export default function Page() {
         {tab === 'stats' && <StatsView onSelectTeam={setSelectedTeam} />}
       </main>
 
-      {selectedGame && <GameModal game={selectedGame} detail={gameDetail} rankings={rankings} onRefresh={() => fetchGameDetail(selectedGame.id)} onClose={() => { setSelectedGame(null); setGameDetail(null); }} />}
+      {selectedGame && <GameModal game={selectedGame} detail={gameDetail} rankings={rankings} onRefresh={onGameRefresh} onClose={onGameClose} />}
       {selectedPlayer && <PlayerModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />}
       {selectedTeam && <TeamModal team={selectedTeam} onClose={() => setSelectedTeam(null)} />}
 
