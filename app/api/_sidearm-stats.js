@@ -223,6 +223,105 @@ function detectSchoolTableType(headers) {
   return null;
 }
 
+// Sum the first integer from a compound cell value ("97-112" → 97) across
+// all player rows. Accepts multiple column name candidates (tries in order).
+function schoolSumInt(rows, ...cols) {
+  let total = 0;
+  for (const r of rows) {
+    for (const col of cols) {
+      const v = r[col];
+      if (v == null || v === '' || v === '-') continue;
+      const mch = String(v).match(/^(\d+)/);
+      if (mch) { total += parseInt(mch[1], 10); break; }
+    }
+  }
+  return total;
+}
+
+// Sum IP values handling softball's ".1"/".2" partial-inning notation.
+function schoolSumIp(rows) {
+  let outs = 0;
+  for (const r of rows) {
+    const v = r['IP'];
+    if (!v) continue;
+    const parts = String(v).split('.');
+    outs += (parseInt(parts[0], 10) || 0) * 3 + (parseInt(parts[1] || '0', 10) || 0);
+  }
+  const full = Math.floor(outs / 3);
+  const rem = outs % 3;
+  return rem === 0 ? `${full}` : `${full}.${rem}`;
+}
+
+// Compute a synthetic team batting totals row from individual player rows.
+// Returns null when there are no player rows or all counting stats are zero.
+function computedBattingTotals(players) {
+  if (!players.length) return null;
+  const ab = schoolSumInt(players, 'AB');
+  if (ab === 0) return null;
+  const h   = schoolSumInt(players, 'H');
+  const bb  = schoolSumInt(players, 'BB');
+  const hr  = schoolSumInt(players, 'HR');
+  const rbi = schoolSumInt(players, 'RBI');
+  const r   = schoolSumInt(players, 'R');
+  const d   = schoolSumInt(players, '2B');
+  const t   = schoolSumInt(players, '3B');
+  const sb  = schoolSumInt(players, 'SB', 'SB-ATT');
+  const hbp = schoolSumInt(players, 'HBP');
+  const sf  = schoolSumInt(players, 'SF');
+
+  const fmt3 = (n) => n.toFixed(3).replace(/^0\./, '.');
+  const avg = fmt3(h / ab);
+  const obpDenom = ab + bb + hbp + sf;
+  const obp = obpDenom > 0 ? fmt3((h + bb + hbp) / obpDenom) : '.000';
+  const tb  = h + d + 2 * t + 3 * hr;
+  const slg = fmt3(tb / ab);
+
+  return {
+    AB: String(ab), H: String(h), BB: String(bb), HR: String(hr),
+    RBI: String(rbi), R: String(r), '2B': String(d), '3B': String(t),
+    SB: String(sb), 'SB-ATT': `${sb}-?`,
+    AVG: avg, OBP: obp, SLG: slg,
+  };
+}
+
+// Compute a synthetic team pitching totals row from individual player rows.
+function computedPitchingTotals(players) {
+  if (!players.length) return null;
+  const ip    = schoolSumIp(players);
+  const ipNum = parseFloat(ip);
+  if (!ipNum) return null;
+  const er  = schoolSumInt(players, 'ER');
+  const h   = schoolSumInt(players, 'H');
+  const bb  = schoolSumInt(players, 'BB');
+  const k   = schoolSumInt(players, 'SO', 'K');
+  const w   = schoolSumInt(players, 'W');
+  const l   = schoolSumInt(players, 'L');
+  const sv  = schoolSumInt(players, 'SV');
+  const sho = schoolSumInt(players, 'SHO');
+  const r2  = schoolSumInt(players, 'R');
+
+  const era  = ((er * 7) / ipNum).toFixed(2);
+  const whip = ((h + bb) / ipNum).toFixed(2);
+
+  return {
+    IP: ip, ER: String(er), H: String(h), BB: String(bb), SO: String(k),
+    W: String(w), L: String(l), SV: String(sv), SHO: String(sho), R: String(r2),
+    ERA: era, WHIP: whip,
+  };
+}
+
+// Labels (lowercased, exact or prefix) that identify a totals/summary row.
+const TOTALS_LABELS = new Set([
+  'totals', 'total', 'team', 'season', 'season totals', 'combined',
+  'team totals', 'overall', 'overall totals',
+]);
+
+function isTotalsName(nameLo) {
+  if (TOTALS_LABELS.has(nameLo)) return true;
+  if (nameLo.startsWith('team total') || nameLo.startsWith('season total')) return true;
+  return false;
+}
+
 function parseSchoolStatsHtml(html, teamDisplayName) {
   const totals = { batting: null, pitching: null };
   const players = { hitting: [], pitching: [] };
@@ -273,10 +372,10 @@ function parseSchoolStatsHtml(html, teamDisplayName) {
       const obj = {};
       for (let i = 0; i < headers.length && i < cells.length; i++) obj[headers[i]] = cells[i];
 
-      // Totals row detection
+      // Totals row detection — expanded label set via isTotalsName()
       const rawName = (obj[nameHeader] || cells[1] || '').trim();
       const nameLo = rawName.toLowerCase();
-      if (nameLo === 'totals' || nameLo === 'total' || nameLo.startsWith('team total')) {
+      if (isTotalsName(nameLo)) {
         if (type === 'batting') totals.batting = obj;
         else totals.pitching = obj;
         continue;
@@ -296,6 +395,17 @@ function parseSchoolStatsHtml(html, teamDisplayName) {
       else players.pitching.push(row);
     }
   }
+
+  // Fallback: if no explicit totals row was found but we have player rows,
+  // compute team totals by summing counting stats. This handles school pages
+  // that omit the totals row or use an unexpected label.
+  if (!totals.batting && players.hitting.length > 0) {
+    totals.batting = computedBattingTotals(players.hitting);
+  }
+  if (!totals.pitching && players.pitching.length > 0) {
+    totals.pitching = computedPitchingTotals(players.pitching);
+  }
+
   return { totals, players };
 }
 
