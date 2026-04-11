@@ -187,6 +187,153 @@ function buildPerTeamIndex(parsed) {
   return teams;
 }
 
+// ---------------------------------------------------------------------------
+// Individual school stats pages
+// ---------------------------------------------------------------------------
+//
+// Sidearm school sites (goducks.com, iuhoosiers.com, etc.) expose a
+// server-rendered stats page at {origin}/sports/softball/stats. The page
+// has one "Batting" table and one "Pitching" table; player names are in
+// "Last, First" format with no "(Team)" suffix (only one team per page).
+//
+// Used as a reliable fallback for Big Ten teams when the Boost API is
+// unavailable, and as primary source for schools without a conference
+// stats feed.
+//
+// Returns the same shape as createSidearmStatsFetcher's getTeamStats, or
+// null on any error.
+
+const schoolStatsCache = new Map();
+const SCHOOL_STATS_TTL = 15 * 60 * 1000;
+
+const SCHOOL_BATTING_CAPS = new Set([
+  'batting', 'hitting', 'batting stats', 'hitting stats',
+  'cumulative batting stats', 'cumulative hitting stats',
+  'overall batting stats',
+]);
+const SCHOOL_PITCHING_CAPS = new Set([
+  'pitching', 'pitching stats', 'cumulative pitching stats',
+  'overall pitching stats',
+]);
+
+function detectSchoolTableType(headers) {
+  const hs = new Set(headers.map((h) => h.toLowerCase()));
+  if ((hs.has('era') || hs.has('earned_run_average')) && (hs.has('ip') || hs.has('innings_pitched'))) return 'pitching';
+  if (hs.has('avg') || hs.has('ba') || hs.has('obp') || hs.has('ob%') || hs.has('batting_average')) return 'batting';
+  return null;
+}
+
+function parseSchoolStatsHtml(html, teamDisplayName) {
+  const totals = { batting: null, pitching: null };
+  const players = { hitting: [], pitching: [] };
+
+  const tableRe = /<table\b[^>]*>([\s\S]*?)<\/table>/gi;
+  let m;
+  while ((m = tableRe.exec(html)) !== null) {
+    const inner = m[1];
+    const capMatch = inner.match(/<caption[^>]*>([\s\S]*?)<\/caption>/i);
+    const caption = capMatch ? stripTags(capMatch[1]).toLowerCase() : '';
+
+    // Parse headers
+    const theadMatch = inner.match(/<thead[^>]*>([\s\S]*?)<\/thead>/i);
+    const headers = [];
+    if (theadMatch) {
+      const firstRowM = theadMatch[1].match(/<tr\b[^>]*>([\s\S]*?)<\/tr>/i);
+      const firstRow = firstRowM ? firstRowM[1] : theadMatch[1];
+      const thRe = /<th\b[^>]*>([\s\S]*?)<\/th>/gi;
+      let tm;
+      while ((tm = thRe.exec(firstRow)) !== null) headers.push(stripTags(tm[1]));
+    }
+    if (headers.length < 3) continue;
+
+    // Determine table type
+    let type = SCHOOL_BATTING_CAPS.has(caption) ? 'batting'
+             : SCHOOL_PITCHING_CAPS.has(caption) ? 'pitching'
+             : detectSchoolTableType(headers);
+    if (!type) continue;
+
+    // Skip if already filled from a better-captioned table
+    if (type === 'batting' && players.hitting.length > 0) continue;
+    if (type === 'pitching' && players.pitching.length > 0) continue;
+
+    // Find the name column header (typically "Player" or second column)
+    const nameHeader = headers.find((h) => /^(player|name|athlete)$/i.test(h)) || headers[1];
+
+    // Parse rows from tbody
+    const tbodyM = inner.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+    if (!tbodyM) continue;
+    const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+    let trm;
+    while ((trm = trRe.exec(tbodyM[1])) !== null) {
+      const cells = [];
+      const tdRe = /<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi;
+      let tdm;
+      while ((tdm = tdRe.exec(trm[1])) !== null) cells.push(stripTags(tdm[1]));
+      if (cells.length < 3) continue;
+      const obj = {};
+      for (let i = 0; i < headers.length && i < cells.length; i++) obj[headers[i]] = cells[i];
+
+      // Totals row detection
+      const rawName = (obj[nameHeader] || cells[1] || '').trim();
+      const nameLo = rawName.toLowerCase();
+      if (nameLo === 'totals' || nameLo === 'total' || nameLo.startsWith('team total')) {
+        if (type === 'batting') totals.batting = obj;
+        else totals.pitching = obj;
+        continue;
+      }
+      if (!rawName || /^-+$/.test(rawName)) continue;
+
+      // Flip "Last, First" → "First Last"
+      let playerName = rawName;
+      if (rawName.includes(',')) {
+        const [last, ...rest] = rawName.split(',');
+        playerName = `${rest.join(',').trim()} ${last.trim()}`.trim();
+      }
+      if (!playerName) continue;
+
+      const row = { ...obj, Player: playerName, Name: playerName, Team: teamDisplayName };
+      if (type === 'batting') players.hitting.push(row);
+      else players.pitching.push(row);
+    }
+  }
+  return { totals, players };
+}
+
+export async function fetchSchoolSoftballStats(origin, teamDisplayName, conference = 'Big Ten') {
+  const cached = schoolStatsCache.get(origin);
+  if (cached && Date.now() - cached.fetchedAt < SCHOOL_STATS_TTL) return cached.data;
+
+  const url = `${origin}/sports/softball/stats`;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 12000);
+    let html;
+    try {
+      const r = await fetch(url, { headers: HEADERS, signal: ctrl.signal, cache: 'no-store' });
+      if (!r.ok) throw new Error(`school stats ${r.status}: ${url}`);
+      html = await r.text();
+    } finally {
+      clearTimeout(t);
+    }
+
+    const { totals, players } = parseSchoolStatsHtml(html, teamDisplayName);
+    if (players.hitting.length === 0 && players.pitching.length === 0) return null;
+
+    const data = {
+      key: normalizeTeamKey(teamDisplayName),
+      name: teamDisplayName,
+      conference,
+      totals,
+      players: { hitting: players.hitting, pitching: players.pitching, fielding: [] },
+      sourceUrl: url,
+    };
+    schoolStatsCache.set(origin, { fetchedAt: Date.now(), data });
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 // Pick the year the current softball season belongs to. Season runs Feb–
 // June; after August we assume we're looking at the upcoming season (same
 // logic the Sidearm schedule scraper uses for its year window).
