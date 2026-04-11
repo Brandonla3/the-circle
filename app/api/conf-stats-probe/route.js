@@ -226,19 +226,35 @@ async function grepBundlesForApiUrls(pageHtml, pageOrigin, buildId) {
   // at the buildId path and parse its chunk list. Next.js always
   // ships this file at a predictable location.
   const manifestCandidates = [];
+  // Route→chunks map pulled from the manifest, if available.
+  let manifestRoutes = null;
   if (scriptSrcs.length === 0 && buildId) {
     const manifestUrl = `${pageOrigin}/_next/static/${buildId}/_buildManifest.js`;
     try {
       const r = await fetch(manifestUrl, { headers: HEADERS, cache: 'no-store' });
       if (r.ok) {
         const manifestJs = await r.text();
-        manifestCandidates.push({ url: manifestUrl, size: manifestJs.length, snippet: manifestJs.slice(0, 4000) });
+        manifestCandidates.push({ url: manifestUrl, size: manifestJs.length, snippet: manifestJs.slice(0, 9000) });
         // Extract any .js filenames mentioned in the manifest.
         const chunkPaths = [...new Set(
           [...manifestJs.matchAll(/["']([^"']*\.js)["']/g)].map((m) => m[1])
         )];
-        // Resolve relative → absolute chunk paths.
-        scriptSrcs = chunkPaths.map((p) => p.startsWith('http') || p.startsWith('/') ? p : `/_next/static/chunks/${p}`);
+        // Resolve relative → absolute chunk paths. The manifest chunks
+        // are already like "static/chunks/pages/foo.js" — prefix with
+        // /_next/ to get /_next/static/chunks/pages/foo.js.
+        scriptSrcs = chunkPaths.map((p) => {
+          if (p.startsWith('http')) return p;
+          if (p.startsWith('/')) return p;
+          return `/_next/${p}`;
+        });
+        // Also try to pull the route→chunks map directly so we can
+        // target the stats page's chunk specifically. Find any "/…/stats"
+        // key in the manifest.
+        const routeMatches = [...manifestJs.matchAll(/"(\/[^"]*stat[^"]*)"\s*:\s*\[([^\]]+)\]/gi)];
+        manifestRoutes = routeMatches.map((m) => ({
+          route: m[1],
+          chunks: [...m[2].matchAll(/"([^"]+\.js)"/g)].map((x) => x[1]),
+        }));
       }
     } catch {
       /* ignore */
@@ -246,10 +262,19 @@ async function grepBundlesForApiUrls(pageHtml, pageOrigin, buildId) {
   }
 
   // Prioritize chunks whose filenames hint at stats / sb / pages.
+  // Route-matched chunks from the manifest win over pattern-matched.
+  const routeChunkSet = new Set(
+    (manifestRoutes || []).flatMap((r) => r.chunks.map((c) => `/_next/${c}`))
+  );
   const prioritized = scriptSrcs
-    .map((s) => ({ src: s, score: /stats|sb[\W_]|softball|pages?|app|layout|[Ss]ection/.test(s) ? 1 : 0 }))
+    .map((s) => ({
+      src: s,
+      score: routeChunkSet.has(s) ? 3 :
+             /stats|sport|softball/.test(s) ? 2 :
+             /pages?|app|layout|common/.test(s) ? 1 : 0,
+    }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 12)
+    .slice(0, 15)
     .map((x) => x.src);
 
   const results = [];
@@ -282,6 +307,7 @@ async function grepBundlesForApiUrls(pageHtml, pageOrigin, buildId) {
     fromPreloadCount: fromPreload.length,
     fromBareRefCount: fromBareRef.length,
     manifestCandidates,
+    manifestRoutes,
     probed: results,
   };
 }
