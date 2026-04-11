@@ -147,6 +147,40 @@ function parseBoostNextData(html) {
   const buildId = parsed.buildId || null;
   const runtimeConfig = parsed.runtimeConfig || pp.runtimeConfig || null;
 
+  // Fallback map preview. This is where Boost Sport AI puts SSR-
+  // prefetched SWR data — the schedule page stores the season schedule
+  // here, and the standings page stores the standings rows here. The
+  // stats page is likely similar, so surface the key names + a short
+  // value preview per key so we can identify stats-bearing keys.
+  const fallbackPreview = (() => {
+    const fb = pp.fallback;
+    if (!fb || typeof fb !== 'object') return { present: false };
+    const keys = Object.keys(fb);
+    const entries = keys.slice(0, 30).map((k) => {
+      const v = fb[k];
+      let shape;
+      if (Array.isArray(v)) shape = `array[${v.length}]`;
+      else if (v && typeof v === 'object') {
+        if (Array.isArray(v.data)) shape = `object{data:array[${v.data.length}],...}`;
+        else shape = `object{${Object.keys(v).slice(0, 6).join(',')}}`;
+      } else shape = typeof v;
+      let firstRowKeys = null;
+      const firstRow = Array.isArray(v) ? v[0]
+        : Array.isArray(v?.data) ? v.data[0]
+        : null;
+      if (firstRow && typeof firstRow === 'object') {
+        firstRowKeys = Object.keys(firstRow).slice(0, 20);
+        // Flatten one level of row.data to show actual stat key names.
+        if (Array.isArray(firstRow.data)) {
+          const flat = Object.assign({}, ...firstRow.data.filter((e) => e && typeof e === 'object'));
+          firstRowKeys = [...firstRowKeys, ...Object.keys(flat).slice(0, 30)];
+        }
+      }
+      return { key: k.slice(0, 160), shape, firstRowKeys };
+    });
+    return { present: true, totalKeys: keys.length, entries };
+  })();
+
   return {
     topKeys,
     pagePropsKeys,
@@ -158,6 +192,7 @@ function parseBoostNextData(html) {
       qualifiers: dumpKey('qualifiers'),
       schools: dumpKey('schools'),
       teams: dumpKey('teams'),
+      fallback: fallbackPreview,
     },
   };
 }
@@ -247,13 +282,17 @@ async function grepBundlesForApiUrls(pageHtml, pageOrigin, buildId) {
           if (p.startsWith('/')) return p;
           return `/_next/${p}`;
         });
-        // Also try to pull the route→chunks map directly so we can
-        // target the stats page's chunk specifically. Find any "/…/stats"
-        // key in the manifest.
-        const routeMatches = [...manifestJs.matchAll(/"(\/[^"]*stat[^"]*)"\s*:\s*\[([^\]]+)\]/gi)];
-        manifestRoutes = routeMatches.map((m) => ({
-          route: m[1],
-          chunks: [...m[2].matchAll(/"([^"]+\.js)"/g)].map((x) => x[1]),
+        // Also target stats chunks directly by matching the chunk
+        // filename pattern. The previous approach — matching on an
+        // outer "[...chunks...]" array — broke on ] inside Next.js
+        // dynamic route segments like `[sport]`. Matching the chunk
+        // filename path directly sidesteps the problem entirely.
+        const statsChunkMatches = [...new Set(
+          [...manifestJs.matchAll(/(static\/chunks\/pages\/[^"']*stat[^"']*\.js)/gi)].map((m) => m[1])
+        )];
+        manifestRoutes = statsChunkMatches.map((chunk) => ({
+          route: chunk,
+          chunks: [chunk],
         }));
       }
     } catch {

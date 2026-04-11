@@ -55,6 +55,7 @@ import {
 } from '../_wmt-stats.js';
 import { getBig12TeamStats } from '../_big12-stats.js';
 import { getAccTeamStats } from '../_acc-stats.js';
+import { getBig10TeamStats } from '../_big10-stats.js';
 import { getSecTeamSchedule } from '../_sec-schedule.js';
 import { getBig12TeamSchedule } from '../_big12-schedule.js';
 import { getAccTeamSchedule } from '../_acc-schedule.js';
@@ -384,9 +385,11 @@ async function computeTeamStats(teamId) {
   // the same conference hit a warm cache in ~10ms.
   //
   //   SEC           → WMT Games (wmt.games/conference/sec)
-  //   Mountain West → WMT Games (wmt.games/conference/mw)  [speculative]
+  //   Mountain West → WMT Games (wmt.games/conference/mwc)
   //   Big 12        → Sidearm HTML tables (big12sports.com/stats.aspx)
   //   ACC           → Sidearm HTML tables (theacc.com/stats.aspx)
+  //   Big Ten       → Boost Sport AI CMS fallback map (bigten.org/sb/stats)
+  //                   + runtime API URL auto-discovery fallback
   //   everything else — no stats scraper yet; ESPN records still render
   //
   // All scrapers return the same shape: { totals: {batting,pitching,
@@ -400,6 +403,8 @@ async function computeTeamStats(teamId) {
     confStatsPromise = getBig12TeamStats(variantList).catch(() => null);
   } else if (conference === 'ACC') {
     confStatsPromise = getAccTeamStats(variantList).catch(() => null);
+  } else if (conference === 'Big Ten') {
+    confStatsPromise = getBig10TeamStats(variantList).catch(() => null);
   }
 
   const [
