@@ -16,6 +16,7 @@
 import { getTeamDirectory, findTeam, findTeamById } from '../_espn.js';
 import { getSidearmOrigin } from '../_sidearm-roster-map.js';
 import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
+import { getStaticRoster } from '../_static-rosters.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -83,14 +84,33 @@ export async function GET(request) {
     );
 
     const origin = getSidearmOrigin(nameVariantSet);
+
+    // No Sidearm API? Try the manually-compiled static roster (LSU, South Carolina, Kentucky).
     if (!origin) {
+      const staticRoster = getStaticRoster(nameVariantSet);
+      if (staticRoster) {
+        const athletes = staticRoster.players.map(mapSidearmPlayer);
+        return Response.json(
+          {
+            team: mapTeamMeta(espnTeam),
+            athletes,
+            meta: {
+              source: 'static',
+              available: true,
+              rosterSize: athletes.length,
+              note: 'Roster compiled from official school site — not live Sidearm API.',
+            },
+          },
+          { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } }
+        );
+      }
       return Response.json({
         team: mapTeamMeta(espnTeam),
         athletes: [],
         meta: {
-          source: 'sidearm',
+          source: 'static',
           available: false,
-          note: `${espnTeam.displayName} is not in the Sidearm directory — roster unavailable`,
+          note: `${espnTeam.displayName} is not in the Sidearm directory and has no static roster — roster unavailable`,
         },
       });
     }
