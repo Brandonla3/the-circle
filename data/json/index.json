@@ -1,0 +1,276 @@
+{
+  "season": 2026,
+  "generatedAt": "2026-04-11T06:33:36.785745+00:00",
+  "conferences": [
+    {
+      "name": "Big Ten",
+      "slug": "big-ten",
+      "sections": {
+        "batters": 367,
+        "pitchers": 367,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "ACC",
+      "slug": "acc",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Big 12",
+      "slug": "big-12",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "SEC",
+      "slug": "sec",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Pac-12",
+      "slug": "pac-12",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "American",
+      "slug": "american",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Mountain West",
+      "slug": "mountain-west",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Sun Belt",
+      "slug": "sun-belt",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "C-USA",
+      "slug": "c-usa",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "MAC",
+      "slug": "mac",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "MVC",
+      "slug": "mvc",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "WAC",
+      "slug": "wac",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Big West",
+      "slug": "big-west",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Southern",
+      "slug": "southern",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Southland",
+      "slug": "southland",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "SWAC",
+      "slug": "swac",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "MEAC",
+      "slug": "meac",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "NEC",
+      "slug": "nec",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "OVC",
+      "slug": "ovc",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Patriot",
+      "slug": "patriot",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "MAAC",
+      "slug": "maac",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "A-10",
+      "slug": "a-10",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Big South",
+      "slug": "big-south",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "CAA",
+      "slug": "caa",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Horizon",
+      "slug": "horizon",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Ivy League",
+      "slug": "ivy",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "Summit",
+      "slug": "summit",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "WCC",
+      "slug": "wcc",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "ASUN",
+      "slug": "asun",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    },
+    {
+      "name": "America East",
+      "slug": "america-east",
+      "sections": {
+        "batters": 0,
+        "pitchers": 0,
+        "fielding": 0
+      }
+    }
+  ]
+}
