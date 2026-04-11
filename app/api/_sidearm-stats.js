@@ -358,41 +358,77 @@ function parseSchoolStatsHtml(html, teamDisplayName) {
     // Find the name column header (typically "Player" or second column)
     const nameHeader = headers.find((h) => /^(player|name|athlete)$/i.test(h)) || headers[1];
 
-    // Parse rows from tbody
-    const tbodyM = inner.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
-    if (!tbodyM) continue;
-    const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
-    let trm;
-    while ((trm = trRe.exec(tbodyM[1])) !== null) {
-      const cells = [];
-      const tdRe = /<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi;
-      let tdm;
-      while ((tdm = tdRe.exec(trm[1])) !== null) cells.push(stripTags(tdm[1]));
-      if (cells.length < 3) continue;
+    // Helper: build an obj from headers + cells with BOTH original and
+    // UPPERCASE keys so downstream lookups (pickLabel, schoolSumInt) work
+    // regardless of whether the source page uses 'h', 'H', 'ob%', 'OB%' etc.
+    const buildObj = (cells) => {
       const obj = {};
-      for (let i = 0; i < headers.length && i < cells.length; i++) obj[headers[i]] = cells[i];
-
-      // Totals row detection — expanded label set via isTotalsName()
-      const rawName = (obj[nameHeader] || cells[1] || '').trim();
-      const nameLo = rawName.toLowerCase();
-      if (isTotalsName(nameLo)) {
-        if (type === 'batting') totals.batting = obj;
-        else totals.pitching = obj;
-        continue;
+      for (let i = 0; i < headers.length && i < cells.length; i++) {
+        obj[headers[i]] = cells[i];
+        const uk = headers[i].toUpperCase();
+        if (uk !== headers[i]) obj[uk] = cells[i];
       }
-      if (!rawName || /^-+$/.test(rawName)) continue;
+      return obj;
+    };
 
-      // Flip "Last, First" → "First Last"
-      let playerName = rawName;
-      if (rawName.includes(',')) {
-        const [last, ...rest] = rawName.split(',');
-        playerName = `${rest.join(',').trim()} ${last.trim()}`.trim();
+    // Parse player rows from tbody.
+    const tbodyM = inner.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+    if (tbodyM) {
+      const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+      let trm;
+      while ((trm = trRe.exec(tbodyM[1])) !== null) {
+        const cells = [];
+        const tdRe = /<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi;
+        let tdm;
+        while ((tdm = tdRe.exec(trm[1])) !== null) cells.push(stripTags(tdm[1]));
+        if (cells.length < 3) continue;
+        const obj = buildObj(cells);
+
+        // Totals row detection — expanded label set via isTotalsName()
+        const rawName = (obj[nameHeader] || cells[1] || '').trim();
+        const nameLo = rawName.toLowerCase();
+        if (isTotalsName(nameLo)) {
+          if (type === 'batting' && !totals.batting) totals.batting = obj;
+          else if (type === 'pitching' && !totals.pitching) totals.pitching = obj;
+          continue;
+        }
+        if (!rawName || /^-+$/.test(rawName)) continue;
+
+        // Flip "Last, First" → "First Last"
+        let playerName = rawName;
+        if (rawName.includes(',')) {
+          const [last, ...rest] = rawName.split(',');
+          playerName = `${rest.join(',').trim()} ${last.trim()}`.trim();
+        }
+        if (!playerName) continue;
+
+        const row = { ...obj, Player: playerName, Name: playerName, Team: teamDisplayName };
+        if (type === 'batting') players.hitting.push(row);
+        else players.pitching.push(row);
       }
-      if (!playerName) continue;
+    }
 
-      const row = { ...obj, Player: playerName, Name: playerName, Team: teamDisplayName };
-      if (type === 'batting') players.hitting.push(row);
-      else players.pitching.push(row);
+    // Also scan <tfoot> for the totals row — Sidearm school pages (e.g.
+    // goducks.com) place the team summary in <tfoot>, not <tbody>.
+    const tfootKey = type === 'batting' ? 'batting' : 'pitching';
+    if (!totals[tfootKey]) {
+      const tfootM = inner.match(/<tfoot[^>]*>([\s\S]*?)<\/tfoot>/i);
+      if (tfootM) {
+        const trRe2 = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+        let trm2;
+        while ((trm2 = trRe2.exec(tfootM[1])) !== null) {
+          const cells2 = [];
+          const tdRe2 = /<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi;
+          let tdm2;
+          while ((tdm2 = tdRe2.exec(trm2[1])) !== null) cells2.push(stripTags(tdm2[1]));
+          if (cells2.length < 3) continue;
+          // Totals row: second cell (index 1) holds the label ("Total", "Team", etc.)
+          const nameCell = (cells2[1] || '').trim();
+          if (!isTotalsName(nameCell.toLowerCase())) continue;
+          totals[tfootKey] = buildObj(cells2);
+          break; // first matching row wins (ignores "Opponents" row)
+        }
+      }
     }
   }
 
