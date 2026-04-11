@@ -416,8 +416,12 @@ async function fetchAndParsePayload() {
   const fallbackHits = findStatsFallbackKeys(fallback);
 
   // Build the per-team index from whatever we found.
+  // Boost payload names teams as "Minnesota Golden Gophers" (full) but ESPN
+  // passes variants like "minnesota" and "minnesota gophers" (no "golden").
+  // We index each team under ALL of its normalized name fragments so any
+  // reasonable ESPN variant lands on the right entry.
   const teams = new Map();
-  const ensureTeam = (displayName) => {
+  const ensureTeam = (displayName, marketName) => {
     if (!displayName) return null;
     const key = normalizeTeamKey(displayName);
     if (!key) return null;
@@ -431,6 +435,16 @@ async function fetchAndParsePayload() {
       };
       teams.set(key, t);
     }
+    // Also index by the shorter market/location name (e.g. "minnesota") and
+    // by each word-prefix that's 4+ chars (e.g. "washington" from "Washington Huskies").
+    // This way ESPN variants without the mascot still resolve.
+    const extras = new Set();
+    if (marketName) extras.add(normalizeTeamKey(marketName));
+    // First word of displayName (e.g. "minnesota" from "Minnesota Golden Gophers")
+    extras.add(normalizeTeamKey(displayName.split(' ')[0]));
+    for (const xk of extras) {
+      if (xk && xk.length >= 4 && !teams.has(xk)) teams.set(xk, t);
+    }
     return t;
   };
 
@@ -442,8 +456,9 @@ async function fetchAndParsePayload() {
       // Team totals rows. One row per Big Ten school.
       for (const row of hit.rows) {
         const flat = flattenRowData(row);
-        const displayName = flat.market || flat.name || flat.school || flat.alias;
-        const t = ensureTeam(displayName);
+        const displayName = flat.name || flat.market || flat.school || flat.alias;
+        const marketName  = flat.market || flat.school || null;
+        const t = ensureTeam(displayName, marketName);
         if (!t) continue;
         if (kind === 'batting') t.totals.batting = mapBoostTeamBattingTotals(flat);
         else if (kind === 'pitching') t.totals.pitching = mapBoostTeamPitchingTotals(flat);
@@ -455,9 +470,11 @@ async function fetchAndParsePayload() {
       for (const row of hit.rows) {
         const flat = flattenRowData(row);
         const displayName =
-          flat.team_market || flat.market || flat.school ||
-          flat.team_name || flat.team || flat.alias;
-        const t = ensureTeam(displayName);
+          flat.team_name || flat.team_market || flat.market ||
+          flat.school || flat.team || flat.alias;
+        const marketName =
+          flat.team_market || flat.market || flat.school || null;
+        const t = ensureTeam(displayName, marketName);
         if (!t) continue;
         if (kind === 'batting') {
           const mapped = mapBoostBattingRow(flat, t.name);
@@ -514,10 +531,12 @@ async function fetchAndParsePayload() {
       for (const row of rows) {
         const rflat = flattenRowData(row);
         const displayName =
-          rflat.team_market || rflat.market || rflat.school ||
-          rflat.team_name || rflat.team || rflat.alias;
+          rflat.team_name || rflat.team_market || rflat.market ||
+          rflat.school || rflat.team || rflat.alias;
+        const marketName =
+          rflat.team_market || rflat.market || rflat.school || null;
         const isPlayer = !!(rflat.first_name || rflat.last_name || rflat.player_name);
-        const t = ensureTeam(displayName);
+        const t = ensureTeam(displayName, marketName);
         if (!t) continue;
         if (isPlayer) {
           if (kind === 'batting') {
@@ -576,8 +595,17 @@ export async function getBig10TeamStats(nameVariants) {
     return null;
   }
   let match = null;
+  // Exact key match first.
   for (const [k, t] of payload.teams) {
     if (keys.has(k)) { match = t; break; }
+  }
+  // Prefix fallback: "minnesota" matches key "minnesotagoldengophers" (and vice-versa).
+  if (!match) {
+    outer: for (const [k, t] of payload.teams) {
+      for (const qk of keys) {
+        if (k.startsWith(qk) || qk.startsWith(k)) { match = t; break outer; }
+      }
+    }
   }
   if (!match) return null;
   return {
