@@ -11,7 +11,7 @@
 //
 // Non-working schools by reason (for future re-checks):
 //
-//   WMT Digital (HTML response):
+//   WMT Digital (HTML response) — /api/v2/sports redirects to a news page, no JSON API:
 //     SEC:     Arkansas, Auburn(*), Kentucky, LSU, South Carolina, Vanderbilt
 //     Big 12:  Arizona, Nevada
 //     ACC:     California, Georgia Tech, Notre Dame
@@ -32,7 +32,7 @@
 //
 // Origins are the bare https://... root — no trailing slash.
 
-// ── SEC (10 confirmed) ────────────────────────────────────────────────────────
+// ── SEC (11 confirmed) ────────────────────────────────────────────────────────
 const SEC_ORIGINS = {
   'alabama':            'https://rolltide.com',         // sportId=9
   'florida':            'https://floridagators.com',    // sportId=30
@@ -42,7 +42,7 @@ const SEC_ORIGINS = {
   'oklahoma':           'https://soonersports.com',     // sportId=10
   'ole miss':           'https://olemisssports.com',    // sportId=8
   'tennessee':          'https://utsports.com',         // sportId=12
-  'texas':              'https://texassports.com',      // sportId=10
+  'texas':              'https://texaslonghorns.com',   // sportId=10
   'texas a&m':          'https://12thman.com',          // sportId=11
 };
 
