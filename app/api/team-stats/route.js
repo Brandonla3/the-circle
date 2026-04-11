@@ -53,6 +53,8 @@ import {
   hasConferenceStats,
   WMT_CONFERENCES,
 } from '../_wmt-stats.js';
+import { getBig12TeamStats } from '../_big12-stats.js';
+import { getAccTeamStats } from '../_acc-stats.js';
 import { getSecTeamSchedule } from '../_sec-schedule.js';
 import { getBig12TeamSchedule } from '../_big12-schedule.js';
 import { getAccTeamSchedule } from '../_acc-schedule.js';
@@ -166,17 +168,35 @@ function toFloat(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Pull the first integer out of a compound value like "97-112" (SB-ATT)
+// or "41-41" (GP-GS). Returns null if no leading digits are found.
+function firstInt(v) {
+  if (v == null) return null;
+  const m = String(v).match(/^(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+// Split a compound "W-L" like "40-2" into [W, L]. Returns [null, null]
+// when the input isn't in that shape.
+function splitWl(v) {
+  if (v == null) return [null, null];
+  const m = String(v).match(/^(\d+)\s*-\s*(\d+)/);
+  if (!m) return [null, null];
+  return [parseInt(m[1], 10), parseInt(m[2], 10)];
+}
+
 function normalizeWmtBattingTotals(row) {
   if (!row) return {};
   return {
     BA:  pickLabel(row, ['BA', 'AVG']),
-    OBP: pickLabel(row, ['OBP']),
-    SLG: pickLabel(row, ['SLG']),
+    OBP: pickLabel(row, ['OBP', 'OB%', 'OBA']),
+    SLG: pickLabel(row, ['SLG', 'SLG%']),
     HR:  toInt(pickLabel(row, ['HR'])),
     RBI: toInt(pickLabel(row, ['RBI'])),
     H:   toInt(pickLabel(row, ['H'])),
     R:   toInt(pickLabel(row, ['R'])),
-    SB:  toInt(pickLabel(row, ['SB'])),
+    // Sidearm stores SB as "SB-ATT" compound ("97-112"); WMT uses bare 'SB'.
+    SB:  firstInt(pickLabel(row, ['SB', 'SB-ATT'])),
     '2B': toInt(pickLabel(row, ['2B'])),
     '3B': toInt(pickLabel(row, ['3B'])),
     BB:  toInt(pickLabel(row, ['BB'])),
@@ -187,19 +207,49 @@ function normalizeWmtBattingTotals(row) {
 
 function normalizeWmtPitchingTotals(row) {
   if (!row) return {};
+  const ip = pickLabel(row, ['IP']);
+  const ipNum = parseFloat(ip);
+  const h = toInt(pickLabel(row, ['H']));
+  const bb = toInt(pickLabel(row, ['BB']));
+  const k = toInt(pickLabel(row, ['SO', 'K']));
+
+  // WHIP / K-per-7: use source value when present, otherwise derive from
+  // raw components (Sidearm team-pitching tables don't ship WHIP or K/7).
+  let whip = pickLabel(row, ['WHIP']);
+  if ((whip == null || whip === '') && Number.isFinite(ipNum) && ipNum > 0 && h != null && bb != null) {
+    whip = ((bb + h) / ipNum).toFixed(2);
+  }
+  let kper7 = pickLabel(row, ['K/7', 'SO/7', 'K9', 'SO/9']);
+  if ((kper7 == null || kper7 === '') && Number.isFinite(ipNum) && ipNum > 0 && k != null) {
+    kper7 = ((k * 7) / ipNum).toFixed(2);
+  }
+
+  // W-L: prefer separate W/L columns; fall back to splitting the
+  // compound "W-L" cell Sidearm uses in team pitching totals.
+  let w = toInt(pickLabel(row, ['W']));
+  let l = toInt(pickLabel(row, ['L']));
+  if (w == null || l == null) {
+    const [cw, cl] = splitWl(pickLabel(row, ['W-L']));
+    if (w == null) w = cw;
+    if (l == null) l = cl;
+  }
+
   return {
     ERA:   pickLabel(row, ['ERA']),
-    WHIP:  pickLabel(row, ['WHIP']),
-    'K/7': pickLabel(row, ['K/7', 'SO/7', 'K9', 'SO/9']),
-    SHO:   toInt(pickLabel(row, ['SHO'])),
-    IP:    pickLabel(row, ['IP']),
-    W:     toInt(pickLabel(row, ['W'])),
-    L:     toInt(pickLabel(row, ['L'])),
+    WHIP:  whip,
+    'K/7': kper7,
+    // Sidearm individual pitching has "SHO" like "7-2" (solo-combined);
+    // team pitching and WMT both use a single integer. firstInt handles
+    // both shapes cleanly.
+    SHO:   firstInt(pickLabel(row, ['SHO'])),
+    IP:    ip,
+    W:     w,
+    L:     l,
     SV:    toInt(pickLabel(row, ['SV'])),
-    K:     toInt(pickLabel(row, ['SO', 'K'])),
-    BB:    toInt(pickLabel(row, ['BB'])),
+    K:     k,
+    BB:    bb,
     ER:    toInt(pickLabel(row, ['ER'])),
-    H:     toInt(pickLabel(row, ['H'])),
+    H:     h,
     R:     toInt(pickLabel(row, ['R'])),
   };
 }
@@ -234,7 +284,9 @@ function normalizeWmtPlayers(wmtPlayers, teamDisplayName) {
       heightDisplay:  null,
       weight:         null,
       batThrows:      null,
-      games: toInt(pickLabel(row, ['G', 'GP'])),
+      // Sidearm individual hitting uses "GP-GS" compound (e.g. "41-41");
+      // WMT uses bare G/GP. firstInt handles both.
+      games: firstInt(pickLabel(row, ['G', 'GP', 'GP-GS'])),
       AB:  toInt(pickLabel(row, ['AB'])),
       R:   toInt(pickLabel(row, ['R'])),
       H:   toInt(pickLabel(row, ['H'])),
@@ -242,18 +294,31 @@ function normalizeWmtPlayers(wmtPlayers, teamDisplayName) {
       HR:  toInt(pickLabel(row, ['HR'])),
       BB:  toInt(pickLabel(row, ['BB'])),
       K:   toInt(pickLabel(row, ['SO', 'K'])),
-      SB:  toInt(pickLabel(row, ['SB'])),
+      SB:  firstInt(pickLabel(row, ['SB', 'SB-ATT'])),
       '2B': toInt(pickLabel(row, ['2B'])),
       '3B': toInt(pickLabel(row, ['3B'])),
       BA:  pickLabel(row, ['BA', 'AVG']),
-      OBP: pickLabel(row, ['OBP']),
-      SLG: pickLabel(row, ['SLG']),
+      OBP: pickLabel(row, ['OBP', 'OB%', 'OBA']),
+      SLG: pickLabel(row, ['SLG', 'SLG%']),
     });
   }
 
   for (const row of wmtPlayers?.pitching || []) {
     const rawName = pickLabel(row, ['Player', 'Name']);
     if (!rawName) continue;
+    const ip = pickLabel(row, ['IP']);
+    const ipNum = parseFloat(ip);
+    const h = toInt(pickLabel(row, ['H']));
+    const bb = toInt(pickLabel(row, ['BB']));
+    const k = toInt(pickLabel(row, ['SO', 'K']));
+    let whip = pickLabel(row, ['WHIP']);
+    if ((whip == null || whip === '') && Number.isFinite(ipNum) && ipNum > 0 && h != null && bb != null) {
+      whip = ((bb + h) / ipNum).toFixed(2);
+    }
+    let kper7 = pickLabel(row, ['K/7', 'SO/7', 'K9', 'SO/9']);
+    if ((kper7 == null || kper7 === '') && Number.isFinite(ipNum) && ipNum > 0 && k != null) {
+      kper7 = ((k * 7) / ipNum).toFixed(2);
+    }
     pitching.push({
       id:         normalize(rawName),
       name:       rawName,
@@ -268,20 +333,22 @@ function normalizeWmtPlayers(wmtPlayers, teamDisplayName) {
       heightDisplay:  null,
       weight:         null,
       batThrows:      null,
-      games: toInt(pickLabel(row, ['App', 'G', 'GP'])),
-      IP:    pickLabel(row, ['IP']),
-      K:     toInt(pickLabel(row, ['SO', 'K'])),
-      BB:    toInt(pickLabel(row, ['BB'])),
+      games: toInt(pickLabel(row, ['App', 'G', 'GP', 'GS'])),
+      IP:    ip,
+      K:     k,
+      BB:    bb,
       ER:    toInt(pickLabel(row, ['ER'])),
-      H:     toInt(pickLabel(row, ['H'])),
+      H:     h,
       R:     toInt(pickLabel(row, ['R'])),
       W:     toInt(pickLabel(row, ['W'])),
       L:     toInt(pickLabel(row, ['L'])),
       SV:    toInt(pickLabel(row, ['SV'])),
-      SHO:   toInt(pickLabel(row, ['SHO'])),
+      // Sidearm player SHO is "solo-combined" compound ("7-2"); take the
+      // solo count as the canonical number of shutouts.
+      SHO:   firstInt(pickLabel(row, ['SHO'])),
       ERA:   pickLabel(row, ['ERA']),
-      WHIP:  pickLabel(row, ['WHIP']),
-      'K/7': pickLabel(row, ['K/7', 'SO/7', 'K9', 'SO/9']),
+      WHIP:  whip,
+      'K/7': kper7,
     });
   }
 
@@ -311,17 +378,34 @@ async function computeTeamStats(teamId) {
     lookupConference(team?.shortDisplayName) ||
     null;
 
-  // Only fetch WMT stats if the team's conference has a confirmed WMT
-  // source. Otherwise skip entirely — no point paying for a conference
-  // payload we know won't match.
-  const wmtStatsPromise = conference && hasConferenceStats(conference)
-    ? getConferenceTeamStats(conference, Array.from(nameVariantSet)).catch(() => null)
-    : Promise.resolve(null);
+  // Route to the right conference stats scraper based on the team's
+  // canonical conference label. Each scraper caches a conference-wide
+  // payload internally at module scope so successive calls for teams in
+  // the same conference hit a warm cache in ~10ms.
+  //
+  //   SEC           → WMT Games (wmt.games/conference/sec)
+  //   Mountain West → WMT Games (wmt.games/conference/mw)  [speculative]
+  //   Big 12        → Sidearm HTML tables (big12sports.com/stats.aspx)
+  //   ACC           → Sidearm HTML tables (theacc.com/stats.aspx)
+  //   everything else — no stats scraper yet; ESPN records still render
+  //
+  // All scrapers return the same shape: { totals: {batting,pitching,
+  // fielding}, players: {hitting,pitching,fielding}, name, conference,
+  // sourceUrl }.
+  let confStatsPromise = Promise.resolve(null);
+  const variantList = Array.from(nameVariantSet);
+  if (conference === 'SEC' || conference === 'Mountain West') {
+    confStatsPromise = getConferenceTeamStats(conference, variantList).catch(() => null);
+  } else if (conference === 'Big 12') {
+    confStatsPromise = getBig12TeamStats(variantList).catch(() => null);
+  } else if (conference === 'ACC') {
+    confStatsPromise = getAccTeamStats(variantList).catch(() => null);
+  }
 
   const [
     schedule,
     recordsRaw,
-    wmtStats,
+    confStats,
     secSchedule,
     big12Schedule,
     accSchedule,
@@ -330,7 +414,7 @@ async function computeTeamStats(teamId) {
   ] = await Promise.all([
     fetchWithRetry(scheduleUrl),
     fetchWithRetry(recordsUrl),
-    wmtStatsPromise,
+    confStatsPromise,
     getSecTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
     getBig12TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
     getAccTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
@@ -406,15 +490,16 @@ async function computeTeamStats(teamId) {
     }
   }
 
-  // Team totals + player rows come straight from WMT when available.
-  // Everything is NULL for teams without WMT coverage — the UI
-  // handles this by rendering "—" placeholders.
+  // Team totals + player rows come straight from the conference scraper
+  // (WMT for SEC/MW, Sidearm for Big 12/ACC). Everything is NULL for
+  // teams in conferences without a scraper — the UI handles this by
+  // rendering "—" placeholders.
   const totals = {
-    batting:  normalizeWmtBattingTotals(wmtStats?.totals?.batting),
-    pitching: normalizeWmtPitchingTotals(wmtStats?.totals?.pitching),
+    batting:  normalizeWmtBattingTotals(confStats?.totals?.batting),
+    pitching: normalizeWmtPitchingTotals(confStats?.totals?.pitching),
   };
-  const players = wmtStats
-    ? normalizeWmtPlayers(wmtStats.players, wmtStats.name || team?.displayName || '')
+  const players = confStats
+    ? normalizeWmtPlayers(confStats.players, confStats.name || team?.displayName || '')
     : { batting: [], pitching: [] };
 
   return {
@@ -423,14 +508,15 @@ async function computeTeamStats(teamId) {
     teamMeta,
     totals,
     players,
-    // Pass through the raw WMT payload for any richer views that want
-    // the full conference-level column set (helpText, sortValue, etc).
-    conferenceStats: wmtStats || null,
+    // Pass through the raw conference payload for any richer views that
+    // want the full source column set (WMT ships helpText/sortValue
+    // sidecars; Sidearm ships every original column unmapped).
+    conferenceStats: confStats || null,
     // Normalized per-game schedule for the TeamModal Schedule sub-tab.
     // Conference feeds win over ESPN when the team is actually a member
     // of that conference (the conference scrapers self-gate on membership).
     schedule:
-      wmtStats && secSchedule && secSchedule.length > 0
+      confStats && secSchedule && secSchedule.length > 0
         ? secSchedule
         : big12Schedule && big12Schedule.length > 0
         ? big12Schedule
@@ -442,7 +528,7 @@ async function computeTeamStats(teamId) {
         ? mwSchedule
         : scheduleGames,
     scheduleSource:
-      wmtStats && secSchedule && secSchedule.length > 0
+      confStats && secSchedule && secSchedule.length > 0
         ? 'sec'
         : big12Schedule && big12Schedule.length > 0
         ? 'big12'
@@ -454,13 +540,14 @@ async function computeTeamStats(teamId) {
         ? 'mw'
         : 'espn',
     meta: {
-      source: wmtStats ? `espn-records+wmt-${wmtStats.conference || conference}` : 'espn-records-only',
+      source: confStats
+        ? `espn-records+${confStats.conference || conference}`
+        : 'espn-records-only',
       scheduleEvents: events.length,
       completedEvents: completed.length,
       elapsedMs: Date.now() - startTime,
       conference,
-      conferenceHasStats: !!(conference && hasConferenceStats(conference)),
-      wmtMatched: !!wmtStats,
+      confStatsMatched: !!confStats,
     },
   };
 }

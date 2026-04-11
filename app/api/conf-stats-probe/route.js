@@ -126,70 +126,115 @@ function parseBoostNextData(html) {
   let parsed;
   try { parsed = JSON.parse(m[1]); }
   catch (e) { return { error: `parse: ${e.message}`, rawLength: m[1].length }; }
-  // Walk the tree and find every key that looks stats-related.
-  const interesting = {};
-  function walk(obj, path = '$', depth = 0) {
-    if (depth > 10 || !obj || typeof obj !== 'object') return;
-    if (Array.isArray(obj)) {
-      if (obj.length > 0 && typeof obj[0] === 'object') {
-        walk(obj[0], `${path}[0]`, depth + 1);
-      }
-      return;
-    }
-    for (const [k, v] of Object.entries(obj)) {
-      const kl = k.toLowerCase();
-      if (/stat|batting|pitching|fielding|players?|roster/.test(kl)) {
-        interesting[`${path}.${k}`] = {
-          type: Array.isArray(v) ? `array[${v.length}]` : typeof v,
-          sample: typeof v === 'object' && v !== null
-            ? (Array.isArray(v)
-                ? (v.length > 0 ? JSON.stringify(v[0]).slice(0, 400) : '[]')
-                : JSON.stringify(v).slice(0, 400))
-            : String(v).slice(0, 200),
-        };
-      }
-      if (typeof v === 'object' && v !== null) {
-        walk(v, `${path}.${k}`, depth + 1);
-      }
-    }
-  }
-  walk(parsed);
-  // Also return the top-level keys.
+
+  // Targeted dumps of the pageProps keys most likely to contain stats.
+  // The earlier generic regex-walk missed these because "data",
+  // "metricSections", "qualifiers", and "schools" don't match the
+  // stats/batting/pitching pattern.
+  const pp = parsed?.props?.pageProps || {};
+  const dumpKey = (k) => {
+    const v = pp[k];
+    if (v === undefined) return { present: false };
+    return {
+      present: true,
+      type: Array.isArray(v) ? `array[${v.length}]` : typeof v,
+      preview: JSON.stringify(v).slice(0, 10000),
+    };
+  };
+
+  const pagePropsKeys = Object.keys(pp);
   const topKeys = Object.keys(parsed);
-  const pagePropsKeys = parsed?.props?.pageProps ? Object.keys(parsed.props.pageProps) : null;
-  // Grab buildId and runtime config so we can figure out API calls.
   const buildId = parsed.buildId || null;
-  const runtimeConfig = parsed.runtimeConfig || parsed?.props?.pageProps?.runtimeConfig || null;
-  return { topKeys, pagePropsKeys, buildId, runtimeConfig, interesting };
+  const runtimeConfig = parsed.runtimeConfig || pp.runtimeConfig || null;
+
+  return {
+    topKeys,
+    pagePropsKeys,
+    buildId,
+    runtimeConfig,
+    pagePropDumps: {
+      data: dumpKey('data'),
+      metricSections: dumpKey('metricSections'),
+      qualifiers: dumpKey('qualifiers'),
+      schools: dumpKey('schools'),
+      teams: dumpKey('teams'),
+    },
+  };
 }
 
 function parseWpStatsData(html) {
-  // The "stats-data" script tag may look like:
-  //   <script id="stats-data" type="application/json">{...}</script>
-  // or embedded in an attribute. Try a few patterns.
+  // Inline script tag patterns we've seen on WordPress/WMT sites.
   const patterns = [
     /<script[^>]*id=["']stats-data["'][^>]*>([\s\S]*?)<\/script>/i,
     /<script[^>]*class=["'][^"']*stats-data[^"']*["'][^>]*>([\s\S]*?)<\/script>/i,
-    /<[^>]*data-stats=["']([^"']+)["']/,
-    /"stats-data"\s*:\s*(\{[\s\S]+?\})/,
     /window\.statsData\s*=\s*(\{[\s\S]+?\});/,
+    /var\s+statsData\s*=\s*(\{[\s\S]+?\});/,
   ];
   for (const p of patterns) {
     const m = html.match(p);
-    if (m && m[1]) {
-      return { matched: p.source, content: m[1].slice(0, 20000) };
-    }
+    if (m && m[1]) return { matched: p.source, content: m[1].slice(0, 20000) };
   }
-  // Also search for any inline JSON that looks like stats.
-  const jsonMatches = [...html.matchAll(/(\{[^{}]*?"(?:batting|pitching|stats|players?)"[\s\S]*?\})/gi)]
-    .slice(0, 3)
-    .map((m) => m[1].slice(0, 1500));
-  // Also collect any wmt.digital / wmt.games URLs in the page.
-  const wmtUrls = [...new Set([...html.matchAll(/(https?:\/\/(?:wmt\.games|wmt\.digital|themw\.com\/wp-json)\/[^"'\s<>]+)/gi)].map((m) => m[1]))];
-  return { matched: null, content: null, jsonMatches, wmtUrls };
+  // Also surface any URLs on the page that look like they could point
+  // at a stats data source (wmt.games, wmt.digital, themw.com/wp-json).
+  const wmtUrls = [...new Set(
+    [...html.matchAll(/(https?:\/\/(?:wmt\.games|wmt\.digital|themw\.com\/wp-json)\/[^"'\s<>]+)/gi)]
+      .map((m) => m[1])
+  )];
+  return { matched: null, content: null, wmtUrls };
 }
 
-async function probeConference(slug, cfg) {
+// Probe a set of candidate URLs directly. Each one is fetched with our
+// standard headers and returns a short descriptor (status + first few
+// KB of body). Used by the MW probe to figure out where the actual
+// stats data lives (wmt.games direct, wp-json endpoint, etc).
+async function probeCandidates(candidates) {
+  const out = [];
+  for (const { label, url } of candidates) {
+    const row = { label, url, status: null, contentType: null, bodySnippet: null, bodyLength: 0, error: null };
+    try {
+      const r = await fetch(url, { headers: HEADERS, cache: 'no-store', redirect: 'follow' });
+      row.status = r.status;
+      row.contentType = r.headers.get('content-type') || null;
+      if (r.ok) {
+        const text = await r.text();
+        row.bodyLength = text.length;
+        row.bodySnippet = text.slice(0, 3000);
+      }
+    } catch (e) {
+      row.status = 'error';
+      row.error = String(e.message || e);
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+// The ncaa_season_id is NCAA-wide so we can reuse one discovery for all
+// WMT conferences. Secsports.com's Inertia blob ships the id inline.
+async function discoverNcaaSeasonId() {
+  try {
+    const r = await fetch('https://www.secsports.com/sport/softball/stats', {
+      headers: HEADERS,
+      cache: 'no-store',
+    });
+    if (!r.ok) return null;
+    const html = await r.text();
+    const m = html.match(/data-page="([^"]+)"/);
+    if (!m) return null;
+    const decoded = m[1]
+      .replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>').replace(/&#039;/g, "'").replace(/&#39;/g, "'");
+    const page = JSON.parse(decoded);
+    const seasons = page?.props?.sport?.sport_ncaa_seasons || [];
+    const current = seasons.find((s) => s.default)
+      || [...seasons].sort((a, b) => (b.ncaa_season_id || 0) - (a.ncaa_season_id || 0))[0];
+    return current?.ncaa_season_id || null;
+  } catch {
+    return null;
+  }
+}
+
+async function probeConference(slug, cfg, seasonId) {
   const out = {
     slug,
     url: cfg.url,
@@ -208,13 +253,34 @@ async function probeConference(slug, cfg) {
     if (cfg.type === 'sidearm-tables') {
       out.tables = parseSidearmTables(html);
       out.totalTables = (html.match(/<table\b/gi) || []).length;
-      // Also grab the main nav / heading text so we can understand layout.
       const mainHeading = (html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/) || [])[1];
       out.mainHeading = mainHeading ? stripTags(mainHeading) : null;
     } else if (cfg.type === 'boost-nextdata') {
       out.boost = parseBoostNextData(html);
     } else if (cfg.type === 'wp-statsdata-script') {
       out.wp = parseWpStatsData(html);
+      // MW stats aren't inline — they're loaded client-side. Probe a
+      // short list of candidate endpoints to find the real source.
+      // Every candidate is fetched with our server-side User-Agent so
+      // Cloudflare doesn't block them the way it would a browser fetch
+      // from this sandbox.
+      const mwCandidates = [
+        { label: 'wmt.games sec (known-working reference)', url: `https://wmt.games/conference/sec/${seasonId || 16}` },
+        { label: 'wmt.games mw', url: `https://wmt.games/conference/mw/${seasonId || 16}` },
+        { label: 'wmt.games mountainwest', url: `https://wmt.games/conference/mountainwest/${seasonId || 16}` },
+        { label: 'wmt.games mwc', url: `https://wmt.games/conference/mwc/${seasonId || 16}` },
+        { label: 'themw.com wp-json (root)', url: 'https://themw.com/wp-json/' },
+        { label: 'themw.com wp-json v1 (existing schedule endpoint base)', url: 'https://themw.com/wp-json/v1' },
+        { label: 'themw.com wp-json v1 stats', url: 'https://themw.com/wp-json/v1/stats' },
+        { label: 'themw.com wp-json v1 stats-events (schedule-events twin)', url: 'https://themw.com/wp-json/v1/stats-events' },
+        { label: 'themw.com wp-json v1 team-stats', url: 'https://themw.com/wp-json/v1/team-stats' },
+        { label: 'themw.com wp-json v1 sport-stats', url: 'https://themw.com/wp-json/v1/sport-stats' },
+        { label: 'themw.com wp-json v1 cume-stats', url: 'https://themw.com/wp-json/v1/cume-stats' },
+        { label: 'themw.com wp-json v1 season-stats', url: 'https://themw.com/wp-json/v1/season-stats' },
+        { label: 'themw.com wp-json v1 stat-data', url: 'https://themw.com/wp-json/v1/stat-data' },
+        { label: 'themw.com wp-json v1 sport-statistics', url: 'https://themw.com/wp-json/v1/sport-statistics' },
+      ];
+      out.candidates = await probeCandidates(mwCandidates);
     }
   } catch (e) {
     out.status = 'error';
@@ -227,13 +293,20 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const which = searchParams.get('conf') || 'all';
   const toRun = which === 'all' ? Object.keys(CONFS) : [which];
+
+  // Kick off the NCAA season id discovery in parallel with the probes —
+  // only the MW branch uses it but it's cheap and serializable.
+  const seasonIdPromise = discoverNcaaSeasonId();
+
   const results = {};
   for (const slug of toRun) {
     if (!CONFS[slug]) {
       results[slug] = { error: `unknown conf slug: ${slug}` };
       continue;
     }
-    results[slug] = await probeConference(slug, CONFS[slug]);
+    const seasonId = slug === 'mw' ? await seasonIdPromise : null;
+    results[slug] = await probeConference(slug, CONFS[slug], seasonId);
   }
+  results._meta = { seasonId: await seasonIdPromise };
   return Response.json(results, { headers: { 'Cache-Control': 'no-store' } });
 }
