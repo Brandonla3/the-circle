@@ -212,19 +212,44 @@ async function probeCandidates(candidates) {
 // Fetch the Next.js JS chunks referenced by a page and grep for
 // strings that look like API endpoint URLs. The Big Ten stats page
 // loads its data client-side, so the fetch URL MUST be embedded
-// somewhere in one of the static chunks. We pull every /_next/static
-// script src out of the HTML, fetch them, and search for strings
-// containing 'boostsport', 'api/v1', or 'stats'.
-async function grepBundlesForApiUrls(pageHtml, pageOrigin) {
-  const scriptSrcs = [...new Set(
-    [...pageHtml.matchAll(/<script[^>]*src="(\/_next\/static\/[^"]+\.js)"/g)].map((m) => m[1])
-  )];
-  // Cap to avoid fetching 30+ chunks. Prefer chunks whose filenames
-  // mention 'stats', 'page', 'pages', or 'sb' (sport alias).
+// somewhere in one of the static chunks.
+async function grepBundlesForApiUrls(pageHtml, pageOrigin, buildId) {
+  // Try several extraction strategies. Next.js ships chunks via
+  // <script src>, <link rel="preload">, <link rel="modulepreload">,
+  // and in a self.__next_f push runtime loader — we try all of them.
+  const fromScriptSrc = [...pageHtml.matchAll(/<script[^>]*\bsrc\s*=\s*["']([^"']*_next\/[^"']*\.js)["']/gi)].map((m) => m[1]);
+  const fromPreload   = [...pageHtml.matchAll(/<link[^>]*\bhref\s*=\s*["']([^"']*_next\/[^"']*\.js)["']/gi)].map((m) => m[1]);
+  const fromBareRef   = [...pageHtml.matchAll(/["'`]([^"'`\s]*_next\/static\/[^"'`\s]+\.js)["'`]/gi)].map((m) => m[1]);
+  let scriptSrcs = [...new Set([...fromScriptSrc, ...fromPreload, ...fromBareRef])];
+
+  // Fallback: if we found nothing, fetch the known _buildManifest.js
+  // at the buildId path and parse its chunk list. Next.js always
+  // ships this file at a predictable location.
+  const manifestCandidates = [];
+  if (scriptSrcs.length === 0 && buildId) {
+    const manifestUrl = `${pageOrigin}/_next/static/${buildId}/_buildManifest.js`;
+    try {
+      const r = await fetch(manifestUrl, { headers: HEADERS, cache: 'no-store' });
+      if (r.ok) {
+        const manifestJs = await r.text();
+        manifestCandidates.push({ url: manifestUrl, size: manifestJs.length, snippet: manifestJs.slice(0, 4000) });
+        // Extract any .js filenames mentioned in the manifest.
+        const chunkPaths = [...new Set(
+          [...manifestJs.matchAll(/["']([^"']*\.js)["']/g)].map((m) => m[1])
+        )];
+        // Resolve relative → absolute chunk paths.
+        scriptSrcs = chunkPaths.map((p) => p.startsWith('http') || p.startsWith('/') ? p : `/_next/static/chunks/${p}`);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Prioritize chunks whose filenames hint at stats / sb / pages.
   const prioritized = scriptSrcs
-    .map((s) => ({ src: s, score: /stats|pages?|sb|app/.test(s) ? 1 : 0 }))
+    .map((s) => ({ src: s, score: /stats|sb[\W_]|softball|pages?|app|layout|[Ss]ection/.test(s) ? 1 : 0 }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 10)
+    .slice(0, 12)
     .map((x) => x.src);
 
   const results = [];
@@ -237,21 +262,28 @@ async function grepBundlesForApiUrls(pageHtml, pageOrigin) {
         continue;
       }
       const text = await r.text();
-      // Extract anything that looks like a URL path or full URL with
-      // 'stats', 'api', 'boostsport', or 'cume' in it.
+      // Extract anything that looks like an API endpoint path or URL.
       const hits = [...new Set([
         ...(text.match(/["'`](\/api\/v[0-9]\/[\w/.?=&%-]+)["'`]/g) || []).map((h) => h.slice(1, -1)),
         ...(text.match(/["'`](https?:\/\/[^"'`]*boostsport\.ai[^"'`]*)["'`]/g) || []).map((h) => h.slice(1, -1)),
         ...(text.match(/["'`](\/stats[\w/.?=&%-]*)["'`]/g) || []).map((h) => h.slice(1, -1)),
         ...(text.match(/["'`](cume-stats[\w/.?=&%-]*)["'`]/g) || []).map((h) => h.slice(1, -1)),
         ...(text.match(/["'`](sport-stats[\w/.?=&%-]*)["'`]/g) || []).map((h) => h.slice(1, -1)),
-      ])].slice(0, 40);
+        ...(text.match(/["'`](\/[\w-]*-stats[\w/.?=&%-]*)["'`]/g) || []).map((h) => h.slice(1, -1)),
+      ])].slice(0, 60);
       results.push({ url, status: 200, size: text.length, hits });
     } catch (e) {
       results.push({ url, status: 'error', error: String(e.message || e), hits: [] });
     }
   }
-  return { scriptSrcsFound: scriptSrcs.length, probed: results };
+  return {
+    scriptSrcsFound: scriptSrcs.length,
+    fromScriptSrcCount: fromScriptSrc.length,
+    fromPreloadCount: fromPreload.length,
+    fromBareRefCount: fromBareRef.length,
+    manifestCandidates,
+    probed: results,
+  };
 }
 
 // The ncaa_season_id is NCAA-wide so we can reuse one discovery for all
@@ -306,7 +338,7 @@ async function probeConference(slug, cfg, seasonId) {
       // Since the stats data isn't in __NEXT_DATA__, it must be
       // embedded in the client-side React code as a fetch string.
       const origin = new URL(cfg.url).origin;
-      out.bundleGrep = await grepBundlesForApiUrls(html, origin);
+      out.bundleGrep = await grepBundlesForApiUrls(html, origin, out.boost?.buildId);
       // Big Ten's stats come from its Boost Sport AI backend, not from
       // the Next.js hydration blob. The __NEXT_DATA__ confirmed the
       // BACKEND_HOST_URL is https://b1gbeprod.boostsport.ai. Probe a
