@@ -63,9 +63,18 @@ function dateRange(startY, startM, startD, end) {
 // ensures a slow cold start returns partial data rather than hitting
 // Vercel's 10s hobby timeout.
 const dayCache = new Map();              // 'YYYY-MM-DD' -> { fetchedAt, games }
+const DAY_CACHE_MAX = 500;               // prevent unbounded growth on long-running instances
 const PAST_DAY_TTL_MS = 24 * 60 * 60 * 1000;
 const RECENT_DAY_TTL_MS = 10 * 60 * 1000;
 const RECENT_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Evict oldest entries when a Map exceeds its size cap.
+function pruneMap(map, max) {
+  if (map.size <= max) return;
+  const excess = map.size - max;
+  const iter = map.keys();
+  for (let i = 0; i < excess; i++) map.delete(iter.next().value);
+}
 
 let teamsCache = null;                   // { fetchedAt, teams, allGamesCount, meta }
 const TEAMS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -112,11 +121,13 @@ async function fetchDay(date) {
         const raw = await r.json();
         const list = raw.games || raw.data || raw.scoreboard?.games || [];
         dayCache.set(key, { fetchedAt: Date.now(), games: list });
+        pruneMap(dayCache, DAY_CACHE_MAX);
         return { games: list, fromCache: false };
       }
       // 404 → nothing scheduled that day, cache as empty so we don't retry.
       if (r.status === 404) {
         dayCache.set(key, { fetchedAt: Date.now(), games: [] });
+        pruneMap(dayCache, DAY_CACHE_MAX);
         return { games: [], fromCache: false };
       }
       // 428/429/5xx → fall through to retry.
@@ -458,7 +469,7 @@ export async function GET(request) {
             scan: scanMeta,
           },
         },
-        { headers: { 'Cache-Control': 'public, max-age=600, s-maxage=600' } }
+        { headers: { 'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200' } }
       );
     }
 
@@ -525,7 +536,7 @@ export async function GET(request) {
           scan: scanMeta,
         },
       },
-      { headers: { 'Cache-Control': 'public, max-age=600, s-maxage=600' } }
+      { headers: { 'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200' } }
     );
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });

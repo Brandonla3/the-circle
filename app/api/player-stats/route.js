@@ -35,7 +35,7 @@ export async function GET(request) {
         status: data.error ? 404 : 200,
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=600',
+          'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200',
         },
       });
     }
@@ -96,7 +96,7 @@ export async function GET(request) {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=600, s-maxage=600',
+          'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200',
         },
       });
     }
@@ -112,7 +112,7 @@ export async function GET(request) {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=600, s-maxage=600',
+        'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200',
       },
     });
   } catch (e) {

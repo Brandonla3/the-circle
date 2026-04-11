@@ -41,7 +41,7 @@ export async function GET(request) {
     const cached = photoCache.get(cacheKey);
     if (cached && Date.now() - cached.fetchedAt < PHOTO_TTL_MS) {
       return Response.json(cached.result, {
-        headers: { 'Cache-Control': 'public, max-age=1800, s-maxage=1800' },
+        headers: { 'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600' },
       });
     }
   }

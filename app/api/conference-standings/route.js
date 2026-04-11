@@ -467,6 +467,6 @@ export async function GET(request) {
     return Response.json(body, { headers: { 'Cache-Control': 'no-store' } });
   }
   return Response.json(body, {
-    headers: { 'Cache-Control': 'public, max-age=300, s-maxage=300' },
+    headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
   });
 }

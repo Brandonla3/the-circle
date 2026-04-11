@@ -67,14 +67,19 @@ export default function Page() {
 
   useEffect(() => { fetchScores(); fetchRankings(); }, [fetchScores, fetchRankings]);
 
+  // Derive hasLive as a boolean ref so the polling effect only re-fires when
+  // the live/not-live state actually changes, not on every games array update.
+  const hasLiveRef = useRef(false);
+  const hasLive = games.some((g) => g.status?.type?.state === 'in');
+  hasLiveRef.current = hasLive;
+
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
-    const hasLive = games.some((g) => g.status?.type?.state === 'in');
     if (hasLive && tab === 'scores') {
       pollRef.current = setInterval(() => fetchScores(true), 20000);
     }
     return () => pollRef.current && clearInterval(pollRef.current);
-  }, [games, tab, fetchScores]);
+  }, [hasLive, tab, fetchScores]);
 
   const shiftDate = (days) => { const d = new Date(date); d.setDate(d.getDate() + days); setDate(d); };
   const liveCount = games.filter((g) => g.status?.type?.state === 'in').length;
@@ -1070,12 +1075,12 @@ function TeamModal({ team, onClose }) {
     if (!stats) {
       return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading full roster stats…</div>;
     }
-    // When a rich conference feed (currently SEC via wmt.games) is available,
-    // render the full-roster tables with every column the source publishes.
-    // Otherwise fall back to the NCAA top-50 narrow tables so the sub-tab is
-    // still useful for non-SEC teams.
-    if (stats.secWmt) {
-      return renderWmtFullRoster(stats.secWmt);
+    // When a rich conference feed (WMT-hosted conferences like SEC, Mountain
+    // West) is available, render the full-roster tables with every column
+    // the source publishes. Otherwise fall back to the narrow per-stat
+    // tables built from WMT's normalized shape.
+    if (stats.conferenceStats) {
+      return renderWmtFullRoster(stats.conferenceStats);
     }
     return (
       <div className="space-y-6">
@@ -1197,6 +1202,7 @@ function GameModal({ game, detail, rankings, onRefresh, onClose }) {
     ...(!loaded || hasScoring ? [{ id: 'scoring', label: 'Scoring Plays' }] : []),
     ...(!loaded || hasWinProb ? [{ id: 'winprob', label: 'Win Probability' }] : []),
     { id: 'compare', label: 'Team Compare' },
+    { id: 'players', label: 'Player Compare' },
     ...(!loaded || hasInfo ? [{ id: 'info', label: 'Game Info' }] : []),
   ];
 
@@ -1254,6 +1260,7 @@ function GameModal({ game, detail, rankings, onRefresh, onClose }) {
               {modalTab === 'scoring' && <ScoringPlaysTab detail={detail} />}
               {modalTab === 'winprob' && <WinProbabilityTab detail={detail} />}
               {modalTab === 'compare' && <TeamCompareTab home={home} away={away} rankings={rankings} />}
+              {modalTab === 'players' && <PlayerCompareTab home={home} away={away} rankings={rankings} />}
               {modalTab === 'info' && <GameInfoTab detail={detail} />}
             </>
           )}
@@ -1905,37 +1912,6 @@ function renderSingleTeamTotals(stats, err) {
   );
 }
 
-// Curated categories the Team Compare tab scouts. Must stay in sync with the
-// slugs the player-stats route actually matches — these are the same slugs
-// surfaced in the Players tab. `lowerIsBetter` flags the two pitching stats
-// (ERA, WHIP) where a smaller number is the good number; everything else
-// higher-wins.
-const COMPARE_BATTING = [
-  { slug: 'batting-avg',  short: 'BA'  },
-  { slug: 'home-runs',    short: 'HR'  },
-  { slug: 'rbi',          short: 'RBI' },
-  { slug: 'hits',         short: 'H'   },
-  { slug: 'runs-scored',  short: 'R'   },
-  { slug: 'stolen-bases', short: 'SB'  },
-  { slug: 'on-base-pct',  short: 'OBP' },
-  { slug: 'slugging-pct', short: 'SLG' },
-  { slug: 'doubles',      short: '2B'  },
-  { slug: 'triples',      short: '3B'  },
-];
-// `whip` previously lived in this list but the henrygd wrapper returns 500
-// "Could not parse data" for NCAA stat id 1237 (individual WHIP), which is
-// the only id NCAA exposes for it in softball. The Leaders sub-tab row
-// showed dashes for both teams; dropping it makes the list honest.
-const COMPARE_PITCHING = [
-  { slug: 'era',             short: 'ERA',  lowerIsBetter: true },
-  { slug: 'wins',            short: 'W'    },
-  { slug: 'strikeouts',      short: 'K'    },
-  { slug: 'saves',           short: 'SV'   },
-  { slug: 'k-per-7',         short: 'K/7'  },
-  { slug: 'innings-pitched', short: 'IP'   },
-  { slug: 'shutouts',        short: 'SHO'  },
-];
-
 // Map the NCAA short-code column headers to human-readable names. Several
 // codes (R, H, BB, SO) mean different things for batters vs pitchers, so the
 // lookup is side-aware.
@@ -2018,190 +1994,74 @@ function fullStatName(short, side) {
   return sideMap[short] || COMMON_STAT_LABELS[short] || short;
 }
 
-function TeamCompareTab({ home, away, rankings }) {
-  const [leaders, setLeaders] = useState(null); // { [slug]: { rows, short, label } }
-  const [homeStats, setHomeStats] = useState(null);  // /api/team-stats payload for home
-  const [awayStats, setAwayStats] = useState(null);  // /api/team-stats payload for away
-  const [homeStatsErr, setHomeStatsErr] = useState(null);
-  const [awayStatsErr, setAwayStatsErr] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(null);
-  const [subTab, setSubTab] = useState('totals'); // 'totals' | 'players'
-  const [selectedPlayer, setSelectedPlayer] = useState(null);
-
-  const homeName = home?.team?.displayName || home?.team?.name || '';
-  const awayName = away?.team?.displayName || away?.team?.name || '';
-  const homeId = home?.team?.id ? String(home.team.id) : null;
-  const awayId = away?.team?.id ? String(away.team.id) : null;
-
-  // Fetch NCAA leaders (existing) + team box-score aggregates for both teams.
-  // Dependency list is JUST the team ids so the effect doesn't accidentally
-  // re-fire every time the parent GameModal re-renders with new prop object
-  // references (which it does whenever the scoreboard polls or the summary
-  // fetch resolves). Earlier versions depended on derived name strings too
-  // and got caught by that exact flicker loop.
-  useEffect(() => {
-    let cancelled = false;
-    const allSlugs = [...COMPARE_BATTING, ...COMPARE_PITCHING].map((c) => c.slug);
-    setLoading(true); setErr(null);
-    setHomeStats(null); setAwayStats(null);
-    setHomeStatsErr(null); setAwayStatsErr(null);
-    Promise.all(
-      allSlugs.map((slug) =>
-        fetch(`/api/player-stats?category=${encodeURIComponent(slug)}`)
-          .then((r) => r.json())
-          .then((d) => ({ slug, data: d }))
-          .catch((e) => ({ slug, data: { error: e.message } }))
-      )
-    )
-      .then((catResults) => {
-        if (cancelled) return;
-        const map = {};
-        for (const { slug, data } of catResults) {
-          if (data && !data.error) map[slug] = data;
-        }
-        setLeaders(map);
-      })
-      .catch((e) => { if (!cancelled) setErr(e.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
-    // Fire team-stats independently so slow box-score aggregation doesn't
-    // block the leaders section from rendering. Errors are recorded in
-    // per-team error state so the UI can show them instead of silently
-    // leaving the column stuck on "Loading…".
-    if (homeId) {
-      fetch(`/api/team-stats?teamId=${encodeURIComponent(homeId)}`)
-        .then(async (r) => {
-          const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
-          if (cancelled) return;
-          if (!r.ok || j.error) setHomeStatsErr(j.error || `HTTP ${r.status}`);
-          else setHomeStats(j);
-        })
-        .catch((e) => { if (!cancelled) setHomeStatsErr(e.message); });
-    }
-    if (awayId) {
-      fetch(`/api/team-stats?teamId=${encodeURIComponent(awayId)}`)
-        .then(async (r) => {
-          const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
-          if (cancelled) return;
-          if (!r.ok || j.error) setAwayStatsErr(j.error || `HTTP ${r.status}`);
-          else setAwayStats(j);
-        })
-        .catch((e) => { if (!cancelled) setAwayStatsErr(e.message); });
-    }
-    return () => { cancelled = true; };
-  }, [homeId, awayId]);
-
-  // ESPN attaches season records, rank, and conference metadata to the
-  // scoreboard competitor objects, so we read those straight off `home`/`away`.
-  // Conference is the one field we DON'T trust ESPN for — they ship inconsistent
-  // values across endpoints (sometimes the football conference, sometimes a
-  // stale label). The canonical D-I softball conference comes from the
-  // hardcoded NCAA Statistics table in api/_conferences.js, looked up by the
-  // mascot-free team location.
-  const extractEspn = (competitor) => {
-    if (!competitor) return null;
-    const t = competitor.team || {};
-    const records = Array.isArray(competitor.records) ? competitor.records : [];
-    const byType = (type) =>
-      records.find((r) => (r.type || r.name || '').toLowerCase() === type) ||
-      records.find((r) => (r.type || r.name || '').toLowerCase().includes(type));
-    const total = byType('total') || records[0] || null;
-    const conf = byType('vsconf') || byType('conf');
-    const home = byType('home');
-    const road = byType('road') || byType('away');
-    const streak = byType('streak');
-    // Parse "W-L" summary into numbers so we can show a pct.
-    const parseWL = (summary) => {
-      if (!summary) return { w: null, l: null };
-      const m = String(summary).match(/^(\d+)-(\d+)/);
-      return m ? { w: parseInt(m[1], 10), l: parseInt(m[2], 10) } : { w: null, l: null };
-    };
-    const totalWL = parseWL(total?.summary);
-    const pct = totalWL.w != null && (totalWL.w + totalWL.l) > 0
-      ? totalWL.w / (totalWL.w + totalWL.l)
-      : null;
-    // Canonical conference lookup from the spreadsheet table. ESPN's
-    // location field is mascot-free which is what lookupConference wants;
-    // fall back to displayName for the rare team where location is missing.
-    const canonicalConf =
-      lookupConference(t.location) ||
-      lookupConference(t.displayName) ||
-      lookupConference(t.shortDisplayName) ||
-      null;
-    return {
-      name: t.displayName || t.name || '',
-      logo: t.logo || t.logos?.[0]?.href || null,
-      conference: canonicalConf || competitor.conference?.name || t.conferenceAbbreviation || '',
-      total: total?.summary || '',
-      totalW: totalWL.w,
-      totalL: totalWL.l,
-      pct,
-      conf: conf?.summary || '',
-      home: home?.summary || '',
-      road: road?.summary || '',
-      streak: streak?.summary || streak?.displayValue || '',
-      curatedRank: competitor?.curatedRank?.current || null,
-    };
+// Shared helpers used by both Team Compare and Player Compare modal tabs.
+// Extract season records, ranks, and conference metadata directly off the
+// ESPN scoreboard competitor object so the tab headers can render instantly
+// from the props that opened the modal — no API call needed.
+function extractEspnCompetitor(competitor) {
+  if (!competitor) return null;
+  const t = competitor.team || {};
+  const records = Array.isArray(competitor.records) ? competitor.records : [];
+  const byType = (type) =>
+    records.find((r) => (r.type || r.name || '').toLowerCase() === type) ||
+    records.find((r) => (r.type || r.name || '').toLowerCase().includes(type));
+  const total = byType('total') || records[0] || null;
+  const conf = byType('vsconf') || byType('conf');
+  const homeRec = byType('home');
+  const road = byType('road') || byType('away');
+  const streak = byType('streak');
+  const parseWL = (summary) => {
+    if (!summary) return { w: null, l: null };
+    const m = String(summary).match(/^(\d+)-(\d+)/);
+    return m ? { w: parseInt(m[1], 10), l: parseInt(m[2], 10) } : { w: null, l: null };
   };
-
-  // The top player on a given team in a given category, matched by normalized
-  // team name. The leaderboard is already rank-sorted, so .find() gives us #1.
-  const findLeader = (slug, teamName) => {
-    const data = leaders?.[slug];
-    if (!data?.rows || !teamName) return null;
-    const key = normalizeTeamName(teamName);
-    if (!key) return null;
-    return data.rows.find((r) => normalizeTeamName(r.team) === key)
-      || data.rows.find((r) => {
-        const n = normalizeTeamName(r.team);
-        return n.includes(key) || key.includes(n);
-      }) || null;
+  const totalWL = parseWL(total?.summary);
+  const pct = totalWL.w != null && (totalWL.w + totalWL.l) > 0
+    ? totalWL.w / (totalWL.w + totalWL.l)
+    : null;
+  // Canonical conference lookup from the spreadsheet table. ESPN's location
+  // field is mascot-free which is what lookupConference wants; fall back to
+  // displayName for the rare team where location is missing.
+  const canonicalConf =
+    lookupConference(t.location) ||
+    lookupConference(t.displayName) ||
+    lookupConference(t.shortDisplayName) ||
+    null;
+  return {
+    name: t.displayName || t.name || '',
+    logo: t.logo || t.logos?.[0]?.href || null,
+    conference: canonicalConf || competitor.conference?.name || t.conferenceAbbreviation || '',
+    total: total?.summary || '',
+    totalW: totalWL.w,
+    totalL: totalWL.l,
+    pct,
+    conf: conf?.summary || '',
+    home: homeRec?.summary || '',
+    road: road?.summary || '',
+    streak: streak?.summary || streak?.displayValue || '',
+    curatedRank: competitor?.curatedRank?.current || null,
   };
+}
 
-  // Pull poll rank/trend for a team out of the rankings prop (fallback if the
-  // scoreboard's curatedRank isn't set on this competitor).
-  const pollRank = (teamName) => {
-    const poll = rankings?.rankings?.[0];
-    if (!poll || !teamName) return null;
-    const key = normalizeTeamName(teamName);
-    const r = (poll.ranks || []).find((x) => {
-      const n = normalizeTeamName(x.team?.name || x.team?.displayName);
-      return n === key;
-    });
-    if (!r) return null;
-    return {
-      current: r.current,
-      previous: typeof r.previous === 'number' ? r.previous : null,
-    };
+function getTeamPollRank(rankings, teamName) {
+  const poll = rankings?.rankings?.[0];
+  if (!poll || !teamName) return null;
+  const key = normalizeTeamName(teamName);
+  const r = (poll.ranks || []).find((x) => {
+    const n = normalizeTeamName(x.team?.name || x.team?.displayName);
+    return n === key;
+  });
+  if (!r) return null;
+  return {
+    current: r.current,
+    previous: typeof r.previous === 'number' ? r.previous : null,
   };
+}
 
-  const awayEspn = extractEspn(away);
-  const homeEspn = extractEspn(home);
-  const awayRank = awayEspn?.curatedRank
-    ? { current: awayEspn.curatedRank, previous: null }
-    : pollRank(awayName);
-  const homeRank = homeEspn?.curatedRank
-    ? { current: homeEspn.curatedRank, previous: null }
-    : pollRank(homeName);
+const pctStr = (n) => (n != null ? n.toFixed(3).replace(/^0/, '') : '—');
 
-  const pctStr = (n) => (n != null ? n.toFixed(3).replace(/^0/, '') : '—');
-
-  if (err) {
-    return <EmptyState text={`Error loading team compare: ${err}`} />;
-  }
-
-  // ---------------- Render helpers ----------------
-  // Everything below is plain functions that RETURN JSX, not inner React
-  // components. That matters because inner arrow-function components
-  // (`const Foo = () => ...`) are a new function identity on every parent
-  // render, which makes React treat every render as "different component
-  // type" and unmount + remount the whole inner tree. That was surfacing
-  // as the sub-tab resetting every 4-5s when the team-stats fetch resolved.
-  // Render helpers sidestep the issue because their returned JSX is just
-  // reconciled positionally.
-
-  const renderTeamHeader = (data, rank, align) => {
+function renderCompareHeader(awayEspn, awayRank, homeEspn, homeRank) {
+  const headerCol = (data, rank, align) => {
     if (!data) return null;
     return (
       <div className={`${align === 'right' ? 'text-right' : 'text-left'} min-w-0`}>
@@ -2241,61 +2101,97 @@ function TeamCompareTab({ home, away, rankings }) {
       </div>
     );
   };
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-5 border-b border-white/10">
+      {headerCol(awayEspn, awayRank, 'right')}
+      <div className="text-white/30 mono text-[10px] uppercase tracking-[0.3em]">vs</div>
+      {headerCol(homeEspn, homeRank, 'left')}
+    </div>
+  );
+}
 
-  // Decide who's better in a given stat row. Returns 'home' | 'away' | null.
-  const pickWinner = (awayLeader, homeLeader, lowerIsBetter) => {
-    const a = awayLeader ? parseFloat(awayLeader.primary) : NaN;
-    const h = homeLeader ? parseFloat(homeLeader.primary) : NaN;
-    if (!Number.isFinite(a) && !Number.isFinite(h)) return null;
-    if (!Number.isFinite(a)) return 'home';
-    if (!Number.isFinite(h)) return 'away';
-    if (a === h) return null;
-    return (lowerIsBetter ? a < h : a > h) ? 'away' : 'home';
+// Build a synthetic teamMeta from scoreboard ESPN records so the Season
+// section of Team Totals renders W-L and streak instantly, with no API call.
+// The remaining ESPN-derived fields (runs scored/allowed) come from the
+// /api/team-stats response when the quick fetch resolves a few seconds later.
+function buildEspnFallback(espn) {
+  if (!espn) return null;
+  return {
+    teamMeta: {
+      wins: espn.totalW,
+      losses: espn.totalL,
+      runsFor: null,
+      runsAgainst: null,
+      streak: espn.streak || null,
+    },
+    totals: { batting: {}, pitching: {} },
   };
+}
 
-  const renderLeaderCell = (leader, align, isWinner) => {
-    if (!leader) {
-      return <div className={`text-white/20 text-xs mono ${align === 'right' ? 'text-right' : 'text-left'}`}>—</div>;
-    }
-    const winnerStyle = isWinner ? { color: '#ff6b1a' } : {};
-    return (
-      <div className={`min-w-0 ${align === 'right' ? 'text-right' : 'text-left'}`}>
-        <div className={`text-sm font-semibold truncate ${isWinner ? '' : 'text-white'}`} style={winnerStyle}>
-          <span className={`mono text-[10px] mr-1.5 ${isWinner ? 'text-white/50' : 'text-white/40'}`}>#{leader.rank}</span>
-          {leader.name}
-        </div>
-        <div className={`mono text-[11px] tabular-nums font-bold ${isWinner ? '' : 'text-white/50'}`} style={winnerStyle}>{leader.primary}</div>
-      </div>
-    );
-  };
+// Pick winner on a numeric team total stat. Handles lower-is-better (ERA, WHIP).
+function pickNumericWinner(awayVal, homeVal, lowerIsBetter) {
+  const a = parseFloat(awayVal);
+  const h = parseFloat(homeVal);
+  if (!Number.isFinite(a) && !Number.isFinite(h)) return null;
+  if (!Number.isFinite(a)) return 'home';
+  if (!Number.isFinite(h)) return 'away';
+  if (a === h) return null;
+  return (lowerIsBetter ? a < h : a > h) ? 'away' : 'home';
+}
 
-  const renderStatRow = (slug, short, lowerIsBetter) => {
-    const awayLeader = findLeader(slug, awayName);
-    const homeLeader = findLeader(slug, homeName);
-    const winner = pickWinner(awayLeader, homeLeader, lowerIsBetter);
-    return (
-      <div key={slug} className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center py-2.5 border-b border-white/5">
-        {renderLeaderCell(awayLeader, 'right', winner === 'away')}
-        <div className="text-center text-[10px] mono uppercase tracking-widest text-white/40 w-14">{short}</div>
-        {renderLeaderCell(homeLeader, 'left', winner === 'home')}
-      </div>
-    );
-  };
+function TeamCompareTab({ home, away, rankings }) {
+  const [homeQuick, setHomeQuick] = useState(null);
+  const [awayQuick, setAwayQuick] = useState(null);
+  const [homeStatsErr, setHomeStatsErr] = useState(null);
+  const [awayStatsErr, setAwayStatsErr] = useState(null);
 
-  // Pick winner on a numeric team total stat. Handles lower-is-better (ERA, WHIP).
-  const pickNumericWinner = (awayVal, homeVal, lowerIsBetter) => {
-    const a = parseFloat(awayVal);
-    const h = parseFloat(homeVal);
-    if (!Number.isFinite(a) && !Number.isFinite(h)) return null;
-    if (!Number.isFinite(a)) return 'home';
-    if (!Number.isFinite(h)) return 'away';
-    if (a === h) return null;
-    return (lowerIsBetter ? a < h : a > h) ? 'away' : 'home';
-  };
+  const homeName = home?.team?.displayName || home?.team?.name || '';
+  const awayName = away?.team?.displayName || away?.team?.name || '';
+  const homeId = home?.team?.id ? String(home.team.id) : null;
+  const awayId = away?.team?.id ? String(away.team.id) : null;
+
+  // Fetch /api/team-stats — now powered by conference scrapes (WMT Games)
+  // instead of NCAA leaderboards, so the full payload is ~1-3s cold and
+  // ~10ms warm. No more split quick/full paths.
+  useEffect(() => {
+    let cancelled = false;
+    setHomeQuick(null); setAwayQuick(null);
+    setHomeStatsErr(null); setAwayStatsErr(null);
+
+    const fetchStats = (teamId, setStats, setErr) => {
+      fetch(`/api/team-stats?teamId=${encodeURIComponent(teamId)}`)
+        .then(async (r) => {
+          const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+          if (cancelled) return;
+          if (!r.ok || j.error) setErr(j.error || `HTTP ${r.status}`);
+          else setStats(j);
+        })
+        .catch((e) => { if (!cancelled) setErr(e.message); });
+    };
+
+    if (homeId) fetchStats(homeId, setHomeQuick, setHomeStatsErr);
+    if (awayId) fetchStats(awayId, setAwayQuick, setAwayStatsErr);
+    return () => { cancelled = true; };
+  }, [homeId, awayId]);
+
+  const awayEspn = extractEspnCompetitor(away);
+  const homeEspn = extractEspnCompetitor(home);
+  const awayRank = awayEspn?.curatedRank
+    ? { current: awayEspn.curatedRank, previous: null }
+    : getTeamPollRank(rankings, awayName);
+  const homeRank = homeEspn?.curatedRank
+    ? { current: homeEspn.curatedRank, previous: null }
+    : getTeamPollRank(rankings, homeName);
+
+  // Instant-render fallback: ESPN scoreboard records (W-L, streak) appear
+  // immediately, with API-derived fields (RS, RA, batting/pitching) filling
+  // in 2-4s later when the quick fetch resolves.
+  const awayData = awayQuick || buildEspnFallback(awayEspn);
+  const homeData = homeQuick || buildEspnFallback(homeEspn);
 
   const renderTotalRow = (key, label, short, get, lowerIsBetter) => {
-    const av = awayStats ? get(awayStats) : null;
-    const hv = homeStats ? get(homeStats) : null;
+    const av = awayData ? get(awayData) : null;
+    const hv = homeData ? get(homeData) : null;
     const winner = pickNumericWinner(av, hv, lowerIsBetter);
     const fmt = (v) => (v == null || v === '' ? '—' : v);
     const cls = (side) =>
@@ -2315,31 +2211,18 @@ function TeamCompareTab({ home, away, rankings }) {
     );
   };
 
-  // ---------------- Totals sub-tab ----------------
-  const renderTotals = () => {
-    // If both teams have definite errors, surface them.
-    if (homeStatsErr && awayStatsErr && !homeStats && !awayStats) {
-      return (
-        <div className="text-center py-10">
-          <div className="text-white/40 text-sm mb-2">Couldn't load team stats for either team.</div>
-          <div className="text-white/30 text-xs mono">{awayName}: {awayStatsErr}</div>
-          <div className="text-white/30 text-xs mono">{homeName}: {homeStatsErr}</div>
-        </div>
-      );
-    }
-    if (!homeStats && !awayStats) {
-      return <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-10">Loading team totals…</div>;
-    }
+  const errNote = (teamLabel, errMsg) => errMsg
+    ? <span className="text-red-400/70"> · {teamLabel} failed: {errMsg}</span>
+    : null;
 
-    const errNote = (teamLabel, errMsg) => errMsg
-      ? <span className="text-red-400/70"> · {teamLabel} failed: {errMsg}</span>
-      : null;
+  return (
+    <div className="space-y-6">
+      {renderCompareHeader(awayEspn, awayRank, homeEspn, homeRank)}
 
-    return (
       <div className="space-y-6">
         <div>
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Season</div>
-          {renderTotalRow('record',  'Record',       'W-L',  (s) => s.teamMeta ? `${s.teamMeta.wins}-${s.teamMeta.losses}` : null)}
+          {renderTotalRow('record',  'Record',       'W-L',  (s) => s.teamMeta && s.teamMeta.wins != null ? `${s.teamMeta.wins}-${s.teamMeta.losses}` : null)}
           {renderTotalRow('rs',      'Runs Scored',  'RS',   (s) => s.teamMeta?.runsFor ?? null)}
           {renderTotalRow('ra',      'Runs Allowed', 'RA',   (s) => s.teamMeta?.runsAgainst ?? null, true)}
           {renderTotalRow('diff',    'Run Diff',     'DIFF', (s) => {
@@ -2372,7 +2255,7 @@ function TeamCompareTab({ home, away, rankings }) {
         </div>
 
         <div className="text-[10px] mono text-white/30 text-center leading-relaxed">
-          Record and run totals via ESPN. Team batting and pitching totals
+          Records and run totals via ESPN. Team batting and pitching totals
           via NCAA team leaderboards (season totals, every D1 team).
           {(awayStatsErr || homeStatsErr) && (
             <span className="text-white/20 block mt-1">
@@ -2383,40 +2266,60 @@ function TeamCompareTab({ home, away, rankings }) {
           )}
         </div>
       </div>
-    );
-  };
 
-  // ---------------- Leaders sub-tab ----------------
-  const renderLeaders = () => (
-    <div className="space-y-8">
-      <div>
-        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Top Hitters</div>
-        {loading && !leaders ? (
-          <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-6">Loading leaders…</div>
-        ) : (
-          <div>
-            {COMPARE_BATTING.map((c) => renderStatRow(c.slug, c.short, c.lowerIsBetter))}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Ace Pitchers</div>
-        {loading && !leaders ? (
-          <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-6">Loading leaders…</div>
-        ) : (
-          <div>
-            {COMPARE_PITCHING.map((c) => renderStatRow(c.slug, c.short, c.lowerIsBetter))}
-          </div>
-        )}
+      <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center pt-4 border-t border-white/5">
+        Records via ESPN · Stats via NCAA
       </div>
     </div>
   );
+}
 
-  // ---------------- Players sub-tab ----------------
-  // The actual table JSX lives in the module-scope `renderPlayerTable`
-  // helper defined near the top of this file; this is just the per-team
-  // wrapper that adds loading / error states above the table.
+// Player Compare is its own top-level modal tab. Lazy-loaded — the full
+// /api/team-stats fetch (including the slow NCAA player-leaderboard scan)
+// only fires when the user actually clicks this tab, so it doesn't slow
+// down Team Compare.
+function PlayerCompareTab({ home, away, rankings }) {
+  const [homeStats, setHomeStats] = useState(null);
+  const [awayStats, setAwayStats] = useState(null);
+  const [homeStatsErr, setHomeStatsErr] = useState(null);
+  const [awayStatsErr, setAwayStatsErr] = useState(null);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+
+  const homeName = home?.team?.displayName || home?.team?.name || '';
+  const awayName = away?.team?.displayName || away?.team?.name || '';
+  const homeId = home?.team?.id ? String(home.team.id) : null;
+  const awayId = away?.team?.id ? String(away.team.id) : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    setHomeStats(null); setAwayStats(null);
+    setHomeStatsErr(null); setAwayStatsErr(null);
+
+    const fetchFull = (teamId, setStats, setErr) => {
+      fetch(`/api/team-stats?teamId=${encodeURIComponent(teamId)}`)
+        .then(async (r) => {
+          const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+          if (cancelled) return;
+          if (!r.ok || j.error) setErr(j.error || `HTTP ${r.status}`);
+          else setStats(j);
+        })
+        .catch((e) => { if (!cancelled) setErr(e.message); });
+    };
+
+    if (homeId) fetchFull(homeId, setHomeStats, setHomeStatsErr);
+    if (awayId) fetchFull(awayId, setAwayStats, setAwayStatsErr);
+    return () => { cancelled = true; };
+  }, [homeId, awayId]);
+
+  const awayEspn = extractEspnCompetitor(away);
+  const homeEspn = extractEspnCompetitor(home);
+  const awayRank = awayEspn?.curatedRank
+    ? { current: awayEspn.curatedRank, previous: null }
+    : getTeamPollRank(rankings, awayName);
+  const homeRank = homeEspn?.curatedRank
+    ? { current: homeEspn.curatedRank, previous: null }
+    : getTeamPollRank(rankings, homeName);
+
   const renderPlayerColumn = (teamLabel, stats, errMsg, group) => {
     if (errMsg) {
       return (
@@ -2432,88 +2335,57 @@ function TeamCompareTab({ home, away, rankings }) {
     return renderPlayerTable(stats, group, (p) => setSelectedPlayer({ ...p, team: p.team || teamLabel }));
   };
 
-  const renderPlayers = () => {
-    // Both teams failed — show the most prominent error state.
-    if (homeStatsErr && awayStatsErr && !homeStats && !awayStats) {
-      return (
+  const bothFailed = homeStatsErr && awayStatsErr && !homeStats && !awayStats;
+  const neitherStarted = !homeStats && !awayStats && !homeStatsErr && !awayStatsErr;
+
+  return (
+    <div className="space-y-6">
+      {renderCompareHeader(awayEspn, awayRank, homeEspn, homeRank)}
+
+      {bothFailed ? (
         <div className="text-center py-10">
           <div className="text-white/40 text-sm mb-2">Couldn't load player stats for either team.</div>
           <div className="text-white/30 text-xs mono">{awayName}: {awayStatsErr}</div>
           <div className="text-white/30 text-xs mono">{homeName}: {homeStatsErr}</div>
         </div>
-      );
-    }
-    // Neither team loaded yet (both still pending).
-    if (!homeStats && !awayStats && !homeStatsErr && !awayStatsErr) {
-      return <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-10">Loading player stats…</div>;
-    }
-
-    return (
-      <div className="space-y-8">
-        <div>
-          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Batters</div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div>
-              <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{awayName}</div>
-              {renderPlayerColumn(awayName, awayStats, awayStatsErr, 'batting')}
-            </div>
-            <div>
-              <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{homeName}</div>
-              {renderPlayerColumn(homeName, homeStats, homeStatsErr, 'batting')}
+      ) : neitherStarted ? (
+        <div className="text-white/30 mono text-xs tracking-widest uppercase text-center py-10">Loading player stats…</div>
+      ) : (
+        <div className="space-y-8">
+          <div>
+            <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Batters</div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{awayName}</div>
+                {renderPlayerColumn(awayName, awayStats, awayStatsErr, 'batting')}
+              </div>
+              <div>
+                <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{homeName}</div>
+                {renderPlayerColumn(homeName, homeStats, homeStatsErr, 'batting')}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div>
-          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Pitchers</div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div>
-              <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{awayName}</div>
-              {renderPlayerColumn(awayName, awayStats, awayStatsErr, 'pitching')}
-            </div>
-            <div>
-              <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{homeName}</div>
-              {renderPlayerColumn(homeName, homeStats, homeStatsErr, 'pitching')}
+          <div>
+            <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Pitchers</div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{awayName}</div>
+                {renderPlayerColumn(awayName, awayStats, awayStatsErr, 'pitching')}
+              </div>
+              <div>
+                <div className="text-[10px] mono text-white/50 mb-2 uppercase tracking-wider">{homeName}</div>
+                {renderPlayerColumn(homeName, homeStats, homeStatsErr, 'pitching')}
+              </div>
             </div>
           </div>
+
+          <div className="text-[10px] mono text-white/30 text-center">
+            SEC teams use the full secsports.com roster feed (all players who appeared this season).
+            Other conferences use NCAA individual leaderboards. Missing stat cells render as —.
+          </div>
         </div>
-
-        <div className="text-[10px] mono text-white/30 text-center">
-          SEC teams use the full secsports.com roster feed (all players who appeared this season).
-          Other conferences use NCAA individual leaderboards. Missing stat cells render as —.
-        </div>
-      </div>
-    );
-  };
-
-  const SUB_TABS = [
-    { id: 'totals',  label: 'Team Totals' },
-    { id: 'players', label: 'Player Compare' },
-  ];
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-5 border-b border-white/10">
-        {renderTeamHeader(awayEspn, awayRank, 'right')}
-        <div className="text-white/30 mono text-[10px] uppercase tracking-[0.3em]">vs</div>
-        {renderTeamHeader(homeEspn, homeRank, 'left')}
-      </div>
-
-      <div className="flex gap-1 p-1 rounded-full border border-white/10 bg-white/[0.02] w-fit mx-auto">
-        {SUB_TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setSubTab(t.id)}
-            className={`px-4 py-1.5 rounded-full text-[10px] mono uppercase tracking-widest transition ${subTab === t.id ? 'text-white' : 'text-white/40 hover:text-white/70'}`}
-            style={subTab === t.id ? { background: '#ff6b1a' } : {}}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {subTab === 'totals' && renderTotals()}
-      {subTab === 'players' && renderPlayers()}
+      )}
 
       <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center pt-4 border-t border-white/5">
         Records via ESPN · Stats via NCAA

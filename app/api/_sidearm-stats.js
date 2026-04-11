@@ -1,0 +1,263 @@
+// Shared Sidearm Sports conference stats scraper.
+//
+// Sidearm powers big12sports.com and theacc.com (and many others). Each
+// conference's softball stats live at a single server-rendered page:
+//
+//   {origin}/stats.aspx?path=softball&year=YYYY
+//
+// The page contains ~100 <table> elements, but the six we care about are
+// identified by their <caption>:
+//
+//   "Overall Batting Stats"      — per-team batting totals (1 row per team)
+//   "Overall Pitching Stats"     — per-team pitching totals
+//   "Overall Field Stats"        — per-team fielding totals
+//   "Individual Hitting Stats"   — per-player hitting (all players, full roster)
+//   "Individual Pitching Stats"  — per-player pitching
+//   "Individual Fielding Stats"  — per-player fielding
+//
+// The remaining 90+ tables are narrow per-stat leaderboards (Batting
+// Average, Hits, Home Runs, etc.) which duplicate data from the six
+// above. We ignore them.
+//
+// Team rows have the team name in the second column. Player rows have
+// the player name in the format "Last, First (Full Team Name)" or
+// "First Last (Full Team Name)"; we split on the trailing "(Team)"
+// suffix to group players under their team.
+//
+// This file is NOT a route — Next.js only treats literal route.js files
+// as HTTP endpoints, so this helper module lives safely alongside them.
+
+import { normalizeTeamKey } from './_wmt.js';
+
+const TTL_MS = 15 * 60 * 1000;
+
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (compatible; TheCircle/1.0)',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+
+// Captions (lowercased) we care about → internal table key.
+const TARGET_CAPTIONS = {
+  'overall batting stats':     'teamBatting',
+  'overall pitching stats':    'teamPitching',
+  'overall field stats':       'teamFielding',
+  'overall fielding stats':    'teamFielding', // alt spelling
+  'individual hitting stats':  'playerBatting',
+  'individual batting stats':  'playerBatting', // alt spelling
+  'individual pitching stats': 'playerPitching',
+  'individual fielding stats': 'playerFielding',
+};
+
+function stripTags(html) {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Parse the six target tables out of the raw HTML. Returns a map of
+// internal key → { headers: string[], rows: Record<string,string>[] }.
+// Tables are matched by caption (case-insensitive); extra tables are
+// skipped and a target key is only filled once (first-match wins).
+function parseSidearmTables(html) {
+  const out = {};
+  const tableRe = /<table\b[^>]*>([\s\S]*?)<\/table>/gi;
+  let m;
+  while ((m = tableRe.exec(html)) !== null) {
+    const inner = m[1];
+    const capMatch = inner.match(/<caption[^>]*>([\s\S]*?)<\/caption>/i);
+    if (!capMatch) continue;
+    const caption = stripTags(capMatch[1]).toLowerCase();
+    const target = TARGET_CAPTIONS[caption];
+    if (!target || out[target]) continue;
+
+    // Headers from thead (first <tr>).
+    const theadMatch = inner.match(/<thead[^>]*>([\s\S]*?)<\/thead>/i);
+    const headers = [];
+    if (theadMatch) {
+      const firstRowMatch = theadMatch[1].match(/<tr\b[^>]*>([\s\S]*?)<\/tr>/i);
+      const firstRow = firstRowMatch ? firstRowMatch[1] : theadMatch[1];
+      const thRe = /<th\b[^>]*>([\s\S]*?)<\/th>/gi;
+      let tm;
+      while ((tm = thRe.exec(firstRow)) !== null) {
+        headers.push(stripTags(tm[1]));
+      }
+    }
+
+    // Rows from tbody.
+    const tbodyMatch = inner.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+    const rows = [];
+    if (tbodyMatch) {
+      const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+      let trm;
+      while ((trm = trRe.exec(tbodyMatch[1])) !== null) {
+        const cells = [];
+        const tdRe = /<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi;
+        let tdm;
+        while ((tdm = tdRe.exec(trm[1])) !== null) {
+          cells.push(stripTags(tdm[1]));
+        }
+        if (cells.length === 0) continue;
+        const obj = {};
+        for (let i = 0; i < headers.length && i < cells.length; i++) {
+          obj[headers[i]] = cells[i];
+        }
+        rows.push(obj);
+      }
+    }
+
+    out[target] = { headers, rows };
+  }
+  return out;
+}
+
+// Parse "Last, First (Team)" or "First Last (Team)" → { name, team }.
+// The name is flipped to "First Last" for consistent display with the
+// rest of the app. Returns { name: raw, team: null } when no trailing
+// "(Team)" suffix is present.
+function parsePlayerNameAndTeam(raw) {
+  if (!raw) return { name: '', team: null };
+  const m = String(raw).match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+  if (!m) return { name: String(raw).trim(), team: null };
+  let name = m[1].trim();
+  const team = m[2].trim();
+  const commaMatch = name.match(/^([^,]+),\s*(.+)$/);
+  if (commaMatch) {
+    name = `${commaMatch[2].trim()} ${commaMatch[1].trim()}`;
+  }
+  return { name, team };
+}
+
+// Group the parsed tables into a per-team Map so a single team lookup
+// can pull totals + players in one shot.
+function buildPerTeamIndex(parsed) {
+  const teams = new Map();
+  const ensureTeam = (displayName) => {
+    if (!displayName) return null;
+    const key = normalizeTeamKey(displayName);
+    if (!key) return null;
+    let t = teams.get(key);
+    if (!t) {
+      t = {
+        key,
+        name: displayName,
+        totals: { batting: null, pitching: null, fielding: null },
+        players: { hitting: [], pitching: [], fielding: [] },
+      };
+      teams.set(key, t);
+    }
+    return t;
+  };
+
+  for (const row of parsed.teamBatting?.rows || []) {
+    const t = ensureTeam(row['Team']);
+    if (t) t.totals.batting = row;
+  }
+  for (const row of parsed.teamPitching?.rows || []) {
+    const t = ensureTeam(row['Team']);
+    if (t) t.totals.pitching = row;
+  }
+  for (const row of parsed.teamFielding?.rows || []) {
+    const t = ensureTeam(row['Team']);
+    if (t) t.totals.fielding = row;
+  }
+
+  const pushPlayer = (sourceKey, destKey) => {
+    for (const row of parsed[sourceKey]?.rows || []) {
+      const { name, team: teamName } = parsePlayerNameAndTeam(row['Player']);
+      const t = ensureTeam(teamName);
+      if (!t) continue;
+      // Replace the combined "Player (Team)" cell with the clean name so
+      // downstream normalizers pick it up via the 'Player'/'Name' labels.
+      t.players[destKey].push({ ...row, Player: name, Name: name, Team: teamName });
+    }
+  };
+  pushPlayer('playerBatting',  'hitting');
+  pushPlayer('playerPitching', 'pitching');
+  pushPlayer('playerFielding', 'fielding');
+
+  return teams;
+}
+
+// Pick the year the current softball season belongs to. Season runs Feb–
+// June; after August we assume we're looking at the upcoming season (same
+// logic the Sidearm schedule scraper uses for its year window).
+function currentSeasonYear() {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  return now.getUTCMonth() >= 7 ? year + 1 : year;
+}
+
+// Factory: returns an async getTeamStats(nameVariants) fn bound to a
+// single Sidearm conference. Each caller gets its own module-scope
+// cache, so the ACC and Big 12 fetchers never collide and warm-path
+// calls skip the upstream entirely (15-min TTL).
+export function createSidearmStatsFetcher({ origin, confName, sportPath = 'softball' }) {
+  let payloadCache = null;
+  let payloadCacheAt = 0;
+  let payloadInFlight = null;
+
+  async function fetchAndParse() {
+    const year = currentSeasonYear();
+    const url = `${origin}/stats.aspx?path=${encodeURIComponent(sportPath)}&year=${year}`;
+    const r = await fetch(url, { headers: HEADERS, cache: 'no-store', redirect: 'follow' });
+    if (!r.ok) throw new Error(`Sidearm stats ${r.status}: ${url}`);
+    const html = await r.text();
+    const parsed = parseSidearmTables(html);
+    const teams = buildPerTeamIndex(parsed);
+    return { conference: confName, sourceUrl: url, teams };
+  }
+
+  async function getPayloadCached() {
+    if (payloadCache && Date.now() - payloadCacheAt < TTL_MS) return payloadCache;
+    if (payloadInFlight) return payloadInFlight;
+    payloadInFlight = (async () => {
+      try {
+        const payload = await fetchAndParse();
+        payloadCache = payload;
+        payloadCacheAt = Date.now();
+        return payload;
+      } finally {
+        payloadInFlight = null;
+      }
+    })();
+    return payloadInFlight;
+  }
+
+  return async function getTeamStats(nameVariants) {
+    const variants = Array.isArray(nameVariants) ? nameVariants : [nameVariants];
+    const keys = new Set(variants.map(normalizeTeamKey).filter(Boolean));
+    if (keys.size === 0) return null;
+    let payload;
+    try {
+      payload = await getPayloadCached();
+    } catch {
+      return null;
+    }
+    let match = null;
+    for (const [k, t] of payload.teams) {
+      if (keys.has(k)) { match = t; break; }
+    }
+    if (!match) return null;
+    return {
+      key: match.key,
+      name: match.name,
+      conference: confName,
+      totals: match.totals,
+      players: {
+        hitting:  match.players.hitting,
+        pitching: match.players.pitching,
+        fielding: match.players.fielding,
+      },
+      sourceUrl: payload.sourceUrl,
+    };
+  };
+}
