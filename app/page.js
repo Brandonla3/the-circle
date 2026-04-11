@@ -823,29 +823,13 @@ const TEAM_MODAL_SUB_TABS = [
 
 function TeamModal({ team, onClose }) {
   const [subTab, setSubTab] = useState('roster');
-  const [roster, setRoster] = useState(null);
-  const [rosterErr, setRosterErr] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsErr, setStatsErr] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
 
-  // Fetch roster + team-stats in parallel on mount. Dependency list is ONLY
-  // [team.id] — derived strings would cause the effect to re-run every time
-  // the parent re-renders with a new prop object reference, which is the
-  // same class of bug 89f70cd fixed in TeamCompareTab.
   useEffect(() => {
     let cancelled = false;
-    setRoster(null); setRosterErr(null);
     setStats(null); setStatsErr(null);
-
-    fetch(`/api/team-roster?teamId=${encodeURIComponent(team.id)}`)
-      .then(async (r) => {
-        const j = await r.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!r.ok || j.error) setRosterErr(j.error || `HTTP ${r.status}`);
-        else setRoster(j);
-      })
-      .catch((e) => { if (!cancelled) setRosterErr(e.message); });
 
     fetch(`/api/team-stats?teamId=${encodeURIComponent(team.id)}`)
       .then(async (r) => {
@@ -866,10 +850,10 @@ function TeamModal({ team, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const logo = roster?.team?.logo || team?.logos?.[0]?.href;
-  const displayName = roster?.team?.displayName || team?.displayName;
-  const abbrev = roster?.team?.abbreviation || team?.abbreviation;
-  const color = roster?.team?.color || (team?.color ? `#${team.color}` : '#ff6b1a');
+  const logo = team?.logos?.[0]?.href;
+  const displayName = team?.displayName;
+  const abbrev = team?.abbreviation;
+  const color = team?.color ? `#${team.color}` : '#ff6b1a';
   // Canonical conference from the NCAA Statistics table. Use the team prop's
   // own location/displayName because it's available before any fetch resolves.
   const conference =
@@ -893,7 +877,6 @@ function TeamModal({ team, onClose }) {
     // codes, and full bio data. ESPN's softball roster is notoriously bad:
     // many schools return last-name-only stubs (e.g. "Alldredge") with no
     // position, no photo, and sometimes 90+ ghost entries. Using stats as
-    // primary and ESPN as a loading fallback solves all three problems.
     const statsPlayers = (() => {
       if (!stats?.players) return null;
       const seen = new Set();
@@ -905,20 +888,18 @@ function TeamModal({ team, onClose }) {
       return out.length > 0 ? out : null;
     })();
 
-    // Which list to render: stats (preferred) or ESPN athletes (loading fallback).
-    const source = statsPlayers || roster?.athletes;
-
-    if (!source && !rosterErr && !statsErr) {
+    if (!statsPlayers && !statsErr) {
       return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading roster…</div>;
     }
-    if (!source) {
+    if (!statsPlayers) {
       return (
         <div className="text-center py-12">
-          <div className="text-white/40 text-sm mb-2">Couldn't load roster.</div>
-          <div className="text-white/30 text-xs mono">{rosterErr || statsErr}</div>
+          <div className="text-white/40 text-sm mb-2">Roster not available from conference feed.</div>
+          <div className="text-white/30 text-xs mono">{statsErr}</div>
         </div>
       );
     }
+    const source = statsPlayers;
 
     // Group by position bucket.
     const buckets = {
@@ -1123,7 +1104,7 @@ function TeamModal({ team, onClose }) {
               <div className="display text-white text-3xl font-bold leading-tight truncate">{displayName || 'Team'}</div>
               <div className="text-white/50 text-xs mono mt-1">
                 {abbrev && <span>{abbrev}</span>}
-                {roster?.meta?.rosterSize != null && <span className="text-white/30"> · {roster.meta.rosterSize} players</span>}
+                {stats?.players && <span className="text-white/30"> · {[...(stats.players.batting||[]), ...(stats.players.pitching||[])].length} players</span>}
                 {stats?.teamMeta?.wins != null && stats?.teamMeta?.losses != null && (
                   <span className="text-white/30"> · {stats.teamMeta.wins}-{stats.teamMeta.losses}</span>
                 )}
@@ -1155,7 +1136,7 @@ function TeamModal({ team, onClose }) {
         </div>
 
         <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30 text-center">
-          Roster via ESPN · Stats via NCAA · Press Esc to close
+          Data via conference sites · Press Esc to close
         </div>
       </div>
       {selectedPlayer && (
@@ -1733,7 +1714,7 @@ function renderTeamSchedule(stats) {
     return (
       <div className="rounded-lg border border-white/5 bg-white/[0.01] p-6 text-center">
         <div className="text-white/40 text-sm mb-1">No games scheduled</div>
-        <div className="text-white/30 text-[10px] mono">ESPN hasn't published a schedule for this team.</div>
+        <div className="text-white/30 text-[10px] mono">No schedule data from conference feed for this team.</div>
       </div>
     );
   }
