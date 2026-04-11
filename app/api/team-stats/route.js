@@ -3,29 +3,22 @@
 //   GET /api/team-stats?teamId=611
 //   GET /api/team-stats?team=Oklahoma
 //
-// Data sources:
+// Data sources (conference sites only — no ESPN fallbacks):
 //   • Team Totals / Player rows — conference stats scrapes via WMT Games
-//     (see app/api/_wmt-stats.js). A single HTTP request per conference
-//     ships the FULL roster + team totals — no rate limiting, no top-50
-//     slicing, no 7-second budgets. Teams in conferences not yet in the
-//     WMT catalog show empty stats (UI falls back to "—" placeholders).
-//   • Season record (W-L, runs for/against, streak) — ESPN core.v2
-//     records endpoint. Always populated.
-//   • Schedule + event counts — ESPN team schedule endpoint. Conference-
-//     specific schedule scrapers (SEC, Big 12, ACC, Big Ten, Mountain
-//     West) take priority over ESPN for schedule rendering because they
-//     ship richer broadcast / venue metadata.
-//
-// NCAA leaderboards are NOT used here anymore. They were slow (~6-14s
-// cold), rate-limited (ncaa-api.henrygd.me throttles at 5-6 concurrent),
-// top-50-only (bench players invisible), and the user explicitly asked
-// us to switch to conference scrapes. The WMT path is ~1-3s cold and
-// covers every player on every team in the catalog.
+//     (wmt.games) for SEC + Mountain West; Sidearm HTML tables for Big 12,
+//     ACC, Big Ten. A single HTTP request per conference ships the FULL
+//     roster + team totals. Teams outside these conferences show empty stats.
+//   • Season record (W-L) — computed from the conference schedule feed.
+//     If no conference schedule is available, teamMeta is omitted (not
+//     filled in from ESPN). Missing data is surfaced explicitly so it can
+//     be diagnosed and fixed.
+//   • Schedule — conference-specific scrapers only (SEC, Big 12, ACC,
+//     Big Ten, Mountain West). No ESPN schedule fallback.
 //
 // Response shape:
 //   {
 //     teamId, conference,
-//     teamMeta: { wins, losses, gamesPlayed, runsFor, runsAgainst, streak, winPct },
+//     teamMeta: { wins, losses, gamesPlayed, winPct } | {},
 //     totals: {
 //       batting: { BA, OBP, SLG, HR, RBI, H, SB, ... },
 //       pitching: { ERA, WHIP, 'K/7', SHO, ... }
@@ -34,15 +27,13 @@
 //       batting: [{ id, name, position, classYear, games, AB, H, HR, RBI, BA, ... }],
 //       pitching: [{ id, name, position, classYear, games, IP, K, W, ERA, SHO, ... }]
 //     },
-//     schedule: [...],  // per-game array for TeamModal
-//     scheduleSource: 'sec' | 'big12' | 'acc' | 'big10' | 'mw' | 'espn',
-//     conferenceStats: {...} | null,  // raw WMT payload for richer views
+//     schedule: [...],  // per-game array for TeamModal; [] when unavailable
+//     scheduleSource: 'sec' | 'big12' | 'acc' | 'big10' | 'mw' | null,
+//     conferenceStats: {...} | null,  // raw WMT/Sidearm payload for richer views
 //     meta: { source, scheduleEvents, completedEvents, elapsedMs }
 //   }
 
 import {
-  ESPN_SITE,
-  ESPN_HEADERS,
   normalize,
   getTeamDirectory,
   findTeam,
@@ -84,26 +75,6 @@ const inFlight = new Map();          // teamId  -> Promise
 // the inner WMT cache is 15 min, so 30 min here is a comfortable
 // overlap that avoids redundant re-scans from the same warm Lambda.
 const TEAM_TTL_MS = 30 * 60 * 1000;
-const ESPN_RETRY_DELAYS_MS = [500, 1000, 2000];
-
-// Retry wrapper for ESPN endpoints (schedule, records). Backoff on 5xx
-// and 429; treat 404 and other 4xx as permanent null.
-async function fetchWithRetry(url) {
-  for (let attempt = 0; attempt <= ESPN_RETRY_DELAYS_MS.length; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, ESPN_RETRY_DELAYS_MS[attempt - 1]));
-    }
-    try {
-      const r = await fetch(url, { headers: ESPN_HEADERS, cache: 'no-store' });
-      if (r.ok) return await r.json();
-      if (r.status === 404) return null;
-      if (r.status < 500 && r.status !== 429) return null;
-    } catch {
-      // network error — fall through to retry
-    }
-  }
-  return null;
-}
 
 function buildTeamNameVariantSet(espnTeam) {
   if (!espnTeam) return new Set();
@@ -367,9 +338,6 @@ function normalizeWmtPlayers(wmtPlayers, teamDisplayName) {
 // --- Main computation -----------------------------------------------------
 async function computeTeamStats(teamId) {
   const startTime = Date.now();
-  const scheduleUrl = `${ESPN_SITE}/teams/${teamId}/schedule`;
-  const season = new Date().getUTCFullYear();
-  const recordsUrl = `https://sports.core.api.espn.com/v2/sports/baseball/leagues/college-softball/seasons/${season}/types/2/teams/${teamId}/records/0?lang=en&region=us`;
 
   // Resolve the team + variants first. We need the canonical conference
   // label (from _conferences.js) to pick the right WMT payload, and the
@@ -392,7 +360,7 @@ async function computeTeamStats(teamId) {
   //   ACC           → Sidearm HTML tables (theacc.com/stats.aspx)
   //   Big Ten       → Boost Sport AI CMS fallback map (bigten.org/sb/stats)
   //                   + runtime API URL auto-discovery fallback
-  //   everything else — no stats scraper yet; ESPN records still render
+  //   everything else — no stats scraper yet; stats will be empty
   //
   // All scrapers return the same shape: { totals: {batting,pitching,
   // fielding}, players: {hitting,pitching,fielding}, name, conference,
@@ -415,8 +383,6 @@ async function computeTeamStats(teamId) {
   const sidearmOrigin = getSidearmOrigin(nameVariantSet);
 
   const [
-    schedule,
-    recordsRaw,
     confStats,
     sidearmRoster,
     secSchedule,
@@ -425,8 +391,6 @@ async function computeTeamStats(teamId) {
     big10Schedule,
     mwSchedule,
   ] = await Promise.all([
-    fetchWithRetry(scheduleUrl),
-    fetchWithRetry(recordsUrl),
     confStatsPromise,
     sidearmOrigin ? buildSidearmRosterIndex(sidearmOrigin).catch(() => null) : Promise.resolve(null),
     getSecTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
@@ -436,72 +400,26 @@ async function computeTeamStats(teamId) {
     getMwTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
   ]);
 
-  const events = schedule?.events || [];
-  const completed = events.filter((ev) => {
-    const comp = ev.competitions?.[0];
-    const st = comp?.status?.type || ev.status?.type;
-    return st?.state === 'post' || st?.completed === true;
-  });
+  // Pick the best available conference schedule (first non-empty wins).
+  const activeSchedule =
+    (secSchedule?.length   ? secSchedule   : null) ||
+    (big12Schedule?.length ? big12Schedule : null) ||
+    (accSchedule?.length   ? accSchedule   : null) ||
+    (big10Schedule?.length ? big10Schedule : null) ||
+    (mwSchedule?.length    ? mwSchedule    : null) ||
+    [];
 
-  // Normalized per-game schedule for the TeamModal Schedule tab.
-  const scheduleGames = events.map((ev) => {
-    const comp = ev.competitions?.[0] || {};
-    const st = comp.status?.type || ev.status?.type || {};
-    const competitors = comp.competitors || [];
-    const self = competitors.find((c) => String(c.team?.id) === String(teamId)) || null;
-    const opp = competitors.find((c) => String(c.team?.id) !== String(teamId)) || null;
-    const selfScore = self?.score?.value;
-    const oppScore = opp?.score?.value;
-    const finished = st.state === 'post' || st.completed === true;
-    let result = null;
-    if (finished && selfScore != null && oppScore != null) {
-      result = selfScore > oppScore ? 'W' : selfScore < oppScore ? 'L' : 'T';
-    }
-    return {
-      id: ev.id,
-      date: ev.date || comp.date || null,
-      status: {
-        state: st.state || null,
-        completed: !!st.completed,
-        detail: st.shortDetail || st.detail || null,
-      },
-      homeAway: self?.homeAway || null,
-      neutralSite: !!comp.neutralSite,
-      opponent: opp
-        ? {
-            id: opp.team?.id ? String(opp.team.id) : null,
-            name: opp.team?.displayName || opp.team?.shortDisplayName || null,
-            abbreviation: opp.team?.abbreviation || null,
-            logo: opp.team?.logos?.[0]?.href || opp.team?.logo || null,
-            rank: opp.curatedRank?.current && opp.curatedRank.current < 99 ? opp.curatedRank.current : null,
-          }
-        : null,
-      score: finished && selfScore != null && oppScore != null
-        ? { self: selfScore, opp: oppScore, display: `${selfScore}-${oppScore}` }
-        : null,
-      result,
-      venue: comp.venue?.fullName || null,
-      venueCity:
-        [comp.venue?.address?.city, comp.venue?.address?.state].filter(Boolean).join(', ') || null,
-      broadcast: comp.broadcasts?.[0]?.media?.shortName
-        || (comp.broadcasts?.[0]?.names?.[0] || null),
-    };
-  });
-
-  // teamMeta comes from the ESPN core.v2 records endpoint — reliable for
-  // every D1 team regardless of television coverage.
+  // Derive W-L from the conference schedule. If no conference schedule is
+  // available, teamMeta stays empty — missing data is surfaced explicitly.
   const teamMeta = {};
-  const recordStats = recordsRaw?.stats || null;
-  if (recordStats) {
-    for (const s of recordStats) {
-      if (s.name === 'wins') teamMeta.wins = s.value;
-      else if (s.name === 'losses') teamMeta.losses = s.value;
-      else if (s.name === 'gamesPlayed') teamMeta.gamesPlayed = s.value;
-      else if (s.name === 'pointsFor') teamMeta.runsFor = s.value;
-      else if (s.name === 'pointsAgainst') teamMeta.runsAgainst = s.value;
-      else if (s.name === 'streak') teamMeta.streak = s.displayValue || String(s.value);
-      else if (s.name === 'winPercent') teamMeta.winPct = s.value;
-    }
+  const completedGames = activeSchedule.filter((g) => g.result === 'W' || g.result === 'L' || g.result === 'T');
+  if (completedGames.length > 0) {
+    const wins   = completedGames.filter((g) => g.result === 'W').length;
+    const losses = completedGames.filter((g) => g.result === 'L').length;
+    teamMeta.wins        = wins;
+    teamMeta.losses      = losses;
+    teamMeta.gamesPlayed = completedGames.length;
+    teamMeta.winPct      = wins / completedGames.length;
   }
 
   // Team totals + player rows come straight from the conference scraper
@@ -550,39 +468,18 @@ async function computeTeamStats(teamId) {
     // want the full source column set (WMT ships helpText/sortValue
     // sidecars; Sidearm ships every original column unmapped).
     conferenceStats: confStats || null,
-    // Normalized per-game schedule for the TeamModal Schedule sub-tab.
-    // Conference feeds win over ESPN when the team is actually a member
-    // of that conference (the conference scrapers self-gate on membership).
-    schedule:
-      confStats && secSchedule && secSchedule.length > 0
-        ? secSchedule
-        : big12Schedule && big12Schedule.length > 0
-        ? big12Schedule
-        : accSchedule && accSchedule.length > 0
-        ? accSchedule
-        : big10Schedule && big10Schedule.length > 0
-        ? big10Schedule
-        : mwSchedule && mwSchedule.length > 0
-        ? mwSchedule
-        : scheduleGames,
+    schedule: activeSchedule,
     scheduleSource:
-      confStats && secSchedule && secSchedule.length > 0
-        ? 'sec'
-        : big12Schedule && big12Schedule.length > 0
-        ? 'big12'
-        : accSchedule && accSchedule.length > 0
-        ? 'acc'
-        : big10Schedule && big10Schedule.length > 0
-        ? 'big10'
-        : mwSchedule && mwSchedule.length > 0
-        ? 'mw'
-        : 'espn',
+      secSchedule?.length   ? 'sec'   :
+      big12Schedule?.length ? 'big12' :
+      accSchedule?.length   ? 'acc'   :
+      big10Schedule?.length ? 'big10' :
+      mwSchedule?.length    ? 'mw'    :
+      null,
     meta: {
-      source: confStats
-        ? `espn-records+${confStats.conference || conference}`
-        : 'espn-records-only',
-      scheduleEvents: events.length,
-      completedEvents: completed.length,
+      source: confStats ? `conf-${confStats.conference || conference}` : 'no-conf-feed',
+      scheduleEvents: activeSchedule.length,
+      completedEvents: completedGames.length,
       elapsedMs: Date.now() - startTime,
       conference,
       confStatsMatched: !!confStats,
