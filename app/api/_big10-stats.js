@@ -28,6 +28,7 @@
 // so this helper module lives safely alongside them.
 
 import { normalizeTeamKey } from './_wmt.js';
+import { fetchSchoolSoftballStats } from './_sidearm-stats.js';
 
 const STATS_URL = 'https://bigten.org/sb/stats/';
 const TTL_MS = 15 * 60 * 1000;
@@ -583,6 +584,43 @@ async function getPayloadCached() {
 }
 
 // ---------------------------------------------------------------------------
+// Individual school Sidearm stats pages — reliable fallback for every B1G team.
+//
+// When the Boost API (Strategy A/B) fails to return data for a team, we fall
+// back to fetching that school's own Sidearm stats page at
+// {origin}/sports/softball/stats. This is the same HTML that big12sports.com
+// and theacc.com use, just scoped to a single school.
+//
+// Keys are normalizeTeamKey values that match entries in BIG10_ALIAS_MAP below.
+// Display names are the canonical ESPN display names for each school.
+// ---------------------------------------------------------------------------
+const BIG10_SCHOOL_STATS = [
+  { keys: ['illinois','illinoisfightingillini','fightingillini'],   origin: 'https://fightingillini.com',    name: 'Illinois Fighting Illini' },
+  { keys: ['indiana','indianahoosiers','hoosiers'],                 origin: 'https://iuhoosiers.com',         name: 'Indiana Hoosiers' },
+  { keys: ['iowa','iowahawkeyes','hawkeyes'],                       origin: 'https://hawkeyesports.com',      name: 'Iowa Hawkeyes' },
+  { keys: ['maryland','marylandterrapins','terrapins','terps'],     origin: 'https://umterps.com',            name: 'Maryland Terrapins' },
+  { keys: ['michigan','michiganwolverines','wolverines'],           origin: 'https://mgoblue.com',            name: 'Michigan Wolverines' },
+  { keys: ['michiganstate','michiganstatespartans','spartans'],     origin: 'https://msuspartans.com',        name: 'Michigan State Spartans' },
+  { keys: ['minnesota','minnesotagoldengophers','minnesotagophers','gophers','goldengophers'], origin: 'https://gophersports.com', name: 'Minnesota Golden Gophers' },
+  { keys: ['nebraska','nebraskahuskers','huskers','cornhuskers','nebraskacornhuskers'], origin: 'https://huskers.com', name: 'Nebraska Cornhuskers' },
+  { keys: ['northwestern','northwesternwildcats'],                  origin: 'https://nusports.com',           name: 'Northwestern Wildcats' },
+  { keys: ['ohiostate','ohiostatebuckeyes','buckeyes'],             origin: 'https://ohiostatebuckeyes.com', name: 'Ohio State Buckeyes' },
+  { keys: ['oregon','oregonducks','ducks'],                         origin: 'https://goducks.com',            name: 'Oregon Ducks' },
+  { keys: ['pennstate','pennstatenittanylions','nittanylions'],     origin: 'https://gopsusports.com',        name: 'Penn State Nittany Lions' },
+  { keys: ['purdue','purdueboilermakers','boilermakers'],           origin: 'https://purduesports.com',       name: 'Purdue Boilermakers' },
+  { keys: ['rutgers','rutgersscarletknights','scarletknights'],     origin: 'https://scarletknights.com',     name: 'Rutgers Scarlet Knights' },
+  { keys: ['ucla','uclabruins','bruins'],                           origin: 'https://uclabruins.com',         name: 'UCLA Bruins' },
+  { keys: ['washington','washingtonhuskies','huskies'],             origin: 'https://gohuskies.com',          name: 'Washington Huskies' },
+  { keys: ['wisconsin','wisconsinbadgers','badgers'],               origin: 'https://uwbadgers.com',          name: 'Wisconsin Badgers' },
+];
+
+// Build a flat lookup: normalizedKey → { origin, name }
+const BIG10_SCHOOL_MAP = new Map();
+for (const entry of BIG10_SCHOOL_STATS) {
+  for (const k of entry.keys) BIG10_SCHOOL_MAP.set(k, { origin: entry.origin, name: entry.name });
+}
+
+// ---------------------------------------------------------------------------
 // Hardcoded alias map — ESPN name variant → Boost payload normalizeTeamKey.
 //
 // Boost names all Big Ten teams as "School Mascot" (full name, e.g.
@@ -710,13 +748,26 @@ export async function getBig10TeamStats(nameVariants) {
     }
   }
 
-  if (!match) return null;
-  return {
-    key: match.key,
-    name: match.name,
-    conference: 'Big Ten',
-    totals: match.totals,
-    players: match.players,
-    sourceUrl: payload.sourceUrl,
-  };
+  if (match) {
+    return {
+      key: match.key,
+      name: match.name,
+      conference: 'Big Ten',
+      totals: match.totals,
+      players: match.players,
+      sourceUrl: payload.sourceUrl,
+    };
+  }
+
+  // 4. Individual school Sidearm stats page — reliable fallback when Boost
+  //    API fails or omits the team. Covers all 17 Big Ten programs.
+  for (const qk of keys) {
+    const school = BIG10_SCHOOL_MAP.get(qk);
+    if (school) {
+      const result = await fetchSchoolSoftballStats(school.origin, school.name, 'Big Ten');
+      if (result) return result;
+    }
+  }
+
+  return null;
 }
