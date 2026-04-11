@@ -1,87 +1,107 @@
-// Hand-curated static rosters for schools whose sites aren't accessible
-// via a server-side API (WMT Digital, etc.).
+// Static rosters for schools not on the Sidearm v2 API (WMT Digital platform).
+// Source: manually compiled from each school's official roster page.
+// Last updated: 2026-04-11
 //
-// ┌───────────────────────────────────────────────────────────────────────┐
-// │  MANUAL MAINTENANCE REQUIRED — update at the start of each season.  │
-// │  Last updated: 2025-2026 season                                      │
-// │                                                                       │
-// │  What to update:                                                      │
-// │    • Replace each school's players array with the current roster      │
-// │    • Update photoUrls from the school's CDN                           │
-// │  What breaks if stale:                                                │
-// │    • Roster tab shows graduated/transferred players                   │
-// │    • Photo URLs may 404 when the CDN path changes                     │
-// └───────────────────────────────────────────────────────────────────────┘
-//
-// Each entry shape matches what applyRosterPlayer() expects:
-//   { number, name, position, photoUrl }
-//
-// Fields intentionally omitted (not available from the static scrape):
-//   hometown, highSchool, previousSchool, heightDisplay, weight, batThrows, cls
-// Those will still be filled in by the ESPN secondary pass when available.
-//
-// To update a roster: replace the players array. photoUrls come directly
-// from the school's CDN — no proxying needed because the Next.js
-// next.config.js image.remotePatterns allows lsusports.net and
-// storage.googleapis.com.
+// Schools:
+//   LSU            — https://lsusports.net/sports/sb/roster/
+//   South Carolina — https://gamecocksonline.com/sports/softball/roster/
+//   Kentucky       — https://ukathletics.com/sports/softball/roster/
 
-// ── LSU (lsusports.net — WMT Digital, no server-side roster API) ────────────
-const LSU_ROSTER = [
-  { number: '00', name: 'Jayden Heavener',  position: 'P',  photoUrl: 'https://lsusports.net/imgproxy/pTwLUID0IEUI_iNTbS5bJ04QsO9YkSRTRWNbxeh2KsE/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS83NDcwNTlkZS1qYWR5bl9oZWF2ZW5lcl8yMDI1LmpwZw.png' },
-  { number: '1',  name: 'Ally Hutchins',    position: 'IF', photoUrl: 'https://lsusports.net/imgproxy/SquBYsL2DimM85q8HbvsJR2IteuicnGjXFkwv6eyS20/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9iNjY5YjIwMi1hbGx5X2h1dGNoaW5zXzIwMjUuanBn.png' },
-  { number: '2',  name: 'Maddox McKee',     position: 'UT', photoUrl: 'https://lsusports.net/imgproxy/M1sk1ZkfWVWfJ6_liPQYSrXKxlUCpJW3V0BTTAypMNY/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS85ZWVhYzQyNC1tYWRkb3hfbWNrZWVfMjAyNS5qcGc.png' },
-  { number: '4',  name: 'Gradie Appling',   position: 'UT', photoUrl: 'https://lsusports.net/imgproxy/otj93SHJZ6gci9T8CtyXKQSeA4g2QxxEdteTC3_Q0VE/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS81MmVkODU0Zi1ncmFkaWVfYXBwbGluZ18yMDI1LmpwZw.png' },
-  { number: '7',  name: 'Jalia Lassiter',   position: 'OF', photoUrl: 'https://lsusports.net/imgproxy/9QmchvF-tF6XjP7i5djdOqyaq0yFKks80xjWvWEZqzY/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS81MmI2OTUyMC1qYWxpYV9sYXNzaXRlcl8yMDI1LmpwZw.png' },
-  { number: '8',  name: 'Cali Deal',         position: 'P',  photoUrl: 'https://lsusports.net/imgproxy/_wlx8I6666M0ZeDX5wfZ1XSefsYKc7Fc0mr-fs19UVE/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS8xNWY4Zjg0OC1jYWxpX2RlYWxfMjAyNS5qcGc.png' },
-  { number: '10', name: 'Rylie Johnson',     position: 'OF', photoUrl: 'https://lsusports.net/imgproxy/z_CFxmXXd5Vsq4OzyW9imjW8cpAKMSslOXzr-z8IQvk/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS81YjdmZGM3My1yeWxpZV9qb2huc29uXzIwMjUuanBn.png' },
-  { number: '11', name: 'Lauryn Soeken',     position: 'P',  photoUrl: 'https://lsusports.net/imgproxy/QuTvXiwmZDXVNSr3II_-Jbp_xBjEorptEHwei8pzg2o/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS81Yzk1OGRjMi1sYXVyeW5fc29la2VuXzIwMjUuanBn.png' },
-  { number: '12', name: 'Maci Bergeron',     position: 'C',  photoUrl: 'https://lsusports.net/imgproxy/ErXdTItbOB1XqYp0QVieXbTJuHGd6W3SeWKPxCjlOfM/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9lNjg4YjA2My1tYWNpX2Jlcmdlcm9uXzIwMjUuanBn.png' },
-  { number: '14', name: 'Ashlin Mowery',     position: 'UT', photoUrl: 'https://lsusports.net/imgproxy/du9sRM1icUl-V4T_8_t6udE1p126SSxM4OAiECDD3ck/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS84OWVhMGYwYy1hc2hsaW5fbW93ZXJ5XzIwMjUuanBn.png' },
-  { number: '15', name: 'Jadyn Laneaux',     position: 'OF', photoUrl: 'https://lsusports.net/imgproxy/pxe23lI_hW02Kao0hBmU_zYpWgeSPJGK2I2ruKX_GM8/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS80YmY0YmFhOC1qYWR5bl9sYW5lYXV4XzIwMjUuanBn.png' },
-  { number: '17', name: 'Paytn Monticelli',  position: 'P',  photoUrl: 'https://lsusports.net/imgproxy/-y_7j25tZyNYq7DbHQsnXl-3qGav1p_iVbGKytdJaQA/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8xMS8zNmZiOWZhNi1wYXl0bl9tb250aWNlbGxpXzIwMjUuanBn.png' },
-  { number: '18', name: 'Tatum Clopton',     position: 'P',  photoUrl: 'https://lsusports.net/imgproxy/Fu6NEl8rdqqIKTf-K84vLhgTi7BiNC85y-KaVKxwuY4/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9lZjY5MGZhMy10YXR1bV9jbG9wdG9uXzIwMjUuanBn.png' },
-  { number: '20', name: 'Alix Franklin',     position: 'UT', photoUrl: 'https://lsusports.net/imgproxy/C_4er5e4R9YQDPffIqc4-bxSdFFPnXDPZgc57wwnYZk/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9hMTYwNjZiZS1hbGl4X2ZyYW5rbGluXzIwMjUuanBn.png' },
-  { number: '21', name: 'Cece Cellura',      position: 'P',  photoUrl: 'https://lsusports.net/imgproxy/_NtM8CnVRqA3N-zWgoG8Cog3vFhP_TM95meEf0HBFsI/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS83MjQ2MmQ0OC1jZWNlX2NlbGx1cmFfMjAyNS5qcGc.png' },
-  { number: '23', name: 'Sierra Daniel',     position: 'UT', photoUrl: 'https://lsusports.net/imgproxy/CkcOZnsyDBLjNhpH--RfQPDcJ_l48WI0yL0BOIL1vek/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9mMDFlYWUyNi1zaWVycmFfZGFuaWVsXzIwMjUuanBn.png' },
-  { number: '24', name: 'Char Lorenz',       position: 'UT', photoUrl: 'https://lsusports.net/imgproxy/WjuysZaemzQ12ZGWdnYoTvGMTue_YX_qcUXQSwJx_yQ/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9hODJhMjI3My1jaGFyX2xvcmVuel8yMDI1LmpwZw.png' },
-  { number: '28', name: 'Jada Phillips',     position: 'C',  photoUrl: 'https://lsusports.net/imgproxy/HzAJCmBU7TE16F-iDWsMldERP699cuXogRyUMTz5RKA/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS8xZWZjNjNhZC1qYWRhX3BoaWxsaXBzXzIwMjUuanBn.png' },
-  { number: '33', name: 'Destiny Harris',    position: 'OF', photoUrl: 'https://lsusports.net/imgproxy/5iwx_PBjqPoPRUn5tzhWL3UTqEqPYooo03m3TIU0HAQ/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9iOTQ0NTRlNS1kZXN0aW55X2hhcnJpc18yMDI1LmpwZw.png' },
-  { number: '42', name: 'Tori Edwards',      position: 'UT', photoUrl: 'https://lsusports.net/imgproxy/M6N7eZdyKks__RVikvudHaV8bfjf2BF_r4gVp0eD98Y/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS84MTNkMzVlZi10b3JpX2Vkd2FyZHNfMjAyNS5qcGc.png' },
-  { number: '44', name: "Ci'ella Pickett",   position: 'UT', photoUrl: 'https://lsusports.net/imgproxy/SmqEv6m83W5jaJaPbDMNV3Bgb3tx39ibjSXyTfGvFcw/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9hYzgxMmVmMC1jaWVsbGFfcGlja2V0dF8yMDI1LmpwZw.png' },
-  { number: '67', name: 'Kylee Edwards',     position: 'IF', photoUrl: 'https://lsusports.net/imgproxy/oSDl0gnqmCt6nDyk-5e7BUeGG-Yq5lb4xESCnRioKDc/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9kOTJjZDRkMy1reWxlZV9lZHdhcmRzXzIwMjUuanBn.png' },
-  { number: '82', name: 'Avery Hodge',       position: 'IF', photoUrl: 'https://lsusports.net/imgproxy/pKpF8CoLmHBCEffQFoOpjLbH6vTv4Oel-LEAIcn2yGo/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9iMjM2MDc1OC1hdmVyeV9ob2RnZV8yMDI1LmpwZw.png' },
-];
-
-// ── Lookup map ───────────────────────────────────────────────────────────────
-// Keys are lowercased ESPN displayName values (same normalization as _espn.js).
-// Values are the roster array for that school.
-// Add future hand-curated schools here with their ESPN display name as the key.
-const STATIC_ROSTER_MAP = {
-  'lsu': LSU_ROSTER,
+// Keys match lowercase ESPN display-name variants (see NAME_MAP below).
+export const STATIC_ROSTERS = {
+  "lsu": [
+    {"jersey": "0", "name": "Jayden Heavener", "firstName": "Jayden", "lastName": "Heavener", "position": "Pitcher / Utility", "classYear": "Sophomore", "heightDisplay": "5-6", "hometown": "Pace, Fla.", "photoUrl": "https://lsusports.net/imgproxy/pTwLUID0IEUI_iNTbS5bJ04QsO9YkSRTRWNbxeh2KsE/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS83NDcwNTlkZS1qYWR5bl9oZWF2ZW5lcl8yMDI1LmpwZw.png", "side": "pitching"},
+    {"jersey": "1", "name": "Ally Hutchins", "firstName": "Ally", "lastName": "Hutchins", "position": "Infield", "classYear": "Junior", "heightDisplay": "5-10", "hometown": "Paducah, Ky.", "photoUrl": "https://lsusports.net/imgproxy/SquBYsL2DimM85q8HbvsJR2IteuicnGjXFkwv6eyS20/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9iNjY5YjIwMi1hbGx5X2h1dGNoaW5zXzIwMjUuanBn.png", "side": "batting"},
+    {"jersey": "2", "name": "Maddox McKee", "firstName": "Maddox", "lastName": "McKee", "position": "Utility", "classYear": "Junior", "heightDisplay": "5-4", "hometown": "Montgomery, Texas", "photoUrl": "https://lsusports.net/imgproxy/M1sk1ZkfWVWfJ6_liPQYSrXKxlUCpJW3V0BTTAypMNY/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS85ZWVhYzQyNC1tYWRkb3hfbWNrZWVfMjAyNS5qcGc.png", "side": "batting"},
+    {"jersey": "4", "name": "Gradie Appling", "firstName": "Gradie", "lastName": "Appling", "position": "Utility", "classYear": "Freshman", "heightDisplay": "5-5", "hometown": "Juliette, Ga.", "photoUrl": "https://lsusports.net/imgproxy/otj93SHJZ6gci9T8CtyXKQSeA4g2QxxEdteTC3_Q0VE/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS81MmVkODU0Zi1ncmFkaWVfYXBwbGluZ18yMDI1LmpwZw.png", "side": "batting"},
+    {"jersey": "7", "name": "Jalia Lassiter", "firstName": "Jalia", "lastName": "Lassiter", "position": "Outfield", "classYear": "Senior", "heightDisplay": "5-7", "hometown": "Atmore, Ala.", "photoUrl": "https://lsusports.net/imgproxy/uiC8TVyzMd9q-DdGo5wsb21R4_HZoBURlo-KUjByB0w/fit/1980/1080/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS81MmI2OTUyMC1qYWxpYV9sYXNzaXRlcl8yMDI1LmpwZw.png", "side": "batting"},
+    {"jersey": "8", "name": "Cali Deal", "firstName": "Cali", "lastName": "Deal", "position": "Pitcher", "classYear": "Freshman", "heightDisplay": "6-0", "hometown": "Quitman, La.", "photoUrl": "https://lsusports.net/imgproxy/-YsjxwK0H17FSR3QZUx_utds-P6V8droYatMAQk_h28/fit/1980/1080/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS8xNWY4Zjg0OC1jYWxpX2RlYWxfMjAyNS5qcGc.png", "side": "pitching"},
+    {"jersey": "10", "name": "Rylie Johnson", "firstName": "Rylie", "lastName": "Johnson", "position": "Outfield", "classYear": "Freshman", "heightDisplay": "5-6", "hometown": "Spotsylvania, Va.", "photoUrl": null, "side": "batting"},
+    {"jersey": "11", "name": "Lauryn Soeken", "firstName": "Lauryn", "lastName": "Soeken", "position": "Pitcher", "classYear": "Freshman", "heightDisplay": "5-9", "hometown": "Katy, Texas", "photoUrl": null, "side": "pitching"},
+    {"jersey": "12", "name": "Maci Bergeron", "firstName": "Maci", "lastName": "Bergeron", "position": "Catcher", "classYear": "Senior", "heightDisplay": "5-4", "hometown": "Rayne, La.", "photoUrl": "https://lsusports.net/imgproxy/LxN-Nfv5Hcl_qtiMYAUdalY7xs-f3GsAJz28sXf2B2I/fit/1980/1080/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9lNjg4YjA2My1tYWNpX2Jlcmdlcm9uXzIwMjUuanBn.png", "side": "batting"},
+    {"jersey": "14", "name": "Ashlin Mowery", "firstName": "Ashlin", "lastName": "Mowery", "position": "Utility", "classYear": "Freshman", "heightDisplay": "5-11", "hometown": "Lancaster, Ohio", "photoUrl": null, "side": "batting"},
+    {"jersey": "15", "name": "Jadyn Laneaux", "firstName": "Jadyn", "lastName": "Laneaux", "position": "Outfield", "classYear": "Junior", "heightDisplay": "5-10", "hometown": "Marietta, Ga.", "photoUrl": null, "side": "batting"},
+    {"jersey": "17", "name": "Paytn Monticelli", "firstName": "Paytn", "lastName": "Monticelli", "position": "Pitcher", "classYear": "Senior", "heightDisplay": "6-2", "hometown": "Cedarburg, Wisc.", "photoUrl": "https://lsusports.net/imgproxy/nT7fBDZ_Vv8tG6NWo8HtMo4CNEymEqXt6MZTMuAZ8SQ/fit/1980/1080/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8xMS8zNmZiOWZhNi1wYXl0bl9tb250aWNlbGxpXzIwMjUuanBn.png", "side": "pitching"},
+    {"jersey": "18", "name": "Tatum Clopton", "firstName": "Tatum", "lastName": "Clopton", "position": "Pitcher", "classYear": "5th-year Senior", "heightDisplay": "5-10", "hometown": "Lawrence, Kan.", "photoUrl": "https://lsusports.net/imgproxy/Fu6NEl8rdqqIKTf-K84vLhgTi7BiNC85y-KaVKxwuY4/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9lZjY5MGZhMy10YXR1bV9jbG9wdG9uXzIwMjUuanBn.png", "side": "pitching"},
+    {"jersey": "20", "name": "Alix Franklin", "firstName": "Alix", "lastName": "Franklin", "position": "Utility", "classYear": "Sophomore", "heightDisplay": "5-7", "hometown": "St. Amant, La.", "photoUrl": "https://lsusports.net/imgproxy/C_4er5e4R9YQDPffIqc4-bxSdFFPnXDPZgc57wwnYZk/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9hMTYwNjZiZS1hbGl4X2ZyYW5rbGluXzIwMjUuanBn.png", "side": "batting"},
+    {"jersey": "21", "name": "Cece Cellura", "firstName": "Cece", "lastName": "Cellura", "position": "Pitcher", "classYear": "Junior", "heightDisplay": "6-0", "hometown": "Glendale, Calif.", "photoUrl": "https://lsusports.net/imgproxy/_NtM8CnVRqA3N-zWgoG8Cog3vFhP_TM95meEf0HBFsI/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS83MjQ2MmQ0OC1jZWNlX2NlbGx1cmFfMjAyNS5qcGc.png", "side": "pitching"},
+    {"jersey": "23", "name": "Sierra Daniel", "firstName": "Sierra", "lastName": "Daniel", "position": "Utility", "classYear": "Junior", "heightDisplay": "5-4", "hometown": "Chandler, Ariz.", "photoUrl": "https://lsusports.net/imgproxy/CkcOZnsyDBLjNhpH--RfQPDcJ_l48WI0yL0BOIL1vek/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9mMDFlYWUyNi1zaWVycmFfZGFuaWVsXzIwMjUuanBn.png", "side": "batting"},
+    {"jersey": "24", "name": "Char Lorenz", "firstName": "Char", "lastName": "Lorenz", "position": "Utility", "classYear": "Redshirt Sophomore", "heightDisplay": "5-5", "hometown": "Munster, Ind.", "photoUrl": null, "side": "batting"},
+    {"jersey": "28", "name": "Jada Phillips", "firstName": "Jada", "lastName": "Phillips", "position": "Catcher / Utility", "classYear": "Sophomore", "heightDisplay": "5-4", "hometown": "Bradenton, Fla.", "photoUrl": "https://lsusports.net/imgproxy/HzAJCmBU7TE16F-iDWsMldERP699cuXogRyUMTz5RKA/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS8xZWZjNjNhZC1qYWRhX3BoaWxsaXBzXzIwMjUuanBn.png", "side": "batting"},
+    {"jersey": "33", "name": "Destiny Harris", "firstName": "Destiny", "lastName": "Harris", "position": "Outfield", "classYear": "Sophomore", "heightDisplay": "5-4", "hometown": "Norfolk, Va.", "photoUrl": "https://lsusports.net/imgproxy/5iwx_PBjqPoPRUn5tzhWL3UTqEqPYooo03m3TIU0HAQ/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9iOTQ0NTRlNS1kZXN0aW55X2hhcnJpc18yMDI1LmpwZw.png", "side": "batting"},
+    {"jersey": "42", "name": "Tori Edwards", "firstName": "Tori", "lastName": "Edwards", "position": "Utility", "classYear": "Redshirt Sophomore", "heightDisplay": "5-11", "hometown": "Flower Mound, Texas", "photoUrl": "https://lsusports.net/imgproxy/M6N7eZdyKks__RVikvudHaV8bfjf2BF_r4gVp0eD98Y/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS84MTNkMzVlZi10b3JpX2Vkd2FyZHNfMjAyNS5qcGc.png", "side": "batting"},
+    {"jersey": "44", "name": "Ci'ella Pickett", "firstName": "Ci'ella", "lastName": "Pickett", "position": "Utility", "classYear": "Freshman", "heightDisplay": "5-8", "hometown": "Mentone, Calif.", "photoUrl": "https://lsusports.net/imgproxy/SmqEv6m83W5jaJaPbDMNV3Bgb3tx39ibjSXyTfGvFcw/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9hYzgxMmVmMC1jaWVsbGFfcGlja2V0dF8yMDI1LmpwZw.png", "side": "batting"},
+    {"jersey": "67", "name": "Kylee Edwards", "firstName": "Kylee", "lastName": "Edwards", "position": "Infield", "classYear": "Junior", "heightDisplay": "5-6", "hometown": "Waldron, Ind.", "photoUrl": "https://lsusports.net/imgproxy/oSDl0gnqmCt6nDyk-5e7BUeGG-Yq5lb4xESCnRioKDc/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9kOTJjZDRkMy1reWxlZV9lZHdhcmRzXzIwMjUuanBn.png", "side": "batting"},
+    {"jersey": "82", "name": "Avery Hodge", "firstName": "Avery", "lastName": "Hodge", "position": "Infield", "classYear": "Senior", "heightDisplay": "5-5", "hometown": "Richmond, Texas", "photoUrl": "https://lsusports.net/imgproxy/pKpF8CoLmHBCEffQFoOpjLbH6vTv4Oel-LEAIcn2yGo/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2xzdXNwb3J0cy1jb20vMjAyNS8wOS9iMjM2MDc1OC1hdmVyeV9ob2RnZV8yMDI1LmpwZw.png", "side": "batting"},
+  ],
+  "south carolina": [
+    {"jersey": "1", "name": "Precious Bross", "firstName": "Precious", "lastName": "Bross", "position": "Utility", "classYear": "Sophomore", "heightDisplay": "5-7", "hometown": "Columbia, S.C.", "photoUrl": "https://gamecocksonline.com/imgproxy/aUSdjTPh6pVkmecI-l0tBMgSHoBVtkLgQUyEo8HPS7A/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS9hZDAzZmNmMy1icm9zcy1wcmVjaW91cy1zY2FsZWQuanBn.png", "side": "batting"},
+    {"jersey": "2", "name": "Dakota Potter", "firstName": "Dakota", "lastName": "Potter", "position": "Outfielder", "classYear": "Freshman", "heightDisplay": "5-5", "hometown": "Norco, Calif.", "photoUrl": "https://gamecocksonline.com/imgproxy/e_B9hyPWzf7RCtHlM7d6ItoVOUSskPJhISnKq0nlAhs/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8xMi80MjYxNWRkMS1wb3R0ZXItZGFrb3RhLmpwZw.png", "side": "batting"},
+    {"jersey": "3", "name": "Shae Anderson", "firstName": "Shae", "lastName": "Anderson", "position": "Infielder", "classYear": "Sophomore", "heightDisplay": "5-7", "hometown": "Moorpark, Calif.", "photoUrl": "https://gamecocksonline.com/imgproxy/Pd39zQFeziqJH91yveQzbCqS-r1Is-YfC8aEVI9ZNFY/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS82NzEyODJkYy1hbmRlcnNvbi1zaGFlLXNjYWxlZC5qcGc.png", "side": "batting"},
+    {"jersey": "4", "name": "Tori Ensley", "firstName": "Tori", "lastName": "Ensley", "position": "Utility", "classYear": "Junior", "heightDisplay": "5-8", "hometown": "Franklin, N.C.", "photoUrl": null, "side": "batting"},
+    {"jersey": "6", "name": "Ansley Bennett", "firstName": "Ansley", "lastName": "Bennett", "position": "Utility", "classYear": "Freshman", "heightDisplay": "5-6", "hometown": "Summerville, S.C.", "photoUrl": null, "side": "batting"},
+    {"jersey": "7", "name": "Lexie Shaver", "firstName": "Lexie", "lastName": "Shaver", "position": "Infielder", "classYear": "Redshirt Junior", "heightDisplay": "5-6", "hometown": "Riverton, Utah", "photoUrl": null, "side": "batting"},
+    {"jersey": "8", "name": "Tate Davis", "firstName": "Tate", "lastName": "Davis", "position": "Infielder", "classYear": "Sophomore", "heightDisplay": "5-9", "hometown": "Greer, S.C.", "photoUrl": null, "side": "batting"},
+    {"jersey": "9", "name": "Alyssa Hovermale", "firstName": "Alyssa", "lastName": "Hovermale", "position": "Infielder", "classYear": "Junior", "heightDisplay": "5-8", "hometown": "Norco, Calif.", "photoUrl": null, "side": "batting"},
+    {"jersey": "10", "name": "Josey Marron", "firstName": "Josey", "lastName": "Marron", "position": "Pitcher", "classYear": "Senior", "heightDisplay": "5-8", "hometown": "Grimes, Iowa", "photoUrl": null, "side": "pitching"},
+    {"jersey": "11", "name": "Kai Byars", "firstName": "Kai", "lastName": "Byars", "position": "Outfield", "classYear": "Freshman", "heightDisplay": "5-6", "hometown": "Mechanicsville, Va.", "photoUrl": null, "side": "batting"},
+    {"jersey": "12", "name": "Sage Scarmardo", "firstName": "Sage", "lastName": "Scarmardo", "position": "Infielder", "classYear": "Senior", "heightDisplay": "5-5", "hometown": "College Station, Texas", "photoUrl": null, "side": "batting"},
+    {"jersey": "13", "name": "Emma Friedel", "firstName": "Emma", "lastName": "Friedel", "position": "Pitcher", "classYear": "Junior", "heightDisplay": "6-1", "hometown": "Fayetteville, Ga.", "photoUrl": null, "side": "pitching"},
+    {"jersey": "15", "name": "Lexi Winters", "firstName": "Lexi", "lastName": "Winters", "position": "Catcher", "classYear": "Senior", "heightDisplay": "5-5", "hometown": "Lexington, S.C.", "photoUrl": "https://gamecocksonline.com/imgproxy/O5yqhkB2NdDM-5-vXZknooK2ngcUGS7PCluMJOzPvn8/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS9hMDAyMWRjNy13aW50ZXJzLWxleGktc2NhbGVkLmpwZw.png", "side": "batting"},
+    {"jersey": "16", "name": "Arianna Rodi", "firstName": "Arianna", "lastName": "Rodi", "position": "Infielder", "classYear": "Senior", "heightDisplay": "5-8", "hometown": "Cranston, R.I.", "photoUrl": "https://gamecocksonline.com/imgproxy/FnZATIGobxhumtDjzDwbuRuIdjXBVo39wHIZ0JQHXvM/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS8yOTY1NTgyMy1yb2RpLWFyaWFubmEtc2NhbGVkLmpwZw.png", "side": "batting"},
+    {"jersey": "18", "name": "KG Favors", "firstName": "KG", "lastName": "Favors", "position": "Pitcher", "classYear": "Freshman", "heightDisplay": "5-8", "hometown": "Orange Beach, Ala.", "photoUrl": "https://gamecocksonline.com/imgproxy/dsmgw_LIy6uFDZyOzRdQOB_OU8n1hlppiHoxGu3G-68/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS9iNDViZTdhMS1mYXZvcnMta2ctc2NhbGVkLmpwZw.png", "side": "pitching"},
+    {"jersey": "20", "name": "Jamie Mackay", "firstName": "Jamie", "lastName": "Mackay", "position": "Catcher", "classYear": "Senior", "heightDisplay": "5-10", "hometown": "Laguna Beach, Calif.", "photoUrl": null, "side": "batting"},
+    {"jersey": "21", "name": "Natalie Heath", "firstName": "Natalie", "lastName": "Heath", "position": "Infielder", "classYear": "Redshirt Senior", "heightDisplay": "5-8", "hometown": "Sharpsburg, Ga.", "photoUrl": null, "side": "batting"},
+    {"jersey": "22", "name": "Nia McKnight", "firstName": "Nia", "lastName": "McKnight", "position": "Outfielder", "classYear": "Sophomore", "heightDisplay": "5-3", "hometown": "Loganville, Ga.", "photoUrl": null, "side": "batting"},
+    {"jersey": "24", "name": "Nealy Lamb", "firstName": "Nealy", "lastName": "Lamb", "position": "Pitcher", "classYear": "Junior", "heightDisplay": "5-11", "hometown": "Cades, S.C.", "photoUrl": "https://gamecocksonline.com/imgproxy/7CZpGC5DNdSrwm5awH6xSXRPouZnRiKlwPAeVkxcwLo/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS82M2VhNmE3Zi1sYW1iLW5lYWx5LmpwZw.png", "side": "pitching"},
+    {"jersey": "25", "name": "Jori Heard", "firstName": "Jori", "lastName": "Heard", "position": "Pitcher", "classYear": "Senior", "heightDisplay": "5-11", "hometown": "Algonquin, Ill.", "photoUrl": "https://gamecocksonline.com/imgproxy/h8zxC55Es4JiGl7awYWg1vEZ5sP7PWx2NRaue1sail8/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS8wZDY3YjY4NC1oZWFyZC1qb3JpLXNjYWxlZC5qcGc.png", "side": "pitching"},
+    {"jersey": "33", "name": "Karley Shelton", "firstName": "Karley", "lastName": "Shelton", "position": "Infielder", "classYear": "Junior", "heightDisplay": "5-5", "hometown": "Lexington, S.C.", "photoUrl": "https://gamecocksonline.com/imgproxy/2Y_zhstxB9kGMix9PzfoM0n-syDksx_mHEgt65qihkk/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS84NTA0ZmY3Zi1zaGVsdG9uLWthcmxleS1zY2FsZWQuanBn.png", "side": "batting"},
+    {"jersey": "43", "name": "Quincee Lilio", "firstName": "Quincee", "lastName": "Lilio", "position": "Outfielder", "classYear": "Redshirt Senior", "heightDisplay": "5-2", "hometown": "Oceanside, Calif.", "photoUrl": "https://gamecocksonline.com/imgproxy/HQdjCIBUL2ckf6rKVeaoFwQ2ns8JkEdKm4kzJESjZII/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS85MjliMTU2YS1saWxpby1xdWluY2VlLmpwZw.png", "side": "batting"},
+    {"jersey": "55", "name": "Julie Kelley", "firstName": "Julie", "lastName": "Kelley", "position": "Pitcher", "classYear": "Sophomore", "heightDisplay": "5-8", "hometown": "Ormond Beach, Fla.", "photoUrl": "https://gamecocksonline.com/imgproxy/v_5W43qqdf2BEkfg8CI4aSvz39oJHjKtmq7z_7P1JrI/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL2dhbWVjb2Nrc29ubGluZS1jb20vMjAyNS8wOS84NGUwZjRjZS1rZWxsZXktanVsaWUtc2NhbGVkLmpwZw.png", "side": "pitching"},
+  ],
+  "kentucky": [
+    {"jersey": "2", "name": "Karissa Hamilton", "firstName": "Karissa", "lastName": "Hamilton", "position": "Catcher", "classYear": "Senior", "heightDisplay": null, "hometown": "Flat Rock, Ind.", "photoUrl": "https://ukathletics.com/imgproxy/ZxaZMC-rqWMKah4Qw1uyXHWG3_7ooDzaIyevjTYgeeQ/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5L2NmMGM4MTBmLTIta2FyaXNzYS1oYW1pbHRvbi1zY2FsZWQuanBn.png", "side": "batting"},
+    {"jersey": "3", "name": "Gabbie Hensley", "firstName": "Gabbie", "lastName": "Hensley", "position": "Catcher / Infield", "classYear": "Freshman", "heightDisplay": null, "hometown": "Chattanooga, Tenn.", "photoUrl": "https://ukathletics.com/imgproxy/8aVKtms5z4Wkd6xqOnS50nQaZZkFq6fmc77bAwGJI4Q/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5LzgxYTYwOWU0LTMtZ2FiYmllLWhlbnNsZXktc2NhbGVkLmpwZw.png", "side": "batting"},
+    {"jersey": "7", "name": "Maddy Clark", "firstName": "Maddy", "lastName": "Clark", "position": "Utility / Infield", "classYear": "Senior", "heightDisplay": null, "hometown": "Claremont, Calif.", "photoUrl": "https://ukathletics.com/imgproxy/V7mUdgViQMfdKdj9KqMy2bsulXtv41qw3OxlAM0A4fk/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5L2MyNDNkNzBlLTctbWFkZHktY2xhcmstc2NhbGVkLmpwZw.png", "side": "batting"},
+    {"jersey": "9", "name": "Ava Emmert", "firstName": "Ava", "lastName": "Emmert", "position": "Utility", "classYear": "Redshirt Freshman", "heightDisplay": null, "hometown": "Lexington, Ky.", "photoUrl": "https://ukathletics.com/imgproxy/qEO_gCy3qWFwfTcDcqVhB57dpBM_9VuFKzz8xE8H0h0/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5L2RhZGM3ZDY3LTktYXZhLWVtbWVydC1zY2FsZWQuanBn.png", "side": "batting"},
+    {"jersey": "11", "name": "Reaghan Oney", "firstName": "Reaghan", "lastName": "Oney", "position": "Outfield", "classYear": "Sophomore", "heightDisplay": null, "hometown": "Mt. Sterling, Ky.", "photoUrl": "https://ukathletics.com/imgproxy/EfYjT4Ke4FfJr3b8ck1KbN3xPQDQcRk6wnWFLxocjYw/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5LzBlNWYzYzFjLTExLXJlYWdoYW4tb25leS1zY2FsZWQuanBn.png", "side": "batting"},
+    {"jersey": "12", "name": "Alexa Riddel", "firstName": "Alexa", "lastName": "Riddel", "position": "INF / OF", "classYear": "Freshman", "heightDisplay": null, "hometown": "St. Louis, Mo.", "photoUrl": "https://ukathletics.com/imgproxy/T_ggI9MjMlxhK-b9Xnp-LgSCH3SKIKdijCKkSMGU0hc/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5LzAzMjZjMjRhLTEyLWFsZXhhLXJpZGRlbC1zY2FsZWQuanBn.png", "side": "batting"},
+    {"jersey": "13", "name": "Abby Hammond", "firstName": "Abby", "lastName": "Hammond", "position": "Pitcher", "classYear": "Freshman", "heightDisplay": null, "hometown": "Lexington, Ky.", "photoUrl": "https://ukathletics.com/imgproxy/LCt_m1b8c-Br0qREqxgUoguUc7Vu7M0ZwopMnWKCe8w/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5LzQ5YzJkMGQ1LTEzLWFiYnktaGFtbW9uZC1zY2FsZWQuanBn.png", "side": "pitching"},
+    {"jersey": "16", "name": "McKenzie Oslanzi", "firstName": "McKenzie", "lastName": "Oslanzi", "position": "Pitcher", "classYear": "Junior", "heightDisplay": null, "hometown": "Marseilles, Ill.", "photoUrl": "https://ukathletics.com/imgproxy/RILlFN9cIqKpB2gLKhNSvl3OAZXGmE16MhRgUyE7VR4/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5LzZhMGVmMzMxLTE2LW1ja2VuemllLW9zbGFuemktc2NhbGVkLmpwZw.png", "side": "pitching"},
+    {"jersey": "19", "name": "Allie Blum", "firstName": "Allie", "lastName": "Blum", "position": "Utility", "classYear": "Sophomore", "heightDisplay": null, "hometown": "New Palestine, Ind.", "photoUrl": "https://ukathletics.com/imgproxy/iVBOBSasgFjAKnkCvCPJkZHp6nk_OU-K_6-z6LNvemY/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5LzYxZTExYWU5LTE5LWFsbGllLWJsdW0tc2NhbGVkLmpwZw.png", "side": "batting"},
+    {"jersey": "21", "name": "Carly Sleeman", "firstName": "Carly", "lastName": "Sleeman", "position": "Catcher", "classYear": "Junior", "heightDisplay": null, "hometown": "Zeeland, Mich.", "photoUrl": "https://ukathletics.com/imgproxy/S-7KAJlzPuAKUKxpJaTGcT7BK2nfCNt3WjxhGnsMR9Q/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5LzQ3NTc3YTY4LTIxLWNhcmx5LXNsZWVtYW4tc2NhbGVkLmpwZw.png", "side": "batting"},
+    {"jersey": "23", "name": "Carson Fall", "firstName": "Carson", "lastName": "Fall", "position": "Pitcher", "classYear": "Sophomore", "heightDisplay": null, "hometown": "Bridge City, Texas", "photoUrl": "https://ukathletics.com/imgproxy/BwOToT39jOEbkRgJ59KhuX9moky5qcc4D1Tm1Gg8knw/fit/600/800/ce/0/aHR0cHM6Ly9zdG9yYWdlLmdvb2dsZWFwaXMuY29tL3VrYXRobGV0aWNzLWNvbS8yMDI1LzA5LzBjMDIwM2RjLTIzLWNhcnNvbi1mYWxsLXNjYWxlZC5qcGc.png", "side": "pitching"},
+    {"jersey": "30", "name": "Sarah Haendiges", "firstName": "Sarah", "lastName": "Haendiges", "position": "Pitcher", "classYear": "Senior", "heightDisplay": null, "hometown": "Upland, Calif.", "photoUrl": null, "side": "pitching"},
+  ],
 };
 
 function norm(s) {
   return (s || '')
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-// Return a static roster array for the given ESPN name variant set, or null.
-// Each element: { number, name, position, photoUrl }
+// ESPN team name variants → static roster key.
+// 'wildcats' is intentionally absent to avoid collisions with other Wildcat teams.
+const NAME_MAP = {
+  'lsu'             : 'lsu',
+  'lsu tigers'      : 'lsu',
+  'louisiana state' : 'lsu',
+  'south carolina'  : 'south carolina',
+  'kentucky'        : 'kentucky',
+};
+
+// Returns { key, players } or null.
 export function getStaticRoster(nameVariantSet) {
   for (const v of nameVariantSet) {
     const n = norm(v);
-    if (STATIC_ROSTER_MAP[n]) return STATIC_ROSTER_MAP[n];
-  }
-  // Substring fallback for decorated names like "LSU Tigers" → "lsu".
-  for (const v of nameVariantSet) {
-    const n = norm(v);
-    for (const [key, roster] of Object.entries(STATIC_ROSTER_MAP)) {
-      if (n.includes(key) || key.includes(n)) return roster;
+    if (STATIC_ROSTERS[n]) return { key: n, players: STATIC_ROSTERS[n] };
+    for (const [alias, key] of Object.entries(NAME_MAP)) {
+      if (n === alias || n.includes(alias)) return { key, players: STATIC_ROSTERS[key] };
     }
   }
   return null;
