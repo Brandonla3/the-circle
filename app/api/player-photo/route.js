@@ -9,6 +9,7 @@
 import { getTeamDirectory, findTeam } from '../_espn.js';
 import { getSidearmOrigin } from '../_sidearm-roster-map.js';
 import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
+import { getStaticRoster } from '../_static-rosters.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -82,27 +83,40 @@ export async function GET(request) {
       : new Set([team]);
 
     const origin = getSidearmOrigin(nameVariantSet);
-    if (!origin) {
-      return respond({
-        matched: false,
-        reason: `${team} is not in the Sidearm directory — no photo source available`,
-      });
+
+    // Resolve player list — Sidearm API first, static roster as fallback.
+    let players = null;
+    let playerMap = null;
+
+    if (origin) {
+      const rosterIndex = await buildSidearmRosterIndex(origin);
+      if (rosterIndex) {
+        players = rosterIndex.players;
+        playerMap = rosterIndex.map;
+      }
     }
 
-    const rosterIndex = await buildSidearmRosterIndex(origin);
-    if (!rosterIndex) {
+    if (!players) {
+      const staticRoster = getStaticRoster(nameVariantSet);
+      if (staticRoster) {
+        players = staticRoster.players;
+        playerMap = new Map(staticRoster.players.map((p) => [norm(p.name), p]));
+      }
+    }
+
+    if (!players) {
       return respond({
         matched: false,
-        reason: `Sidearm roster fetch failed for ${team} (${origin})`,
+        reason: `${team} is not in the Sidearm directory and has no static roster — no photo source available`,
       });
     }
 
     // Try exact map lookup first, then scored scan.
-    let best = rosterIndex.map.get(norm(name)) || null;
+    let best = playerMap?.get(norm(name)) || null;
     let bestScore = best ? 100 : 0;
 
     if (!best) {
-      for (const player of rosterIndex.players) {
+      for (const player of players) {
         const score = scoreName(player, name);
         if (score > bestScore) { bestScore = score; best = player; }
       }
