@@ -1,57 +1,26 @@
-// Return a D1 softball team's full ESPN roster so the client can render
-// it inline in the Teams tab instead of linking out to espn.com.
+// Return a team's full roster from the school's Sidearm Sports API.
 //
-//   GET /api/team-roster?teamId=2633           -> by ESPN team id
-//   GET /api/team-roster?team=Tennessee        -> by name (resolved via directory)
+// No ESPN fallback. If the school isn't in the Sidearm directory, the
+// response is explicit about it so the caller can surface the gap clearly.
+//
+//   GET /api/team-roster?teamId=2633
+//   GET /api/team-roster?team=Tennessee
 //
 // Response:
 //   {
-//     team: { id, name, displayName, logo, color, abbreviation, location, nickname },
-//     athletes: [
-//       { id, name, firstName, lastName, position, jersey, classYear,
-//         heightIn, weight, birthPlace, photoUrl }
-//     ]
+//     team: { id, name, displayName, abbreviation, color, logo, ... },
+//     athletes: [{ name, position, jersey, classYear, photoUrl, hometown, ... }],
+//     meta: { source: 'sidearm', available: true|false, rosterSize, note? }
 //   }
-//
-// Both path modes hit the same underlying ESPN roster endpoint and share
-// the module-scope cache via _espn.js.
 
-import {
-  getTeamDirectory,
-  findTeam,
-  findTeamById,
-  getRoster,
-  extractAthletePhoto,
-  extractTeamLogo,
-} from '../_espn.js';
+import { getTeamDirectory, findTeam, findTeamById } from '../_espn.js';
+import { getSidearmOrigin } from '../_sidearm-roster-map.js';
+import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-function mapAthlete(a) {
-  return {
-    id: a.id,
-    name: a.displayName || `${a.firstName || ''} ${a.lastName || ''}`.trim(),
-    firstName: a.firstName || null,
-    lastName: a.lastName || null,
-    position: a.position?.abbreviation || a.position?.displayName || null,
-    positionName: a.position?.displayName || null,
-    jersey: a.jersey || null,
-    classYear: a.experience?.displayValue || null,
-    heightIn: a.height || null,
-    heightDisplay: a.displayHeight || null,
-    weight: a.weight || null,
-    weightDisplay: a.displayWeight || null,
-    birthPlace: a.birthPlace?.city
-      ? `${a.birthPlace.city}${a.birthPlace.state ? ', ' + a.birthPlace.state : ''}`
-      : null,
-    bats: a.bats?.abbreviation || a.bats?.displayValue || null,
-    throws: a.throws?.abbreviation || a.throws?.displayValue || null,
-    photoUrl: extractAthletePhoto(a),
-  };
-}
-
-function mapTeam(t) {
+function mapTeamMeta(t) {
   if (!t) return null;
   return {
     id: t.id,
@@ -63,7 +32,26 @@ function mapTeam(t) {
     nickname: t.nickname || null,
     color: t.color ? `#${t.color}` : null,
     alternateColor: t.alternateColor ? `#${t.alternateColor}` : null,
-    logo: extractTeamLogo(t),
+    logo: t.logos?.[0]?.href || null,
+  };
+}
+
+function mapSidearmPlayer(p) {
+  return {
+    id: p.name?.toLowerCase().replace(/\s+/g, '-') || null,
+    name: p.name,
+    firstName: p.firstName || null,
+    lastName: p.lastName || null,
+    position: p.position || null,
+    jersey: p.jerseyNumber || null,
+    classYear: p.academicYear || null,
+    heightDisplay: p.heightDisplay || null,
+    weight: p.weight || null,
+    hometown: p.hometown || null,
+    highSchool: p.highSchool || null,
+    previousSchool: p.previousSchool || null,
+    batThrows: p.batThrows || null,
+    photoUrl: p.photoUrl || null,
   };
 }
 
@@ -77,13 +65,11 @@ export async function GET(request) {
   }
 
   try {
+    // Resolve team name variants from the ESPN team directory.
+    // ESPN is used only for ID↔name resolution — the scoreboard sends ESPN
+    // team IDs and we need the name to look up the Sidearm origin.
     const dir = await getTeamDirectory();
-    let espnTeam = null;
-    if (teamIdQ) {
-      espnTeam = findTeamById(dir, teamIdQ);
-    } else {
-      espnTeam = findTeam(dir, teamNameQ);
-    }
+    const espnTeam = teamIdQ ? findTeamById(dir, teamIdQ) : findTeam(dir, teamNameQ);
     if (!espnTeam) {
       return Response.json(
         { error: 'team not found', query: { teamId: teamIdQ, team: teamNameQ } },
@@ -91,21 +77,48 @@ export async function GET(request) {
       );
     }
 
-    const rosterEntry = await getRoster(espnTeam.id);
-    const athletes = (rosterEntry.athletes || []).map(mapAthlete);
+    const nameVariantSet = new Set(
+      [espnTeam.displayName, espnTeam.name, espnTeam.shortDisplayName, espnTeam.location, espnTeam.nickname]
+        .filter(Boolean)
+    );
 
-    // ESPN sometimes enriches team info on the roster payload (records,
-    // venue, etc.) so prefer the roster's team metadata if it's richer.
-    const teamMetaBase = rosterEntry.teamMeta || espnTeam;
+    const origin = getSidearmOrigin(nameVariantSet);
+    if (!origin) {
+      return Response.json({
+        team: mapTeamMeta(espnTeam),
+        athletes: [],
+        meta: {
+          source: 'sidearm',
+          available: false,
+          note: `${espnTeam.displayName} is not in the Sidearm directory — roster unavailable`,
+        },
+      });
+    }
+
+    const rosterIndex = await buildSidearmRosterIndex(origin);
+    if (!rosterIndex || rosterIndex.players.length === 0) {
+      return Response.json({
+        team: mapTeamMeta(espnTeam),
+        athletes: [],
+        meta: {
+          source: 'sidearm',
+          available: false,
+          note: `Sidearm roster fetch returned no players for ${espnTeam.displayName} (${origin})`,
+        },
+      });
+    }
+
+    const athletes = rosterIndex.players.map(mapSidearmPlayer);
 
     return Response.json(
       {
-        team: mapTeam({ ...espnTeam, ...teamMetaBase }),
+        team: mapTeamMeta(espnTeam),
         athletes,
         meta: {
-          source: 'espn',
+          source: 'sidearm',
+          available: true,
           rosterSize: athletes.length,
-          fetchedAt: new Date(rosterEntry.fetchedAt).toISOString(),
+          origin,
         },
       },
       { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=7200' } }
