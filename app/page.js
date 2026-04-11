@@ -2936,16 +2936,79 @@ function LeadersView({ onSelectPlayer }) {
   );
 }
 
+// Build a stats array from a WMT/Sidearm player row so PlayerModal can
+// render stats without hitting NCAA leaderboards.
+function buildRowStats(player) {
+  const side = player.side || 'batting';
+  const entries = side === 'pitching'
+    ? [
+        ['ERA',  player.ERA],
+        ['IP',   player.IP],
+        ['W',    player.W],
+        ['L',    player.L],
+        ['SV',   player.SV],
+        ['SHO',  player.SHO],
+        ['K',    player.K],
+        ['BB',   player.BB],
+        ['H',    player.H],
+        ['ER',   player.ER],
+        ['WHIP', player.WHIP],
+        ['K/7',  player['K/7']],
+        ['App',  player.games],
+      ]
+    : [
+        ['BA',  player.BA],
+        ['OBP', player.OBP],
+        ['SLG', player.SLG],
+        ['HR',  player.HR],
+        ['RBI', player.RBI],
+        ['H',   player.H],
+        ['AB',  player.AB],
+        ['R',   player.R],
+        ['2B',  player['2B']],
+        ['3B',  player['3B']],
+        ['BB',  player.BB],
+        ['K',   player.K],
+        ['SB',  player.SB],
+        ['G',   player.games],
+      ];
+  return entries
+    .filter(([, v]) => v != null && v !== '')
+    .map(([label, value]) => ({ label, value: String(value) }));
+}
+
 function PlayerModal({ player, onClose }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
-  const [photo, setPhoto] = useState(null);      // ESPN headshot lookup result
+  const [photo, setPhoto] = useState(null);      // Sidearm/roster photo result
   const [photoBroken, setPhotoBroken] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
     setData(null); setErr(null);
-    const url = `/api/player-stats?profile=1&name=${encodeURIComponent(player.name)}&team=${encodeURIComponent(player.team || '')}&side=${encodeURIComponent(player.side || 'batting')}`;
+    // If the player row already carries WMT/conference stats, use them
+    // directly — no NCAA leaderboard fetch needed.
+    const side = player.side || 'batting';
+    const hasBatting  = player.BA != null || player.AB != null || player.HR != null;
+    const hasPitching = player.ERA != null || player.IP != null;
+    if (hasBatting || hasPitching) {
+      const stats = buildRowStats(player);
+      setData({
+        stats,
+        appearsIn: [],
+        side,
+        player: {
+          name:     player.name,
+          team:     player.team,
+          position: player.position,
+          cls:      player.classYear,
+          gp:       player.games,
+        },
+      });
+      return;
+    }
+    // Fallback: fetch from NCAA leaderboards (players not in a conference feed).
+    let cancelled = false;
+    const url = `/api/player-stats?profile=1&name=${encodeURIComponent(player.name)}&team=${encodeURIComponent(player.team || '')}&side=${encodeURIComponent(side)}`;
     fetch(url)
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
@@ -2955,7 +3018,7 @@ function PlayerModal({ player, onClose }) {
       })
       .catch((e) => { if (!cancelled) setErr(e.message); });
     return () => { cancelled = true; };
-  }, [player.name, player.team, player.side]);
+  }, [player.name, player.team, player.side, player.BA, player.ERA]);
 
   // ESPN headshot lookup (separate from profile fetch so it doesn't block stats).
   useEffect(() => {
@@ -3078,7 +3141,7 @@ function PlayerModal({ player, onClose }) {
           )}
           {err && (
             <div className="text-center py-12">
-              <div className="text-white/40 text-sm mb-2">No NCAA leaderboard data for this player.</div>
+              <div className="text-white/40 text-sm mb-2">No stats available for this player.</div>
               <div className="text-white/30 text-xs mono">{err}</div>
             </div>
           )}
@@ -3134,7 +3197,7 @@ function PlayerModal({ player, onClose }) {
         </div>
 
         <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30">
-          Aggregated from NCAA.com season leaderboards · Press Esc to close
+          {data && !data.appearsIn?.length ? 'Stats via conference feed' : 'Aggregated from NCAA.com season leaderboards'} · Press Esc to close
         </div>
       </div>
     </div>
