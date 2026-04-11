@@ -48,8 +48,11 @@ export const WMT_CONFERENCES = {
     discoveryUrl: 'https://www.secsports.com/sport/softball/stats',
   },
   'Mountain West': {
-    slug: 'mw',
-    pineKeyPrefix: 'conference-teams-mw',
+    // Note: the URL slug is `mwc`, NOT `mw` — verified via probe
+    // 2026-04-11 (wmt.games/conference/mw/17020 returns 404, but
+    // /conference/mwc/17020 returns 200 with the full payload).
+    slug: 'mwc',
+    pineKeyPrefix: 'conference-teams-mwc',
     // MW's themw.com stats page is WordPress-rendered without the Inertia
     // data we use for SEC discovery; we fall back to the SEC discovery URL
     // because the ncaa_season_id is NCAA-wide (not SEC-specific) so the

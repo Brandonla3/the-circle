@@ -180,7 +180,20 @@ export async function fetchWmtConferenceStats(url, conferenceKey) {
   if (!r.ok) throw new Error(`WMT HTTP ${r.status}`);
   const html = await r.text();
   const nuxt = extractNuxtData(html);
-  const container = nuxt?.data?.[conferenceKey];
+  let container = nuxt?.data?.[conferenceKey];
+  // Defensive auto-discovery: if the exact key didn't match, scan
+  // nuxt.data for any `conference-teams-*` key with a valid tabs
+  // array and use the first one we find. This handles conferences
+  // where we don't know (or get wrong) the precise pinia key prefix.
+  if (!container && nuxt?.data) {
+    for (const [k, v] of Object.entries(nuxt.data)) {
+      if (!k.startsWith('conference-teams-')) continue;
+      if (v && Array.isArray(v.tabs) && v.tabs.length > 0) {
+        container = v;
+        break;
+      }
+    }
+  }
   if (!container) {
     const keys = Object.keys(nuxt?.data || {});
     throw new Error(`WMT payload missing key "${conferenceKey}". Available: ${keys.join(', ') || 'none'}`);
