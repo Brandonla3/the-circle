@@ -1,70 +1,69 @@
-// Aggregate a D1 softball team's season stats by walking their schedule,
-// fetching each completed game's summary from ESPN, and summing counting
-// stats from the box scores. Derives rate stats (BA, OBP, ERA, WHIP, K/7)
-// from the summed counting stats so they're consistent across the whole
-// season, not per-game snapshots.
+// Per-team softball stats aggregator.
 //
 //   GET /api/team-stats?teamId=611
+//   GET /api/team-stats?team=Oklahoma
 //
-// Response:
+// Data sources:
+//   • Team Totals / Player rows — conference stats scrapes via WMT Games
+//     (see app/api/_wmt-stats.js). A single HTTP request per conference
+//     ships the FULL roster + team totals — no rate limiting, no top-50
+//     slicing, no 7-second budgets. Teams in conferences not yet in the
+//     WMT catalog show empty stats (UI falls back to "—" placeholders).
+//   • Season record (W-L, runs for/against, streak) — ESPN core.v2
+//     records endpoint. Always populated.
+//   • Schedule + event counts — ESPN team schedule endpoint. Conference-
+//     specific schedule scrapers (SEC, Big 12, ACC, Big Ten, Mountain
+//     West) take priority over ESPN for schedule rendering because they
+//     ship richer broadcast / venue metadata.
+//
+// NCAA leaderboards are NOT used here anymore. They were slow (~6-14s
+// cold), rate-limited (ncaa-api.henrygd.me throttles at 5-6 concurrent),
+// top-50-only (bench players invisible), and the user explicitly asked
+// us to switch to conference scrapes. The WMT path is ~1-3s cold and
+// covers every player on every team in the catalog.
+//
+// Response shape:
 //   {
-//     teamId, teamMeta: { wins, losses, gamesPlayed, runsFor, runsAgainst, streak },
+//     teamId, conference,
+//     teamMeta: { wins, losses, gamesPlayed, runsFor, runsAgainst, streak, winPct },
 //     totals: {
-//       batting: { games, AB, R, H, RBI, HR, BB, K, BA, OBP },
-//       pitching: { games, IP, W, L, SV, H, R, ER, BB, K, HR, ERA, WHIP, 'K/7' }
+//       batting: { BA, OBP, SLG, HR, RBI, H, SB, ... },
+//       pitching: { ERA, WHIP, 'K/7', SHO, ... }
 //     },
 //     players: {
-//       batting: [{ id, name, position, games, AB, R, H, RBI, HR, BB, K, BA, OBP }],
-//       pitching: [{ id, name, position, games, IP, W, L, SV, H, R, ER, BB, K, HR, ERA, WHIP, 'K/7' }]
+//       batting: [{ id, name, position, classYear, games, AB, H, HR, RBI, BA, ... }],
+//       pitching: [{ id, name, position, classYear, games, IP, K, W, ERA, SHO, ... }]
 //     },
-//     meta: { source, scheduleEvents, completedEvents, gamesProcessed,
-//             gamesFailed, gamesSkipped, timeExhausted, elapsedMs }
+//     schedule: [...],  // per-game array for TeamModal
+//     scheduleSource: 'sec' | 'big12' | 'acc' | 'big10' | 'mw' | 'espn',
+//     conferenceStats: {...} | null,  // raw WMT payload for richer views
+//     meta: { source, scheduleEvents, completedEvents, elapsedMs }
 //   }
-//
-// ESPN softball box scores don't break out 2B, 3B, SB, HBP, or SF, so SLG
-// is not computable and OBP is an approximation that ignores HBP and SF.
-// Everything else (BA, ERA, WHIP, K/7) is exact because it only needs the
-// counting stats we already have.
-//
-// Caching:
-//   - per-event summary: module-scope Map, 24h TTL for past events,
-//     10min TTL for recent (last 7 days) so in-progress stats eventually roll in
-//   - per-team aggregate: 5min TTL. Partial scans (time exhausted) are
-//     NOT cached; subsequent requests pick up where we left off via the
-//     accumulating per-event cache.
-//   - in-flight dedupe so concurrent requests for the same team share one scan
 
 import {
   ESPN_SITE,
   ESPN_HEADERS,
   normalize,
-  splitName,
-  scoreMatch,
   getTeamDirectory,
   findTeam,
   findTeamById,
-  getRoster,
 } from '../_espn.js';
 import {
-  ALL_CATEGORIES as NCAA_PLAYER_CATS,
-  fetchLeaderboardAllPages as fetchNcaaPlayerLeaderboard,
-  normalizePlayerKey,
-} from '../_ncaa-player.js';
-import { getSecTeamStats } from '../sec-stats/route.js';
+  getConferenceTeamStats,
+  hasConferenceStats,
+  WMT_CONFERENCES,
+} from '../_wmt-stats.js';
 import { getSecTeamSchedule } from '../_sec-schedule.js';
 import { getBig12TeamSchedule } from '../_big12-schedule.js';
 import { getAccTeamSchedule } from '../_acc-schedule.js';
 import { getBig10TeamSchedule } from '../_big10-schedule.js';
 import { getMwTeamSchedule } from '../_mw-schedule.js';
-import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
-import { getSidearmOrigin } from '../_sidearm-roster-map.js';
-import { getStaticRoster } from '../_static-rosters.js';
+import { lookupConference } from '../_conferences.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 // --- Caches ---------------------------------------------------------------
-// Evict oldest entries when a Map exceeds its size cap.
 function pruneMap(map, max) {
   if (map.size <= max) return;
   const excess = map.size - max;
@@ -73,936 +72,17 @@ function pruneMap(map, max) {
 }
 
 const teamStatsCache = new Map();    // teamId  -> { fetchedAt, data }
-const TEAM_STATS_CACHE_MAX = 100;    // prevent unbounded growth
+const TEAM_STATS_CACHE_MAX = 100;
 const inFlight = new Map();          // teamId  -> Promise
 
-// --- NCAA team-leaderboard sourcing --------------------------------------
-// The category sidebar on ncaa.com's stats pages is CLIENT-side rendered, so
-// there is nothing to scrape server-side — every previous attempt to
-// auto-discover team-level stat IDs hit the same wall (curl against
-// /stats/softball/d1/current/team/<id> only yields that page's self-link +
-// pagination anchors, and /stats/softball/d1 only has two featured links).
-// The only approach that actually works is maintaining the slug → id map by
-// hand. The IDs below were obtained by sweeping ncaa-api.henrygd.me directly
-// across /stats/softball/d1/current/team/1..3500 on 2026-04-08 and recording
-// every 200 response. If NCAA re-numbers a stat between seasons, `slugStatus`
-// will start reporting `empty-leaderboard` for the affected slug and a
-// quick re-sweep will give us the new id.
-// NCAA leaderboard pages only change once a day when NCAA publishes new
-// stats overnight. 60 minutes is a safe TTL that avoids redundant fetches
-// across back-to-back scorecards while still picking up same-day updates.
-const NCAA_TEAM_LB_TTL_MS = 60 * 60 * 1000;
-// Keyed by `${slug}:p${page}`. Each curated slug may end up with multiple
-// cached page entries after a scan walks a leaderboard in search of a
-// specific team.
-const ncaaTeamLbCache = new Map();
-const NCAA_TEAM_LB_CACHE_MAX = 500;  // prevent unbounded growth
-
-// ncaa-api.henrygd.me throttles with HTTP 428 after ~5-6 parallel requests,
-// same pattern the standings route documented in commit 5b32d2d. We batch
-// at 4 concurrent with a small delay and retry transient failures.
-// Batch 5 concurrent requests (safe ceiling before henrygd throttles at 6).
-const NCAA_BATCH_SIZE = 5;
-const NCAA_BATCH_DELAY_MS = 100;
-const NCAA_RETRY_DELAYS_MS = [500, 1000, 2000];
-const NCAA_SCAN_BUDGET_MS = 7000;
-
-// Each leaderboard page returns 50 rows. D1 softball has ~290 teams, so 7
-// pages covers everyone; we cap at 8 as a safety margin in case NCAA grows
-// the field. The per-leaderboard `pages` metadata from the wrapper still
-// governs the actual walk — we just never fetch beyond this cap.
-const NCAA_MAX_PAGES = 8;
-
-const NCAA_HEADERS = {
-  'User-Agent':
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Accept': 'application/json',
-};
-
-// Fetch an NCAA wrapper URL with retries for 428/429/5xx/network errors.
-// Returns parsed JSON on success, null on any non-recoverable failure or
-// after all retries exhausted. Matches standings/route.js fetchDay.
-async function fetchNcaaWithRetry(url) {
-  for (let attempt = 0; attempt <= NCAA_RETRY_DELAYS_MS.length; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, NCAA_RETRY_DELAYS_MS[attempt - 1]));
-    }
-    try {
-      const r = await fetch(url, { headers: NCAA_HEADERS, cache: 'no-store' });
-      if (r.ok) return await r.json();
-      if (r.status === 404) return null;
-      // 428/429/5xx → retry. Any other 4xx → give up, nothing to retry.
-      if (r.status !== 428 && r.status !== 429 && r.status < 500) return null;
-    } catch (e) {
-      // network error — fall through to retry.
-    }
-  }
-  return null;
-}
-
-// Ground-truth slug → { id, title, col } map. Totals are preferred over
-// per-game variants where both exist because the head-to-head Team Compare
-// view in page.js displays raw string values — totals compare more cleanly.
-// `col` is the exact column name the leaderboard uses for the primary stat
-// value, verified by probing each leaderboard's first data row. NCAA names
-// these inconsistently (OBP is under "PCT", SLG is under "SLG PCT" with a
-// space, doubles leaderboard is sorted per-game but we read the "2B" total
-// column), so the generic candidate-list fallback in pickNcaaPrimaryValue
-// would pick the wrong column for several slugs.
-//
-// ┌───────────────────────────────────────────────────────────────────────┐
-// │  MANUAL MAINTENANCE REQUIRED — re-sweep if NCAA renumbers stats.   │
-// │  Last verified: 2026-04-08                                           │
-// │                                                                       │
-// │  How to update:                                                       │
-// │    Sweep ncaa-api.henrygd.me /stats/softball/d1/current/team/1..3500 │
-// │    and record every 200 response. Update ids below.                  │
-// │  How to detect staleness:                                             │
-// │    GET /api/team-stats-probe — slugStatus shows 'empty-leaderboard' │
-// │    for any slug whose NCAA id has changed.                           │
-// └───────────────────────────────────────────────────────────────────────┘
-//
-// Additional team stat IDs found during the sweep that we may want to
-// curate later: 283 Fielding%, 284 Scoring (runs/game), 320 WL%, 345 HR/G,
-// 347 3B/G, 348 SB/G, 350 Double Plays/G, 595 Hit Batters, 1188 K/BB Ratio,
-// 1230 Hits Allowed/7, 1234 HBP, 1241 Sac Bunts, 1242 Sac Flies, 1300 RBI/G.
-const NCAA_TEAM_STAT_IDS = {
-  'team-batting-avg':  { id: 281,  title: 'Batting Average',            col: 'BA' },
-  'team-on-base-pct':  { id: 862,  title: 'On Base Percentage',         col: 'PCT' },
-  'team-slugging-pct': { id: 349,  title: 'Slugging Percentage',        col: 'SLG PCT' },
-  'team-home-runs':    { id: 1228, title: 'Home Runs',                  col: 'HR' },
-  'team-rbi':          { id: 1299, title: 'Runs Batted In',             col: 'RBI' },
-  'team-runs-scored':  { id: 1238, title: 'Total Runs',                 col: 'R' },
-  'team-hits':         { id: 1229, title: 'Hits',                       col: 'H' },
-  'team-stolen-bases': { id: 1239, title: 'Total Stolen Bases',         col: 'SB' },
-  'team-doubles':      { id: 346,  title: 'Doubles',                    col: '2B' },
-  'team-triples':      { id: 1227, title: 'Triples',                    col: '3B' },
-  'team-era':          { id: 282,  title: 'Earned Run Average',         col: 'ERA' },
-  'team-whip':         { id: 1236, title: 'WHIP',                       col: 'WHIP' },
-  'team-k-per-7':      { id: 864,  title: 'Strikeouts Per Seven Innings', col: 'K/7' },
-  'team-shutouts':     { id: 1084, title: 'Shutouts',                   col: 'SHO' },
-};
-
-// Curated categories. `lower` marks pitching stats where smaller is better
-// (used by the compare view to pick a winner). Three slugs from earlier
-// curation lists were dropped because NCAA doesn't publish them at team
-// level: `team-strikeouts` (overlaps functionally with team-k-per-7 at 864),
-// `team-saves`, and `team-opponent-ba`.
-const NCAA_TEAM_BATTING = [
-  { slug: 'team-batting-avg',  short: 'BA'  },
-  { slug: 'team-on-base-pct',  short: 'OBP' },
-  { slug: 'team-slugging-pct', short: 'SLG' },
-  { slug: 'team-home-runs',    short: 'HR'  },
-  { slug: 'team-rbi',          short: 'RBI' },
-  { slug: 'team-runs-scored',  short: 'R'   },
-  { slug: 'team-hits',         short: 'H'   },
-  { slug: 'team-stolen-bases', short: 'SB'  },
-  { slug: 'team-doubles',      short: '2B'  },
-  { slug: 'team-triples',      short: '3B'  },
-];
-
-const NCAA_TEAM_PITCHING = [
-  { slug: 'team-era',     short: 'ERA',  lower: true },
-  { slug: 'team-whip',    short: 'WHIP', lower: true },
-  { slug: 'team-k-per-7', short: 'K/7'  },
-  { slug: 'team-shutouts', short: 'SHO' },
-];
-
-const NCAA_ALL_TEAM_CATS = [
-  ...NCAA_TEAM_BATTING.map((c) => ({
-    ...c,
-    side: 'batting',
-    id: NCAA_TEAM_STAT_IDS[c.slug]?.id,
-    label: NCAA_TEAM_STAT_IDS[c.slug]?.title,
-    col: NCAA_TEAM_STAT_IDS[c.slug]?.col,
-  })),
-  ...NCAA_TEAM_PITCHING.map((c) => ({
-    ...c,
-    side: 'pitching',
-    id: NCAA_TEAM_STAT_IDS[c.slug]?.id,
-    label: NCAA_TEAM_STAT_IDS[c.slug]?.title,
-    col: NCAA_TEAM_STAT_IDS[c.slug]?.col,
-  })),
-];
-
-// Fetch a single page of one NCAA team leaderboard. Cached per-(slug, page)
-// so repeated calls across teams only hit the wrapper once per TTL window.
-async function fetchNcaaTeamLeaderboardPage(cat, page) {
-  if (!cat.id) return null;
-  const key = `${cat.slug}:p${page}`;
-  const cached = ncaaTeamLbCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < NCAA_TEAM_LB_TTL_MS) return cached.data;
-
-  const suffix = page > 1 ? `/p${page}` : '';
-  const url = `https://ncaa-api.henrygd.me/stats/softball/d1/current/team/${cat.id}${suffix}`;
-  const json = await fetchNcaaWithRetry(url);
-  if (!json) return null;
-  const data = {
-    slug: cat.slug,
-    id: cat.id,
-    label: cat.label,
-    short: cat.short,
-    side: cat.side,
-    lower: cat.lower,
-    page: json.page || page,
-    totalPages: json.pages || 1,
-    rows: json.data || [],
-  };
-  ncaaTeamLbCache.set(key, { fetchedAt: Date.now(), data });
-  pruneMap(ncaaTeamLbCache, NCAA_TEAM_LB_CACHE_MAX);
-  return data;
-}
-
-// Walk an NCAA team leaderboard starting at page 1, looking for the target
-// team. Stops as soon as the team is found, when we hit the wrapper's
-// reported last page, or when we hit NCAA_MAX_PAGES. Each page is fetched
-// sequentially within this helper — but the CALLER runs multiple slugs in
-// parallel batches, so overall concurrency stays at NCAA_BATCH_SIZE.
-//
-// This is what gets teams like Oklahoma (rank 54 in Doubles per Game)
-// unstuck — they're not in the first 50 rows, so a single-page fetch used
-// to report team-not-in-rows for every leaderboard where the team isn't
-// a leader.
-async function fetchAndFindNcaaRow(cat, nameVariantSet) {
-  let lastLb = null;
-  let pagesFetched = 0;
-  let fetchFailed = false;
-  for (let page = 1; page <= NCAA_MAX_PAGES; page++) {
-    const lb = await fetchNcaaTeamLeaderboardPage(cat, page);
-    if (!lb) {
-      if (page === 1) fetchFailed = true;
-      break;
-    }
-    pagesFetched++;
-    lastLb = lb;
-    if (!lb.rows || lb.rows.length === 0) break;
-    const row = findNcaaTeamRow(lb.rows, nameVariantSet);
-    if (row) return { lb, row, pagesFetched, fetchFailed: false };
-    if (page >= lb.totalPages) break;
-  }
-  return { lb: lastLb, row: null, pagesFetched, fetchFailed };
-}
-
-// Find a team's row in a single NCAA leaderboard. Pass 1 does an exact
-// normalized match against any candidate column; Pass 2 falls back to
-// substring containment so that suffix-appended leaderboard names (e.g.
-// "Oklahoma Sooners" vs "Oklahoma") still resolve. Modeled on the
-// substring fallback in `findTeam` in _espn.js.
-function findNcaaTeamRow(rows, nameVariantSet) {
-  if (!Array.isArray(rows) || rows.length === 0) return null;
-  const candidateCols = ['School', 'school', 'Team', 'TEAM', 'team', 'Name', 'NAME', 'name'];
-
-  // Pass 1: exact normalized equality.
-  for (const row of rows) {
-    for (const col of candidateCols) {
-      const c = row[col];
-      if (!c) continue;
-      if (nameVariantSet.has(normalize(c))) return row;
-    }
-  }
-  // Pass 2: substring containment in either direction.
-  for (const row of rows) {
-    for (const col of candidateCols) {
-      const c = row[col];
-      if (!c) continue;
-      const norm = normalize(c);
-      if (!norm) continue;
-      for (const v of nameVariantSet) {
-        if (v.length < 4) continue;
-        if (norm.includes(v) || v.includes(norm)) return row;
-      }
-    }
-  }
-  return null;
-}
-
-// Pluck the primary stat value out of a leaderboard row. Prefers the
-// explicit column hint from NCAA_TEAM_STAT_IDS (`cat.col`) because NCAA's
-// column naming is inconsistent across leaderboards — OBP is under "PCT",
-// SLG is under "SLG PCT" with a space, etc. Without the hint, the generic
-// candidate list would pick the first matching column (often a counting
-// stat like H or AB), which is why an earlier run showed OBP as "483"
-// (really the hit total) and SLG as "1129" (really the at-bat count).
-function pickNcaaPrimaryValue(row, cat) {
-  if (!row) return null;
-  if (cat.col && row[cat.col] != null && row[cat.col] !== '') {
-    return row[cat.col];
-  }
-  // Fallback candidate list for any slug that doesn't have a col hint.
-  const candidates = [
-    cat.short,
-    cat.label,
-    'BA', 'AVG', 'OBP', 'SLG',
-    'HR', 'RBI', 'R', 'H', 'SB', '2B', '3B',
-    'ERA', 'WHIP', 'SO', 'K', 'SHO', 'SV',
-    'RPG', 'HRPG',
-  ];
-  for (const k of candidates) {
-    if (row[k] != null && row[k] !== '') return row[k];
-  }
-  // Last resort: first non-meta key.
-  const META = new Set(['Rank', 'RANK', 'rank', 'Team', 'TEAM', 'team', 'School', 'school', 'Conference', 'Conf', 'Cl', 'CL', 'G', 'GP']);
-  for (const [k, v] of Object.entries(row)) {
-    if (META.has(k)) continue;
-    if (v != null && v !== '') return v;
-  }
-  return null;
-}
-
-// Aggregate NCAA team-level totals for one team. Walks the curated stat
-// list in throttled batches (NCAA_BATCH_SIZE concurrent with a short delay
-// between batches) because the henrygd wrapper throttles with HTTP 428
-// above that threshold. Each slug inside a batch may step through multiple
-// leaderboard pages via fetchAndFindNcaaRow — the wrapper returns only 50
-// rows per page and D1 softball has ~290 teams, so teams outside the top
-// 50 of a given stat were previously reporting team-not-in-rows. Cached
-// results short-circuit the fetch entirely, so warm calls are free. A 7s
-// wall-clock budget matches standings/route.js so slow upstreams can't
-// push this past Vercel's 10s request timeout.
-async function aggregateNcaaTeamStats(teamId, nameVariantSet) {
-  if (!nameVariantSet || nameVariantSet.size === 0) {
-    return {
-      batting: {},
-      pitching: {},
-      found: 0,
-      attempted: NCAA_ALL_TEAM_CATS.length,
-      slugStatus: {},
-      error: 'no team name variants',
-    };
-  }
-
-  const cats = NCAA_ALL_TEAM_CATS;
-  // results[i] = { lb, row, pagesFetched, fetchFailed } | null
-  const results = new Array(cats.length).fill(null);
-  const startTime = Date.now();
-  let timeExhausted = false;
-
-  for (let i = 0; i < cats.length; i += NCAA_BATCH_SIZE) {
-    if (Date.now() - startTime > NCAA_SCAN_BUDGET_MS) {
-      timeExhausted = true;
-      break;
-    }
-    const batchEnd = Math.min(i + NCAA_BATCH_SIZE, cats.length);
-    const batch = cats.slice(i, batchEnd);
-    const batchResults = await Promise.all(
-      batch.map((c) => fetchAndFindNcaaRow(c, nameVariantSet))
-    );
-    for (let k = 0; k < batch.length; k++) {
-      results[i + k] = batchResults[k];
-    }
-    if (batchEnd < cats.length) {
-      await new Promise((r) => setTimeout(r, NCAA_BATCH_DELAY_MS));
-    }
-  }
-
-  const batting = {};
-  const pitching = {};
-  let found = 0;
-  let totalPagesFetched = 0;
-  const slugStatus = {};
-  const pagesFetchedBySlug = {};
-
-  for (let i = 0; i < cats.length; i++) {
-    const cat = cats[i];
-    const r = results[i];
-    if (!r) {
-      // Scan budget tripped before this slug's batch fired.
-      slugStatus[cat.slug] = cat.id ? 'time-exhausted' : 'no-id';
-      continue;
-    }
-    totalPagesFetched += r.pagesFetched || 0;
-    if (r.pagesFetched > 0) pagesFetchedBySlug[cat.slug] = r.pagesFetched;
-    if (r.fetchFailed || !r.lb) {
-      slugStatus[cat.slug] = cat.id ? 'fetch-failed' : 'no-id';
-      continue;
-    }
-    if (!r.lb.rows || r.lb.rows.length === 0) {
-      slugStatus[cat.slug] = 'empty-leaderboard';
-      continue;
-    }
-    if (!r.row) {
-      // Walked every page the wrapper reports and still didn't find this
-      // team — either the team genuinely isn't ranked (possible for some
-      // esoteric stats) or the name-match logic needs another alias for
-      // this particular school.
-      slugStatus[cat.slug] = 'team-not-in-rows';
-      continue;
-    }
-    const value = pickNcaaPrimaryValue(r.row, cat);
-    if (value == null || value === '') {
-      slugStatus[cat.slug] = 'no-value';
-      continue;
-    }
-    found++;
-    slugStatus[cat.slug] = 'ok';
-    const target = cat.side === 'batting' ? batting : pitching;
-    target[cat.short] = value;
-    if (r.row.Rank || r.row.RANK || r.row.rank) {
-      target[`${cat.short}_rank`] = r.row.Rank || r.row.RANK || r.row.rank;
-    }
-  }
-
-  return {
-    batting,
-    pitching,
-    found,
-    attempted: cats.length,
-    timeExhausted,
-    elapsedMs: Date.now() - startTime,
-    totalPagesFetched,
-    pagesFetchedBySlug,
-    slugStatus,
-  };
-}
-
-// --- NCAA per-player aggregation -----------------------------------------
-// For a given team, walk every curated NCAA individual leaderboard, collect
-// rows where the team name matches, bucket by player, and merge each
-// player's raw stat columns across every leaderboard they appear in. The
-// result is shaped exactly like the old ESPN box-score finalizePlayers
-// output so the existing UI table in TeamCompareTab renders unchanged.
-//
-// Coverage note: NCAA individual leaderboards are top-N only (50 rows per
-// page). For elite teams like Oklahoma, most starters appear on page 1 of
-// multiple stats (HR, RBI, BA, Hits), so a single-page scan across 17
-// leaderboards captures the lineup. Role players and bench bats who
-// aren't in any top-50 leaderboard will be missing — that's a real
-// limitation, but it's strictly better than ESPN's college-softball box
-// scores which ship zero stats for most non-televised games.
-//
-// No ESPN roster join: ESPN's college softball roster endpoint returns
-// fossilized rosters (Oklahoma still lists Jocelyn Alo who graduated in
-// 2022), with every jersey `null` and every position `"UN"`, so enriching
-// NCAA rows against it gave worse data. Position and class year come
-// straight from NCAA's leaderboard rows, which are current.
-async function aggregateNcaaPlayerStats(teamId, nameVariantSet) {
-  if (!nameVariantSet || nameVariantSet.size === 0) {
-    return {
-      batting: [],
-      pitching: [],
-      playerCount: 0,
-      attempted: NCAA_PLAYER_CATS.length,
-      slugsOk: 0,
-      error: 'no team name variants',
-    };
-  }
-
-  const startTime = Date.now();
-  const cats = NCAA_PLAYER_CATS;
-  const results = new Array(cats.length).fill(null);
-  let timeExhausted = false;
-
-  // Throttled batched fetch. Each batch fires NCAA_BATCH_SIZE requests to
-  // the wrapper in parallel, waits for them, then delays before the next
-  // batch. fetchNcaaPlayerLeaderboard has its own per-slug cache and retry
-  // loop, so warm calls short-circuit and transient 428s recover.
-  for (let i = 0; i < cats.length; i += NCAA_BATCH_SIZE) {
-    if (Date.now() - startTime > NCAA_SCAN_BUDGET_MS) {
-      timeExhausted = true;
-      break;
-    }
-    const batchEnd = Math.min(i + NCAA_BATCH_SIZE, cats.length);
-    const batch = cats.slice(i, batchEnd);
-    const batchResults = await Promise.all(
-      batch.map((c) => fetchNcaaPlayerLeaderboard(c.slug, 2).catch(() => null))
-    );
-    for (let k = 0; k < batch.length; k++) {
-      results[i + k] = batchResults[k];
-    }
-    if (batchEnd < cats.length) {
-      await new Promise((r) => setTimeout(r, NCAA_BATCH_DELAY_MS));
-    }
-  }
-
-  // byPlayer: key -> accumulator {
-  //   key, name, team, cls, position, jersey, gp,
-  //   sides: Set<'batting'|'pitching'>,
-  //   rawMerged: { ... every raw column we've seen across leaderboards ... },
-  //   appearances: Set<slug>,
-  // }
-  const byPlayer = new Map();
-  let slugsOk = 0;
-  const slugStatus = {};
-
-  for (let i = 0; i < cats.length; i++) {
-    const cat = cats[i];
-    const lb = results[i];
-    if (!lb) {
-      slugStatus[cat.slug] = timeExhausted ? 'time-exhausted' : 'fetch-failed';
-      continue;
-    }
-    if (!lb.rows || lb.rows.length === 0) {
-      slugStatus[cat.slug] = 'empty';
-      continue;
-    }
-    slugStatus[cat.slug] = 'ok';
-    slugsOk++;
-    for (const row of lb.rows) {
-      // Team-name match: exact first, then the SAFE substring direction only.
-      // The old code used `rowTeamNorm.includes(v) || v.includes(rowTeamNorm)`.
-      // The first direction is dangerous: "texas tech".includes("texas") = true,
-      // causing Texas Tech players to appear for Texas. We keep only the safe
-      // direction `v.includes(rowTeamNorm)` which handles NCAA abbreviated names
-      // like "Florida St." matching our variant "florida state", without allowing
-      // any prefix-school false positives.
-      const rowTeamNorm = normalize(row.team || '');
-      if (!nameVariantSet.has(rowTeamNorm)) {
-        let hit = false;
-        if (rowTeamNorm.length >= 4) {
-          for (const v of nameVariantSet) {
-            if (v.length < 4) continue;
-            if (v.includes(rowTeamNorm)) { hit = true; break; }
-          }
-        }
-        if (!hit) continue;
-      }
-
-      const key = normalizePlayerKey(row.name, row.team);
-      let rec = byPlayer.get(key);
-      if (!rec) {
-        rec = {
-          key,
-          name: row.name,
-          team: row.team,
-          cls: row.cls || null,
-          position: row.position || null,
-          jersey: null,
-          photoUrl: null,
-          hometown: null,
-          highSchool: null,
-          previousSchool: null,
-          heightDisplay: null,
-          weight: null,
-          batThrows: null,
-          gp: row.gp || null,
-          sides: new Set(),
-          rawMerged: {},
-          appearances: new Set(),
-        };
-        byPlayer.set(key, rec);
-      }
-      rec.sides.add(cat.side);
-      rec.appearances.add(cat.slug);
-      if (!rec.cls && row.cls) rec.cls = row.cls;
-      if (!rec.position && row.position) rec.position = row.position;
-      // `gp` varies between batting (G) and pitching (App) in NCAA's
-      // source rows; keep the largest number we've seen so a pitcher's
-      // appearance count doesn't overwrite their batting games.
-      const curGp = parseInt(rec.gp, 10);
-      const newGp = parseInt(row.gp, 10);
-      if (Number.isFinite(newGp) && (!Number.isFinite(curGp) || newGp > curGp)) {
-        rec.gp = String(newGp);
-      }
-      // Merge every raw column we've seen for this player. Later boards
-      // don't overwrite earlier values unless the existing value is empty.
-      for (const [k, v] of Object.entries(row.raw || {})) {
-        if (v == null || v === '') continue;
-        if (rec.rawMerged[k] == null || rec.rawMerged[k] === '') {
-          rec.rawMerged[k] = v;
-        }
-      }
-      rec.rawMerged[`__slug_${cat.slug}`] = row.primary;
-    }
-  }
-
-  // ── Roster supplement (Sidearm-first, ESPN fallback) ──────────────────
-  // Priority:
-  //   1. Sidearm school API — has jersey numbers + headshot URLs.
-  //   2. ESPN roster API   — fallback; often last-name-only for softball.
-  //
-  // For each roster athlete we:
-  //   a) Try to match to a byPlayer entry (from leaderboards) and enrich it
-  //      with jersey / position / photo.
-  //   b) If no leaderboard match, add the athlete as a roster-only entry
-  //      so the full team roster is visible in the Player Compare tab.
-  //
-  // Sidearm player shape: { name, jerseyNumber, position, photoUrl, academicYear,
-  //                          hometown, highSchool, previousSchool, heightDisplay,
-  //                          weight, batThrows }
-  // ESPN athlete shape:   { displayName, fullName, jersey, position.abbreviation,
-  //                         experience.displayValue, id, displayHeight, displayWeight,
-  //                         bats.abbreviation, throws.abbreviation, birthPlace }
-
-  // Helper: match one roster player into byPlayer, enrich or add.
-  function applyRosterPlayer({
-    name, jerseyNumber, position, photoUrl, cls, espnId,
-    hometown, highSchool, previousSchool, heightDisplay, weight, batThrows,
-  }) {
-    const nameParts = splitName(name);
-    if (nameParts.length < 2) return; // skip last-name-only entries
-
-    let bestRec = null;
-    let bestScore = 0;
-    for (const rec of byPlayer.values()) {
-      const fakeAthlete = { displayName: rec.name, fullName: rec.name };
-      const s = scoreMatch(fakeAthlete, nameParts);
-      if (s > bestScore) { bestScore = s; bestRec = rec; }
-    }
-
-    if (bestScore >= 70 && bestRec) {
-      if (!bestRec.jersey         && jerseyNumber)   bestRec.jersey         = jerseyNumber;
-      if (!bestRec.position       && position)        bestRec.position       = position;
-      if (!bestRec.cls            && cls)             bestRec.cls            = cls;
-      if (!bestRec.photoUrl       && photoUrl)        bestRec.photoUrl       = photoUrl;
-      if (!bestRec.hometown       && hometown)        bestRec.hometown       = hometown;
-      if (!bestRec.highSchool     && highSchool)      bestRec.highSchool     = highSchool;
-      if (!bestRec.previousSchool && previousSchool)  bestRec.previousSchool = previousSchool;
-      if (!bestRec.heightDisplay  && heightDisplay)   bestRec.heightDisplay  = heightDisplay;
-      if (!bestRec.weight         && weight)          bestRec.weight         = weight;
-      if (!bestRec.batThrows      && batThrows)       bestRec.batThrows      = batThrows;
-    } else {
-      // Not in any leaderboard — add as roster-only entry.
-      const recKey = espnId ? String(espnId) : normalize(name);
-      if (byPlayer.has(recKey)) return;
-      const rec = {
-        key: recKey,
-        name,
-        team: null,
-        cls: cls || null,
-        position: position || null,
-        jersey: jerseyNumber || null,
-        photoUrl: photoUrl || null,
-        hometown: hometown || null,
-        highSchool: highSchool || null,
-        previousSchool: previousSchool || null,
-        heightDisplay: heightDisplay || null,
-        weight: weight || null,
-        batThrows: batThrows || null,
-        gp: null,
-        sides: new Set(),
-        rawMerged: {},
-        appearances: new Set(),
-      };
-      rec.sides.add((position || '').toUpperCase() === 'P' ? 'pitching' : 'batting');
-      byPlayer.set(recKey, rec);
-    }
-  }
-
-  // 1. Try Sidearm first — full bio data including photos, jersey, hometown, HS, transfers.
-  const sidearmOrigin = getSidearmOrigin(nameVariantSet);
-  let usedSidearm = false;
-  let rosterPlayerCount = 0;
-  if (sidearmOrigin) {
-    try {
-      const idx = await buildSidearmRosterIndex(sidearmOrigin);
-      if (idx && idx.players.length > 0) {
-        usedSidearm = true;
-        rosterPlayerCount = idx.players.length;
-        for (const p of idx.players) {
-          applyRosterPlayer({
-            name:           p.name,
-            jerseyNumber:   p.jerseyNumber,
-            position:       p.position,
-            photoUrl:       p.photoUrl,
-            cls:            p.academicYear,   // "Fr." "So." "Jr." "Sr."
-            espnId:         null,
-            hometown:       p.hometown,
-            highSchool:     p.highSchool,
-            previousSchool: p.previousSchool,
-            heightDisplay:  p.heightDisplay,
-            weight:         p.weight,
-            batThrows:      p.batThrows,
-          });
-        }
-      }
-    } catch {
-      // Fall through to ESPN.
-    }
-  }
-
-  // 2. Static hand-curated roster — for WMT Digital schools whose sites don't
-  //    expose a server-side API (e.g. LSU). Only runs when Sidearm wasn't used.
-  let usedStatic = false;
-  if (!usedSidearm) {
-    const staticPlayers = getStaticRoster(nameVariantSet);
-    if (staticPlayers && staticPlayers.length > 0) {
-      usedStatic = true;
-      rosterPlayerCount = staticPlayers.length;
-      for (const p of staticPlayers) {
-        applyRosterPlayer({
-          name:           p.name,
-          jerseyNumber:   p.number,
-          position:       p.position,
-          photoUrl:       p.photoUrl,
-          cls:            null,
-          espnId:         null,
-          hometown:       null,
-          highSchool:     null,
-          previousSchool: null,
-          heightDisplay:  null,
-          weight:         null,
-          batThrows:      null,
-        });
-      }
-    }
-  }
-
-  // 3. ESPN roster as fallback (and secondary enrichment for any fields
-  //    Sidearm/static didn't provide — e.g. class year, height, B/T).
-  let rosterAthletes = [];
-  try { rosterAthletes = (await getRoster(teamId))?.athletes || []; } catch {}
-  if (!usedSidearm && !usedStatic) rosterPlayerCount = rosterAthletes.length;
-
-  for (const athlete of rosterAthletes) {
-    const name = athlete.displayName || athlete.fullName || '';
-    // Build ESPN birthPlace string for hometown fallback.
-    const espnBirthPlace = athlete.birthPlace?.city
-      ? `${athlete.birthPlace.city}${athlete.birthPlace.state ? ', ' + athlete.birthPlace.state : ''}`
-      : null;
-    const espnBatThrows = [
-      athlete.bats?.abbreviation || athlete.bats?.displayValue,
-      athlete.throws?.abbreviation || athlete.throws?.displayValue,
-    ].filter(Boolean).join('/') || null;
-
-    if (!usedSidearm && !usedStatic) {
-      // Primary enrichment from ESPN when neither Sidearm nor a static roster
-      // was available — ESPN jersey/position/class but no photos.
-      applyRosterPlayer({
-        name,
-        jerseyNumber:  athlete.jersey || null,
-        position:      athlete.position?.abbreviation || null,
-        photoUrl:      null,
-        cls:           athlete.experience?.displayValue || null,
-        espnId:        athlete.id,
-        hometown:      espnBirthPlace,   // ESPN birthPlace as hometown fallback
-        highSchool:    null,             // ESPN doesn't provide high school
-        previousSchool: null,            // ESPN doesn't provide transfer info
-        heightDisplay: athlete.displayHeight || null,
-        weight:        athlete.displayWeight || null,
-        batThrows:     espnBatThrows,
-      });
-    } else {
-      // Secondary pass when Sidearm or static roster was used: fill in any
-      // gaps ESPN knows about (class year, height, B/T) that the primary
-      // source didn't have.
-      const nameParts = splitName(name);
-      if (nameParts.length < 2) continue;
-      let bestRec = null; let bestScore = 0;
-      for (const rec of byPlayer.values()) {
-        const s = scoreMatch({ displayName: rec.name, fullName: rec.name }, nameParts);
-        if (s > bestScore) { bestScore = s; bestRec = rec; }
-      }
-      if (bestScore >= 70 && bestRec) {
-        if (!bestRec.cls         && athlete.experience?.displayValue) bestRec.cls         = athlete.experience.displayValue;
-        if (!bestRec.heightDisplay && athlete.displayHeight)          bestRec.heightDisplay = athlete.displayHeight;
-        if (!bestRec.weight      && athlete.displayWeight)            bestRec.weight        = athlete.displayWeight;
-        if (!bestRec.batThrows   && espnBatThrows)                    bestRec.batThrows     = espnBatThrows;
-      }
-    }
-  }
-
-  // Shape each accumulator into the {id, name, games, AB, H, ...} records
-  // the UI already knows how to render. Fields missing from NCAA (e.g.
-  // pitcher BB, WHIP) come out as null and render as "—".
-  const batting = [];
-  const pitching = [];
-  const num = (v) => {
-    if (v == null || v === '') return null;
-    return v;
-  };
-
-  for (const rec of byPlayer.values()) {
-    const games = rec.gp || null;
-    const raw = rec.rawMerged;
-    const shared = {
-      id: rec.key,
-      name: rec.name,
-      jersey: rec.jersey || null,
-      photoUrl: rec.photoUrl || null,
-      position: rec.position || null,
-      classYear: rec.cls || null,
-      hometown: rec.hometown || null,
-      highSchool: rec.highSchool || null,
-      previousSchool: rec.previousSchool || null,
-      heightDisplay: rec.heightDisplay || null,
-      weight: rec.weight || null,
-      batThrows: rec.batThrows || null,
-      games,
-    };
-
-    if (rec.sides.has('batting')) {
-      batting.push({
-        ...shared,
-        AB:  num(raw.AB),
-        R:   num(raw.R  ?? raw['__slug_runs-scored']),
-        H:   num(raw.H  ?? raw['__slug_hits']),
-        RBI: num(raw.RBI ?? raw['__slug_rbi']),
-        HR:  num(raw.HR  ?? raw['__slug_home-runs']),
-        BB:  num(raw.BB),
-        K:   num(raw.SO),
-        SB:  num(raw.SB  ?? raw['__slug_stolen-bases']),
-        '2B': num(raw['2B'] ?? raw['__slug_doubles']),
-        '3B': num(raw['3B'] ?? raw['__slug_triples']),
-        BA:  num(raw.BA  ?? raw['__slug_batting-avg']),
-        OBP: num(raw.PCT ?? raw['__slug_on-base-pct']),
-        SLG: num(raw['SLG PCT'] ?? raw['__slug_slugging-pct']),
-      });
-    }
-
-    if (rec.sides.has('pitching')) {
-      pitching.push({
-        ...shared,
-        IP:  num(raw.IP  ?? raw['__slug_innings-pitched']),
-        // NCAA ships strikeouts as SO; the UI column is labelled K.
-        K:   num(raw.SO  ?? raw['__slug_strikeouts']),
-        // BB (walks allowed) is not in any curated pitching leaderboard's
-        // raw row for softball, so this falls to null and renders "—".
-        BB:  num(raw.BB),
-        ER:  num(raw.ER),
-        H:   num(raw.H),
-        R:   num(raw.R),
-        W:   num(raw.W  ?? raw['__slug_wins']),
-        L:   num(raw.L),
-        SV:  num(raw.SV ?? raw['__slug_saves']),
-        SHO: num(raw.SHO ?? raw['__slug_shutouts']),
-        ERA: num(raw.ERA ?? raw['__slug_era']),
-        // WHIP similarly unavailable from NCAA individual leaderboards.
-        WHIP: num(raw.WHIP),
-        'K/7': num(raw['K/7'] ?? raw['__slug_k-per-7']),
-      });
-    }
-  }
-
-  // Sort: batters by BA desc (fall back to name); pitchers by ERA asc.
-  // Nullish rate stats sort to the bottom either way.
-  const baNum = (p) => parseFloat(p.BA) || 0;
-  const eraNum = (p) => parseFloat(p.ERA);
-  batting.sort((a, b) => baNum(b) - baNum(a) || a.name.localeCompare(b.name));
-  pitching.sort((a, b) => {
-    const ae = eraNum(a);
-    const be = eraNum(b);
-    if (Number.isFinite(ae) && Number.isFinite(be)) return ae - be;
-    if (Number.isFinite(ae)) return -1;
-    if (Number.isFinite(be)) return 1;
-    return a.name.localeCompare(b.name);
-  });
-
-  const leaderboardCount = [...byPlayer.values()].filter((r) => r.appearances.size > 0).length;
-  return {
-    batting,
-    pitching,
-    playerCount: byPlayer.size,
-    rosterTotal: rosterPlayerCount,
-    rosterSource: usedSidearm ? 'sidearm' : 'espn',
-    leaderboardMatched: leaderboardCount,
-    attempted: cats.length,
-    slugsOk,
-    slugStatus,
-    timeExhausted,
-    elapsedMs: Date.now() - startTime,
-  };
-}
-
-// Convert WMT class-year short code to the dot-suffix format used by Sidearm.
-function wmtNormalizeYear(yr) {
-  const y = (yr || '').trim().toLowerCase();
-  if (y === 'sr') return 'Sr.';
-  if (y === 'jr') return 'Jr.';
-  if (y === 'so') return 'So.';
-  if (y === 'fr') return 'Fr.';
-  return yr || null;
-}
-
-// Merge WMT individual player rows into the standard players.batting / players.pitching
-// format, enriching with Sidearm bio/photo data from the existing ncaaPlayerLists.
-// WMT rows are keyed by column label (e.g. row['AVG'], row['ERA']).
-// This returns all players who appeared this season — not just top-50 nationally.
-function mergeWmtPlayers(wmtPlayers, ncaaPlayerLists) {
-  // Build a name lookup from the existing (Sidearm-enriched) player arrays.
-  const lookup = new Map();
-  for (const p of [...(ncaaPlayerLists.batting || []), ...(ncaaPlayerLists.pitching || [])]) {
-    if (p.name) lookup.set(normalize(p.name), p);
-  }
-
-  const batting  = [];
-  const pitching = [];
-
-  // ── Hitting rows → batting ──────────────────────────────────────────────
-  for (const row of wmtPlayers.hitting || []) {
-    const rawName = row['Player'] || row['Name'] || '';
-    if (!rawName) continue;
-    const bio = lookup.get(normalize(rawName)) || {};
-    batting.push({
-      id:             bio.id           || normalize(rawName),
-      name:           bio.name         || rawName,
-      jersey:         bio.jersey       || row['#']  || null,
-      photoUrl:       bio.photoUrl     || null,
-      position:       bio.position     || row['Pos'] || null,
-      classYear:      bio.classYear    || wmtNormalizeYear(row['Yr']),
-      hometown:       bio.hometown     || null,
-      highSchool:     bio.highSchool   || null,
-      previousSchool: bio.previousSchool || null,
-      heightDisplay:  bio.heightDisplay  || null,
-      weight:         bio.weight         || null,
-      batThrows:      bio.batThrows      || null,
-      games:  parseInt(row['G']  || row['GP'] || '0', 10) || null,
-      AB:     parseFloat(row['AB'])              || null,
-      R:      parseFloat(row['R'])               || null,
-      H:      parseFloat(row['H'])               || null,
-      RBI:    parseFloat(row['RBI'])             || null,
-      HR:     parseFloat(row['HR'])              || null,
-      BB:     parseFloat(row['BB'])              || null,
-      K:      parseFloat(row['SO'] ?? row['K'])  || null,
-      SB:     parseFloat(row['SB'])              || null,
-      '2B':   parseFloat(row['2B'])              || null,
-      '3B':   parseFloat(row['3B'])              || null,
-      BA:     row['AVG']  || null,
-      OBP:    row['OBP']  || null,
-      SLG:    row['SLG']  || null,
-    });
-  }
-
-  // ── Pitching rows → pitching ────────────────────────────────────────────
-  for (const row of wmtPlayers.pitching || []) {
-    const rawName = row['Player'] || row['Name'] || '';
-    if (!rawName) continue;
-    const bio = lookup.get(normalize(rawName)) || {};
-    pitching.push({
-      id:             bio.id           || normalize(rawName),
-      name:           bio.name         || rawName,
-      jersey:         bio.jersey       || row['#']  || null,
-      photoUrl:       bio.photoUrl     || null,
-      position:       'P',
-      classYear:      bio.classYear    || wmtNormalizeYear(row['Yr']),
-      hometown:       bio.hometown     || null,
-      highSchool:     bio.highSchool   || null,
-      previousSchool: bio.previousSchool || null,
-      heightDisplay:  bio.heightDisplay  || null,
-      weight:         bio.weight         || null,
-      batThrows:      bio.batThrows      || null,
-      games:  parseInt(row['App'] ?? row['G'] ?? row['GP'] ?? '0', 10) || null,
-      IP:     row['IP']                              || null,
-      K:      parseFloat(row['SO'] ?? row['K'])      || null,
-      BB:     parseFloat(row['BB'])                  || null,
-      ER:     parseFloat(row['ER'])                  || null,
-      H:      parseFloat(row['H'])                   || null,
-      R:      parseFloat(row['R'])                   || null,
-      W:      parseFloat(row['W'])                   || null,
-      L:      parseFloat(row['L'])                   || null,
-      SV:     parseFloat(row['SV'])                  || null,
-      SHO:    parseFloat(row['SHO'])                 || null,
-      ERA:    row['ERA']  || null,
-      WHIP:   row['WHIP'] || null,
-      'K/7':  null,
-    });
-  }
-
-  // Sort: batters by BA desc; pitchers by ERA asc (nulls last).
-  const baNum  = (p) => parseFloat(p.BA)  || 0;
-  const eraNum = (p) => { const v = parseFloat(p.ERA); return Number.isFinite(v) ? v : 99; };
-  batting.sort( (a, b) => baNum(b)  - baNum(a)  || a.name.localeCompare(b.name));
-  pitching.sort((a, b) => eraNum(a) - eraNum(b) || a.name.localeCompare(b.name));
-
-  return { batting, pitching };
-}
-
-// 30-minute in-process cache. Stats update once daily; 30 min is fine and
-// avoids redundant re-scans from the same warm Lambda instance.
+// 30-minute in-process cache. Conference stats update once daily and
+// the inner WMT cache is 15 min, so 30 min here is a comfortable
+// overlap that avoids redundant re-scans from the same warm Lambda.
 const TEAM_TTL_MS = 30 * 60 * 1000;
 const ESPN_RETRY_DELAYS_MS = [500, 1000, 2000];
 
-// Retry wrapper for ESPN endpoints (schedule, records). Same backoff shape
-// as the NCAA retry above but with ESPN-specific headers.
+// Retry wrapper for ESPN endpoints (schedule, records). Backoff on 5xx
+// and 429; treat 404 and other 4xx as permanent null.
 async function fetchWithRetry(url) {
   for (let attempt = 0; attempt <= ESPN_RETRY_DELAYS_MS.length; attempt++) {
     if (attempt > 0) {
@@ -1013,8 +93,8 @@ async function fetchWithRetry(url) {
       if (r.ok) return await r.json();
       if (r.status === 404) return null;
       if (r.status < 500 && r.status !== 429) return null;
-    } catch (e) {
-      // network error — retry
+    } catch {
+      // network error — fall through to retry
     }
   }
   return null;
@@ -1039,53 +119,209 @@ function buildTeamNameVariantSet(espnTeam) {
 }
 
 // Look up the ESPN team in the directory by id and return the set of
-// normalized name variants used for name-matching against NCAA leaderboards
-// (which key rows by school name, not by any numeric id).
-async function getTeamNameVariantSet(teamId) {
+// normalized name variants used for name-matching against WMT conference
+// payloads (which key rows by school name, not by any numeric id).
+async function getTeamInfo(teamId) {
   try {
     const dir = await getTeamDirectory();
     const team = findTeamById(dir, teamId);
-    return buildTeamNameVariantSet(team);
-  } catch (e) {
-    return new Set();
+    return {
+      team,
+      variants: buildTeamNameVariantSet(team),
+    };
+  } catch {
+    return { team: null, variants: new Set() };
   }
 }
 
+// --- WMT row normalization -----------------------------------------------
+//
+// WMT team-totals and player-stats rows are keyed by the source column
+// label (e.g. 'AVG', not 'BA'). The rest of the app — renderTotals() in
+// page.js, etc. — expects canonical keys like BA/OBP/SLG/ERA/WHIP. These
+// helpers map each WMT row into the canonical shape so the UI can render
+// without knowing about WMT's naming.
+//
+// Each mapping accepts a list of candidate WMT labels to try in order,
+// which handles small differences between conferences (e.g. 'K' vs 'SO',
+// 'K/7' vs 'SO/7' vs 'K9').
+
+function pickLabel(row, candidates) {
+  if (!row) return null;
+  for (const c of candidates) {
+    if (row[c] != null && row[c] !== '') return row[c];
+  }
+  return null;
+}
+
+function toInt(v) {
+  if (v == null || v === '') return null;
+  const n = parseInt(String(v).replace(/,/g, ''), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toFloat(v) {
+  if (v == null || v === '') return null;
+  const n = parseFloat(String(v).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeWmtBattingTotals(row) {
+  if (!row) return {};
+  return {
+    BA:  pickLabel(row, ['BA', 'AVG']),
+    OBP: pickLabel(row, ['OBP']),
+    SLG: pickLabel(row, ['SLG']),
+    HR:  toInt(pickLabel(row, ['HR'])),
+    RBI: toInt(pickLabel(row, ['RBI'])),
+    H:   toInt(pickLabel(row, ['H'])),
+    R:   toInt(pickLabel(row, ['R'])),
+    SB:  toInt(pickLabel(row, ['SB'])),
+    '2B': toInt(pickLabel(row, ['2B'])),
+    '3B': toInt(pickLabel(row, ['3B'])),
+    BB:  toInt(pickLabel(row, ['BB'])),
+    K:   toInt(pickLabel(row, ['SO', 'K'])),
+    AB:  toInt(pickLabel(row, ['AB'])),
+  };
+}
+
+function normalizeWmtPitchingTotals(row) {
+  if (!row) return {};
+  return {
+    ERA:   pickLabel(row, ['ERA']),
+    WHIP:  pickLabel(row, ['WHIP']),
+    'K/7': pickLabel(row, ['K/7', 'SO/7', 'K9', 'SO/9']),
+    SHO:   toInt(pickLabel(row, ['SHO'])),
+    IP:    pickLabel(row, ['IP']),
+    W:     toInt(pickLabel(row, ['W'])),
+    L:     toInt(pickLabel(row, ['L'])),
+    SV:    toInt(pickLabel(row, ['SV'])),
+    K:     toInt(pickLabel(row, ['SO', 'K'])),
+    BB:    toInt(pickLabel(row, ['BB'])),
+    ER:    toInt(pickLabel(row, ['ER'])),
+    H:     toInt(pickLabel(row, ['H'])),
+    R:     toInt(pickLabel(row, ['R'])),
+  };
+}
+
+function wmtNormalizeYear(yr) {
+  const y = (yr || '').trim().toLowerCase();
+  if (y === 'sr') return 'Sr.';
+  if (y === 'jr') return 'Jr.';
+  if (y === 'so') return 'So.';
+  if (y === 'fr') return 'Fr.';
+  return yr || null;
+}
+
+function normalizeWmtPlayers(wmtPlayers, teamDisplayName) {
+  const batting = [];
+  const pitching = [];
+
+  for (const row of wmtPlayers?.hitting || []) {
+    const rawName = pickLabel(row, ['Player', 'Name']);
+    if (!rawName) continue;
+    batting.push({
+      id:         normalize(rawName),
+      name:       rawName,
+      team:       teamDisplayName,
+      jersey:     pickLabel(row, ['#', 'No.', 'Jersey']),
+      photoUrl:   null,
+      position:   pickLabel(row, ['Pos']),
+      classYear:  wmtNormalizeYear(pickLabel(row, ['Yr'])),
+      hometown:       null,
+      highSchool:     null,
+      previousSchool: null,
+      heightDisplay:  null,
+      weight:         null,
+      batThrows:      null,
+      games: toInt(pickLabel(row, ['G', 'GP'])),
+      AB:  toInt(pickLabel(row, ['AB'])),
+      R:   toInt(pickLabel(row, ['R'])),
+      H:   toInt(pickLabel(row, ['H'])),
+      RBI: toInt(pickLabel(row, ['RBI'])),
+      HR:  toInt(pickLabel(row, ['HR'])),
+      BB:  toInt(pickLabel(row, ['BB'])),
+      K:   toInt(pickLabel(row, ['SO', 'K'])),
+      SB:  toInt(pickLabel(row, ['SB'])),
+      '2B': toInt(pickLabel(row, ['2B'])),
+      '3B': toInt(pickLabel(row, ['3B'])),
+      BA:  pickLabel(row, ['BA', 'AVG']),
+      OBP: pickLabel(row, ['OBP']),
+      SLG: pickLabel(row, ['SLG']),
+    });
+  }
+
+  for (const row of wmtPlayers?.pitching || []) {
+    const rawName = pickLabel(row, ['Player', 'Name']);
+    if (!rawName) continue;
+    pitching.push({
+      id:         normalize(rawName),
+      name:       rawName,
+      team:       teamDisplayName,
+      jersey:     pickLabel(row, ['#', 'No.', 'Jersey']),
+      photoUrl:   null,
+      position:   'P',
+      classYear:  wmtNormalizeYear(pickLabel(row, ['Yr'])),
+      hometown:       null,
+      highSchool:     null,
+      previousSchool: null,
+      heightDisplay:  null,
+      weight:         null,
+      batThrows:      null,
+      games: toInt(pickLabel(row, ['App', 'G', 'GP'])),
+      IP:    pickLabel(row, ['IP']),
+      K:     toInt(pickLabel(row, ['SO', 'K'])),
+      BB:    toInt(pickLabel(row, ['BB'])),
+      ER:    toInt(pickLabel(row, ['ER'])),
+      H:     toInt(pickLabel(row, ['H'])),
+      R:     toInt(pickLabel(row, ['R'])),
+      W:     toInt(pickLabel(row, ['W'])),
+      L:     toInt(pickLabel(row, ['L'])),
+      SV:    toInt(pickLabel(row, ['SV'])),
+      SHO:   toInt(pickLabel(row, ['SHO'])),
+      ERA:   pickLabel(row, ['ERA']),
+      WHIP:  pickLabel(row, ['WHIP']),
+      'K/7': pickLabel(row, ['K/7', 'SO/7', 'K9', 'SO/9']),
+    });
+  }
+
+  // Sort: batters by BA desc; pitchers by ERA asc (nulls last).
+  const baNum  = (p) => parseFloat(p.BA)  || 0;
+  const eraNum = (p) => { const v = parseFloat(p.ERA); return Number.isFinite(v) ? v : 99; };
+  batting.sort((a, b) => baNum(b) - baNum(a) || a.name.localeCompare(b.name));
+  pitching.sort((a, b) => eraNum(a) - eraNum(b) || a.name.localeCompare(b.name));
+
+  return { batting, pitching };
+}
+
 // --- Main computation -----------------------------------------------------
-//
-// Data sources after the Step 2 rewrite:
-//   • Team Totals  — aggregateNcaaTeamStats (NCAA team leaderboards)
-//   • Player rows  — aggregateNcaaPlayerStats (NCAA individual leaderboards)
-//   • Schedule + event counts — ESPN team schedule endpoint (just for meta)
-//   • Record (W/L/runs/streak) — ESPN core.v2 records endpoint
-//
-// ESPN box scores are gone entirely because for non-televised teams they
-// ship zero player stats and only a `records` placeholder, leaving a whole
-// 41-game Oklahoma season with empty rows. NCAA top-50 leaderboards cover
-// every school's starters; the tradeoff is that role players who don't
-// appear in any top-50 won't show up in Player Compare. That's an honest
-// coverage limitation instead of misleading zeros.
-async function computeTeamStats(teamId, { skipPlayers = false } = {}) {
+async function computeTeamStats(teamId) {
   const startTime = Date.now();
   const scheduleUrl = `${ESPN_SITE}/teams/${teamId}/schedule`;
   const season = new Date().getUTCFullYear();
   const recordsUrl = `https://sports.core.api.espn.com/v2/sports/baseball/leagues/college-softball/seasons/${season}/types/2/teams/${teamId}/records/0?lang=en&region=us`;
 
-  // Resolve the variant set first so both NCAA aggregations can use it.
-  const nameVariantSet = await getTeamNameVariantSet(teamId);
+  // Resolve the team + variants first. We need the canonical conference
+  // label (from _conferences.js) to pick the right WMT payload, and the
+  // name variants so WMT's team-name keys match across spelling quirks.
+  const { team, variants: nameVariantSet } = await getTeamInfo(teamId);
+  const conference =
+    lookupConference(team?.location) ||
+    lookupConference(team?.displayName) ||
+    lookupConference(team?.shortDisplayName) ||
+    null;
 
-  // ESPN calls + NCAA TEAM aggregation run in parallel. NCAA PLAYER
-  // aggregation runs AFTER team stats because both hit the same henrygd
-  // wrapper which throttles at ~5-6 concurrent requests — running team
-  // and player scans at the same time exceeds that and we end up with
-  // time-exhausted slugs on cold-start. Sequencing them keeps cold-start
-  // total under Vercel's 10s limit while still letting warm-cache calls
-  // finish in ~1s (both aggregators hit their caches).
+  // Only fetch WMT stats if the team's conference has a confirmed WMT
+  // source. Otherwise skip entirely — no point paying for a conference
+  // payload we know won't match.
+  const wmtStatsPromise = conference && hasConferenceStats(conference)
+    ? getConferenceTeamStats(conference, Array.from(nameVariantSet)).catch(() => null)
+    : Promise.resolve(null);
+
   const [
     schedule,
     recordsRaw,
-    ncaaTeamStats,
-    secWmt,
+    wmtStats,
     secSchedule,
     big12Schedule,
     accSchedule,
@@ -1094,45 +330,13 @@ async function computeTeamStats(teamId, { skipPlayers = false } = {}) {
   ] = await Promise.all([
     fetchWithRetry(scheduleUrl),
     fetchWithRetry(recordsUrl),
-    aggregateNcaaTeamStats(teamId, nameVariantSet).catch(() => null),
-    // Conference-specific full-roster feed. Currently only the SEC is wired
-    // (via wmt.games, which ships the entire roster with a much richer
-    // column set than NCAA's top-50 leaderboards). getSecTeamStats swallows
-    // its own errors and returns null if the team isn't in the SEC payload,
-    // so non-SEC schools fall through to the NCAA-only path below.
-    getSecTeamStats(Array.from(nameVariantSet)).catch(() => null),
-    // Conference-specific schedule feed. The SEC secsports.com API is
-    // dramatically faster and more reliable than ESPN's softball schedule
-    // (broadcasts + venues populated for non-televised games, AP rank,
-    // is_conference flag, etc). Returns null for non-SEC teams so the
-    // caller falls back to the ESPN-derived scheduleGames below.
+    wmtStatsPromise,
     getSecTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    // Big 12 schedule feed via big12sports.com's Sidearm responsive-calendar
-    // service. Same coverage-per-request win as the SEC feed. Returns null
-    // for non-Big-12 teams; unlike the SEC helper this is safely
-    // self-gating because the API only lists games with a Big 12 school as
-    // the `school` side, so name-matching is the membership test.
     getBig12TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    // ACC schedule feed via theacc.com — identical Sidearm endpoint as
-    // Big 12, different host + sport_id. Also self-gating on name match.
     getAccTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    // Big Ten schedule feed scraped from bigten.org/sb/schedule/ — the
-    // Boost Sport AI CMS server-renders the entire conference season
-    // inline in __NEXT_DATA__, so one HTTP GET gives us all ~700 games
-    // for the 16–17 softball-sponsoring B1G programs. Self-gating on
-    // market/name match, same as Big 12/ACC.
     getBig10TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    // Mountain West schedule feed via themw.com's WMT Stats WordPress
-    // plugin. Paginated at 100/page across ~4 pages. Self-gates on
-    // school_category.id being non-null so a non-MW opponent with a
-    // matching name (e.g. Abilene Christian, which appears in the
-    // feed only because they played Utah State) correctly falls back
-    // to ESPN.
     getMwTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
   ]);
-  const ncaaPlayerStats = skipPlayers
-    ? null
-    : await aggregateNcaaPlayerStats(teamId, nameVariantSet).catch(() => null);
 
   const events = schedule?.events || [];
   const completed = events.filter((ev) => {
@@ -1141,11 +345,7 @@ async function computeTeamStats(teamId, { skipPlayers = false } = {}) {
     return st?.state === 'post' || st?.completed === true;
   });
 
-  // Normalized per-game schedule for the TeamModal Schedule tab. The ESPN
-  // site-API schedule response ships everything we need (opponent id +
-  // logo + score + status + venue + broadcast) so no second network call
-  // is required — we just flatten the competition shape into something
-  // the UI can render directly.
+  // Normalized per-game schedule for the TeamModal Schedule tab.
   const scheduleGames = events.map((ev) => {
     const comp = ev.competitions?.[0] || {};
     const st = comp.status?.type || ev.status?.type || {};
@@ -1163,11 +363,11 @@ async function computeTeamStats(teamId, { skipPlayers = false } = {}) {
       id: ev.id,
       date: ev.date || comp.date || null,
       status: {
-        state: st.state || null,          // 'pre' | 'in' | 'post'
+        state: st.state || null,
         completed: !!st.completed,
         detail: st.shortDetail || st.detail || null,
       },
-      homeAway: self?.homeAway || null,    // 'home' | 'away'
+      homeAway: self?.homeAway || null,
       neutralSite: !!comp.neutralSite,
       opponent: opp
         ? {
@@ -1190,9 +390,8 @@ async function computeTeamStats(teamId, { skipPlayers = false } = {}) {
     };
   });
 
-  // teamMeta comes from the ESPN records endpoint — NCAA doesn't publish a
-  // clean W/L/runs/streak rollup, and ESPN's core.v2 endpoint is reliable
-  // for every D1 team regardless of television coverage.
+  // teamMeta comes from the ESPN core.v2 records endpoint — reliable for
+  // every D1 team regardless of television coverage.
   const teamMeta = {};
   const recordStats = recordsRaw?.stats || null;
   if (recordStats) {
@@ -1207,48 +406,31 @@ async function computeTeamStats(teamId, { skipPlayers = false } = {}) {
     }
   }
 
+  // Team totals + player rows come straight from WMT when available.
+  // Everything is NULL for teams without WMT coverage — the UI
+  // handles this by rendering "—" placeholders.
   const totals = {
-    batting: ncaaTeamStats?.batting || {},
-    pitching: ncaaTeamStats?.pitching || {},
+    batting:  normalizeWmtBattingTotals(wmtStats?.totals?.batting),
+    pitching: normalizeWmtPitchingTotals(wmtStats?.totals?.pitching),
   };
-  // For SEC teams the WMT feed covers all players who appeared this season
-  // (not just the top-50-nationally slice from NCAA leaderboards).
-  // Sidearm bio/photo data from ncaaPlayerStats is preserved via name lookup.
-  const basePlayers = {
-    batting:  ncaaPlayerStats?.batting  || [],
-    pitching: ncaaPlayerStats?.pitching || [],
-  };
-  const players = (
-    secWmt?.players &&
-    ((secWmt.players.hitting?.length  ?? 0) > 0 ||
-     (secWmt.players.pitching?.length ?? 0) > 0)
-  ) ? mergeWmtPlayers(secWmt.players, basePlayers)
-    : basePlayers;
+  const players = wmtStats
+    ? normalizeWmtPlayers(wmtStats.players, wmtStats.name || team?.displayName || '')
+    : { batting: [], pitching: [] };
 
   return {
     teamId: String(teamId),
+    conference,
     teamMeta,
     totals,
     players,
-    // Rich conference-level payload when available. Currently populated for
-    // SEC teams from wmt.games — 25 batting / 24 pitching / 14 fielding team
-    // columns and the full roster (not a top-N slice) with 24 hitting /
-    // 31 pitching / 15 fielding player columns. The TeamModal renders this
-    // directly when present and falls back to the NCAA path otherwise.
-    secWmt: secWmt || null,
+    // Pass through the raw WMT payload for any richer views that want
+    // the full conference-level column set (helpText, sortValue, etc).
+    conferenceStats: wmtStats || null,
     // Normalized per-game schedule for the TeamModal Schedule sub-tab.
     // Conference feeds win over ESPN when the team is actually a member
-    // of that conference. Order matters here:
-    //   - SEC is gated on secWmt because the secsports.com API also
-    //     returns non-SEC teams that happened to play a SEC opponent,
-    //     and we do NOT want to serve those teams a partial schedule.
-    //   - Big 12 / ACC are self-gating: the Sidearm responsive-calendar
-    //     endpoint only emits events with a conference school as the
-    //     `school` side, so name-matching inside the helper IS the
-    //     membership test — a non-empty array means the team is in that
-    //     conference.
+    // of that conference (the conference scrapers self-gate on membership).
     schedule:
-      secWmt && secSchedule && secSchedule.length > 0
+      wmtStats && secSchedule && secSchedule.length > 0
         ? secSchedule
         : big12Schedule && big12Schedule.length > 0
         ? big12Schedule
@@ -1260,7 +442,7 @@ async function computeTeamStats(teamId, { skipPlayers = false } = {}) {
         ? mwSchedule
         : scheduleGames,
     scheduleSource:
-      secWmt && secSchedule && secSchedule.length > 0
+      wmtStats && secSchedule && secSchedule.length > 0
         ? 'sec'
         : big12Schedule && big12Schedule.length > 0
         ? 'big12'
@@ -1272,53 +454,15 @@ async function computeTeamStats(teamId, { skipPlayers = false } = {}) {
         ? 'mw'
         : 'espn',
     meta: {
-      source: skipPlayers
-        ? 'ncaa-team+quick'
-        : secWmt ? 'ncaa-team+ncaa-player+sec-wmt' : 'ncaa-team+ncaa-player',
+      source: wmtStats ? `espn-records+wmt-${wmtStats.conference || conference}` : 'espn-records-only',
       scheduleEvents: events.length,
       completedEvents: completed.length,
       elapsedMs: Date.now() - startTime,
-      ncaaTeamStats: ncaaTeamStats
-        ? {
-            found: ncaaTeamStats.found,
-            attempted: ncaaTeamStats.attempted,
-            timeExhausted: ncaaTeamStats.timeExhausted,
-            elapsedMs: ncaaTeamStats.elapsedMs,
-            totalPagesFetched: ncaaTeamStats.totalPagesFetched,
-            pagesFetchedBySlug: ncaaTeamStats.pagesFetchedBySlug,
-            slugStatus: ncaaTeamStats.slugStatus,
-            error: ncaaTeamStats.error,
-          }
-        : null,
-      ncaaPlayerStats: ncaaPlayerStats
-        ? {
-            playerCount: ncaaPlayerStats.playerCount,
-            rosterTotal: ncaaPlayerStats.rosterTotal,
-            rosterSource: ncaaPlayerStats.rosterSource,
-            leaderboardMatched: ncaaPlayerStats.leaderboardMatched,
-            attempted: ncaaPlayerStats.attempted,
-            slugsOk: ncaaPlayerStats.slugsOk,
-            timeExhausted: ncaaPlayerStats.timeExhausted,
-            elapsedMs: ncaaPlayerStats.elapsedMs,
-            slugStatus: ncaaPlayerStats.slugStatus,
-            error: ncaaPlayerStats.error,
-          }
-        : null,
+      conference,
+      conferenceHasStats: !!(conference && hasConferenceStats(conference)),
+      wmtMatched: !!wmtStats,
     },
   };
-}
-
-// Quick path: return team totals without the slow player-leaderboard scan.
-// Checks the full cache and inFlight promise first so warm instances still
-// serve complete data instantly. Only runs the abbreviated compute when
-// nothing is cached — and deliberately does NOT cache the partial result
-// so subsequent full requests don't get poisoned.
-async function getTeamStatsQuick(teamId) {
-  const id = String(teamId);
-  const cached = teamStatsCache.get(id);
-  if (cached && Date.now() - cached.fetchedAt < TEAM_TTL_MS) return cached.data;
-  if (inFlight.has(id)) return inFlight.get(id);
-  return computeTeamStats(id, { skipPlayers: true });
 }
 
 async function getTeamStats(teamId) {
@@ -1331,15 +475,8 @@ async function getTeamStats(teamId) {
 
   const promise = (async () => {
     const data = await computeTeamStats(id);
-    // Don't cache partial results — subsequent requests should re-fetch the
-    // missing NCAA leaderboard pages once they've had time to warm up.
-    const partial =
-      data.meta?.ncaaTeamStats?.timeExhausted ||
-      data.meta?.ncaaPlayerStats?.timeExhausted;
-    if (!partial) {
-      teamStatsCache.set(id, { fetchedAt: Date.now(), data });
-      pruneMap(teamStatsCache, TEAM_STATS_CACHE_MAX);
-    }
+    teamStatsCache.set(id, { fetchedAt: Date.now(), data });
+    pruneMap(teamStatsCache, TEAM_STATS_CACHE_MAX);
     return data;
   })();
 
@@ -1357,8 +494,6 @@ export async function GET(request) {
   const teamName = searchParams.get('team');
 
   // Allow ?team=Oklahoma so callers don't need to know the numeric ESPN id.
-  // Resolves through the shared team directory the same way the player-photo
-  // and team-roster routes do.
   if (!teamId && teamName) {
     const safeName = String(teamName).slice(0, 100);
     try {
@@ -1380,21 +515,11 @@ export async function GET(request) {
     return Response.json({ error: 'teamId or team query param required' }, { status: 400 });
   }
 
-  const quick = searchParams.get('quick') === '1';
-
   try {
-    const data = quick
-      ? await getTeamStatsQuick(teamId)
-      : await getTeamStats(teamId);
+    const data = await getTeamStats(teamId);
     return Response.json(data, {
-      // Full responses: s-maxage=1800 (30 min edge cache).
-      // Quick responses: s-maxage=300 (5 min) — partial data, shorter shelf life.
-      // stale-while-revalidate lets the edge serve stale data instantly while
-      // fetching a fresh copy in the background.
       headers: {
-        'Cache-Control': quick
-          ? 'public, s-maxage=300, stale-while-revalidate=600'
-          : 'public, s-maxage=1800, stale-while-revalidate=3600',
+        'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600',
       },
     });
   } catch (e) {

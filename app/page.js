@@ -1075,12 +1075,12 @@ function TeamModal({ team, onClose }) {
     if (!stats) {
       return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading full roster stats…</div>;
     }
-    // When a rich conference feed (currently SEC via wmt.games) is available,
-    // render the full-roster tables with every column the source publishes.
-    // Otherwise fall back to the NCAA top-50 narrow tables so the sub-tab is
-    // still useful for non-SEC teams.
-    if (stats.secWmt) {
-      return renderWmtFullRoster(stats.secWmt);
+    // When a rich conference feed (WMT-hosted conferences like SEC, Mountain
+    // West) is available, render the full-roster tables with every column
+    // the source publishes. Otherwise fall back to the narrow per-stat
+    // tables built from WMT's normalized shape.
+    if (stats.conferenceStats) {
+      return renderWmtFullRoster(stats.conferenceStats);
     }
     return (
       <div className="space-y-6">
@@ -2150,28 +2150,27 @@ function TeamCompareTab({ home, away, rankings }) {
   const homeId = home?.team?.id ? String(home.team.id) : null;
   const awayId = away?.team?.id ? String(away.team.id) : null;
 
-  // Fetch /api/team-stats?quick=1 only — skips the slow NCAA player scan
-  // entirely. Cold path is ~2-4s (vs ~6-14s for the full scan). Player Compare
-  // is a separate top-level tab that lazy-loads the full payload only when
-  // the user opens it.
+  // Fetch /api/team-stats — now powered by conference scrapes (WMT Games)
+  // instead of NCAA leaderboards, so the full payload is ~1-3s cold and
+  // ~10ms warm. No more split quick/full paths.
   useEffect(() => {
     let cancelled = false;
     setHomeQuick(null); setAwayQuick(null);
     setHomeStatsErr(null); setAwayStatsErr(null);
 
-    const fetchQuick = (teamId, setQuick, setErr) => {
-      fetch(`/api/team-stats?teamId=${encodeURIComponent(teamId)}&quick=1`)
+    const fetchStats = (teamId, setStats, setErr) => {
+      fetch(`/api/team-stats?teamId=${encodeURIComponent(teamId)}`)
         .then(async (r) => {
           const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
           if (cancelled) return;
           if (!r.ok || j.error) setErr(j.error || `HTTP ${r.status}`);
-          else setQuick(j);
+          else setStats(j);
         })
         .catch((e) => { if (!cancelled) setErr(e.message); });
     };
 
-    if (homeId) fetchQuick(homeId, setHomeQuick, setHomeStatsErr);
-    if (awayId) fetchQuick(awayId, setAwayQuick, setAwayStatsErr);
+    if (homeId) fetchStats(homeId, setHomeQuick, setHomeStatsErr);
+    if (awayId) fetchStats(awayId, setAwayQuick, setAwayStatsErr);
     return () => { cancelled = true; };
   }, [homeId, awayId]);
 
