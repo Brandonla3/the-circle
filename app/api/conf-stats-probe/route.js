@@ -257,6 +257,34 @@ async function probeConference(slug, cfg, seasonId) {
       out.mainHeading = mainHeading ? stripTags(mainHeading) : null;
     } else if (cfg.type === 'boost-nextdata') {
       out.boost = parseBoostNextData(html);
+      // Big Ten's stats come from its Boost Sport AI backend, not from
+      // the Next.js hydration blob. The __NEXT_DATA__ confirmed the
+      // BACKEND_HOST_URL is https://b1gbeprod.boostsport.ai. Probe a
+      // list of common Boost API paths to find where the actual stats
+      // data lives.
+      const sid = seasonId || 17020;
+      const big10Candidates = [
+        // Try common Boost stats paths at the prod backend host.
+        { label: 'b1gbeprod stats (root)',                    url: 'https://b1gbeprod.boostsport.ai/api/v1/stats' },
+        { label: 'b1gbeprod stats by conf+sport+season',      url: `https://b1gbeprod.boostsport.ai/api/v1/stats?conference_alias=b1g&sport=sb&season=2026` },
+        { label: 'b1gbeprod stats conf b1g sport sb',         url: `https://b1gbeprod.boostsport.ai/api/v1/stats/b1g/sb/2026` },
+        { label: 'b1gbeprod sport-stats b1g sb',              url: `https://b1gbeprod.boostsport.ai/api/v1/sport-stats/b1g/sb/2026` },
+        { label: 'b1gbeprod conference-stats b1g sb',         url: `https://b1gbeprod.boostsport.ai/api/v1/conference-stats/b1g/sb/2026` },
+        { label: 'b1gbeprod team-stats b1g sb',               url: `https://b1gbeprod.boostsport.ai/api/v1/team-stats?conference_alias=b1g&sport_alias=sb&season=2026` },
+        { label: 'b1gbeprod player-stats b1g sb',             url: `https://b1gbeprod.boostsport.ai/api/v1/player-stats?conference_alias=b1g&sport_alias=sb&season=2026` },
+        { label: 'b1gbeprod cume-stats b1g sb',               url: `https://b1gbeprod.boostsport.ai/api/v1/cume-stats?conference_alias=b1g&sport_alias=sb&season=2026` },
+        { label: 'b1gbeprod season-stats b1g sb',             url: `https://b1gbeprod.boostsport.ai/api/v1/season-stats?conference_alias=b1g&sport_alias=sb&season=2026` },
+        // Alternate path shapes — REST-ish /sports/{alias}/stats style.
+        { label: 'b1gbeprod sports sb stats',                 url: `https://b1gbeprod.boostsport.ai/api/v1/sports/sb/stats?season=2026` },
+        { label: 'b1gbeprod sport sb conf b1g stats',         url: `https://b1gbeprod.boostsport.ai/api/v1/sport/sb/conference/b1g/stats?season=2026` },
+        // Try the Next.js data route that SSR'd the page — Next ships
+        // its getStaticProps / getServerSideProps blobs at _next/data.
+        { label: 'bigten.org _next/data stats',               url: `https://bigten.org/_next/data/16IUQfy3_BdMXH8jkp5XJ/sb/stats.json` },
+        { label: 'bigten.org _next/data stats with season',   url: `https://bigten.org/_next/data/16IUQfy3_BdMXH8jkp5XJ/sb/stats/2026.json` },
+        // Also try hitting the cms.boostsport.ai delivery host.
+        { label: 'cms.boostsport.ai stats b1g sb',            url: `https://cms.boostsport.ai/api/v1/stats?conference_alias=b1g&sport=sb&season=2026` },
+      ];
+      out.candidates = await probeCandidates(big10Candidates);
     } else if (cfg.type === 'wp-statsdata-script') {
       out.wp = parseWpStatsData(html);
       // MW stats aren't inline — they're loaded client-side. Probe a
@@ -264,21 +292,22 @@ async function probeConference(slug, cfg, seasonId) {
       // Every candidate is fetched with our server-side User-Agent so
       // Cloudflare doesn't block them the way it would a browser fetch
       // from this sandbox.
+      const sid = seasonId || 17020;
       const mwCandidates = [
-        { label: 'wmt.games sec (known-working reference)', url: `https://wmt.games/conference/sec/${seasonId || 16}` },
-        { label: 'wmt.games mw', url: `https://wmt.games/conference/mw/${seasonId || 16}` },
-        { label: 'wmt.games mountainwest', url: `https://wmt.games/conference/mountainwest/${seasonId || 16}` },
-        { label: 'wmt.games mwc', url: `https://wmt.games/conference/mwc/${seasonId || 16}` },
-        { label: 'themw.com wp-json (root)', url: 'https://themw.com/wp-json/' },
-        { label: 'themw.com wp-json v1 (existing schedule endpoint base)', url: 'https://themw.com/wp-json/v1' },
-        { label: 'themw.com wp-json v1 stats', url: 'https://themw.com/wp-json/v1/stats' },
-        { label: 'themw.com wp-json v1 stats-events (schedule-events twin)', url: 'https://themw.com/wp-json/v1/stats-events' },
-        { label: 'themw.com wp-json v1 team-stats', url: 'https://themw.com/wp-json/v1/team-stats' },
-        { label: 'themw.com wp-json v1 sport-stats', url: 'https://themw.com/wp-json/v1/sport-stats' },
-        { label: 'themw.com wp-json v1 cume-stats', url: 'https://themw.com/wp-json/v1/cume-stats' },
-        { label: 'themw.com wp-json v1 season-stats', url: 'https://themw.com/wp-json/v1/season-stats' },
-        { label: 'themw.com wp-json v1 stat-data', url: 'https://themw.com/wp-json/v1/stat-data' },
-        { label: 'themw.com wp-json v1 sport-statistics', url: 'https://themw.com/wp-json/v1/sport-statistics' },
+        { label: 'wmt.games sec (known-working reference)',            url: `https://wmt.games/conference/sec/${sid}` },
+        { label: 'wmt.games mw',                                       url: `https://wmt.games/conference/mw/${sid}` },
+        { label: 'wmt.games mountainwest',                             url: `https://wmt.games/conference/mountainwest/${sid}` },
+        { label: 'wmt.games mwc',                                      url: `https://wmt.games/conference/mwc/${sid}` },
+        { label: 'themw.com wp-json (root)',                           url: 'https://themw.com/wp-json/' },
+        { label: 'themw.com wp-json v1 (existing schedule base)',      url: 'https://themw.com/wp-json/v1' },
+        { label: 'themw.com wp-json v1 stats',                         url: 'https://themw.com/wp-json/v1/stats' },
+        { label: 'themw.com wp-json v1 stats-events',                  url: 'https://themw.com/wp-json/v1/stats-events' },
+        { label: 'themw.com wp-json v1 team-stats',                    url: 'https://themw.com/wp-json/v1/team-stats' },
+        { label: 'themw.com wp-json v1 sport-stats',                   url: 'https://themw.com/wp-json/v1/sport-stats' },
+        { label: 'themw.com wp-json v1 cume-stats',                    url: 'https://themw.com/wp-json/v1/cume-stats' },
+        { label: 'themw.com wp-json v1 season-stats',                  url: 'https://themw.com/wp-json/v1/season-stats' },
+        { label: 'themw.com wp-json v1 stat-data',                     url: 'https://themw.com/wp-json/v1/stat-data' },
+        { label: 'themw.com wp-json v1 sport-statistics',              url: 'https://themw.com/wp-json/v1/sport-statistics' },
       ];
       out.candidates = await probeCandidates(mwCandidates);
     }
@@ -304,7 +333,8 @@ export async function GET(request) {
       results[slug] = { error: `unknown conf slug: ${slug}` };
       continue;
     }
-    const seasonId = slug === 'mw' ? await seasonIdPromise : null;
+    // Both MW and Big Ten probes now use the discovered seasonId.
+    const seasonId = (slug === 'mw' || slug === 'big10') ? await seasonIdPromise : null;
     results[slug] = await probeConference(slug, CONFS[slug], seasonId);
   }
   results._meta = { seasonId: await seasonIdPromise };
