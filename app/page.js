@@ -823,14 +823,28 @@ const TEAM_MODAL_SUB_TABS = [
 
 function TeamModal({ team, onClose }) {
   const [subTab, setSubTab] = useState('roster');
+  const [roster, setRoster] = useState(null);
+  const [rosterErr, setRosterErr] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsErr, setStatsErr] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
+    setRoster(null); setRosterErr(null);
     setStats(null); setStatsErr(null);
 
+    // Roster: Sidearm school sites (photos, full bio, every player on squad).
+    fetch(`/api/team-roster?teamId=${encodeURIComponent(team.id)}`)
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!r.ok || j.error) setRosterErr(j.error || `HTTP ${r.status}`);
+        else setRoster(j);
+      })
+      .catch((e) => { if (!cancelled) setRosterErr(e.message); });
+
+    // Stats: conference feeds (WMT/Sidearm stats tables).
     fetch(`/api/team-stats?teamId=${encodeURIComponent(team.id)}`)
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
@@ -872,34 +886,72 @@ function TeamModal({ team, onClose }) {
   // resolves and triggers a re-render.
 
   const renderRosterView = () => {
-    // Prefer stats.players as the source — it contains every Sidearm player
-    // (including bench/non-leaderboard entries) with photos, real position
-    // codes, and full bio data. ESPN's softball roster is notoriously bad:
-    // many schools return last-name-only stubs (e.g. "Alldredge") with no
-    // position, no photo, and sometimes 90+ ghost entries. Using stats as
-    const statsPlayers = (() => {
-      if (!stats?.players) return null;
-      const seen = new Set();
-      const out = [];
-      for (const p of [...(stats.players.batting || []), ...(stats.players.pitching || [])]) {
-        const key = p.id || p.name;
-        if (key && !seen.has(key)) { seen.add(key); out.push(p); }
-      }
-      return out.length > 0 ? out : null;
-    })();
+    // Primary source: Sidearm school roster (full squad, photos, bio data).
+    // Enrichment: stats players (from conference feed) fill in stats-only
+    // players who didn't make the Sidearm roster cut.
+    // Show loading until at least one source resolves.
+    const sidearmAthletes = roster?.athletes;
+    const sidearmAvailable = roster?.meta?.available;
 
-    if (!statsPlayers && !statsErr) {
+    // Build a name→player map from stats for enrichment and fallback.
+    const statsPlayerMap = new Map();
+    if (stats?.players) {
+      for (const p of [...(stats.players.batting || []), ...(stats.players.pitching || [])]) {
+        if (p.name) statsPlayerMap.set(p.name.toLowerCase(), p);
+      }
+    }
+
+    // Merge: start from Sidearm athletes, enrich with stats; then append
+    // any stats-only players (appeared in stats but not on Sidearm roster).
+    let source = null;
+    if (sidearmAthletes && sidearmAthletes.length > 0) {
+      const seenNames = new Set();
+      const merged = sidearmAthletes.map((a) => {
+        seenNames.add(a.name?.toLowerCase());
+        const sp = statsPlayerMap.get(a.name?.toLowerCase());
+        return {
+          ...a,
+          // Fill in stats fields so clicking opens a full PlayerModal
+          side: (['P','RHP','LHP'].includes((a.position || '').toUpperCase())) ? 'pitching' : 'batting',
+          games: sp?.games ?? null, AB: sp?.AB ?? null, H: sp?.H ?? null,
+          R: sp?.R ?? null, HR: sp?.HR ?? null, RBI: sp?.RBI ?? null,
+          BB: sp?.BB ?? null, K: sp?.K ?? null, SB: sp?.SB ?? null,
+          '2B': sp?.['2B'] ?? null, '3B': sp?.['3B'] ?? null,
+          BA: sp?.BA ?? null, OBP: sp?.OBP ?? null, SLG: sp?.SLG ?? null,
+          IP: sp?.IP ?? null, W: sp?.W ?? null, L: sp?.L ?? null,
+          SV: sp?.SV ?? null, SHO: sp?.SHO ?? null, ERA: sp?.ERA ?? null,
+          WHIP: sp?.WHIP ?? null, 'K/7': sp?.['K/7'] ?? null,
+        };
+      });
+      // Append stats-only players not on Sidearm roster
+      for (const sp of statsPlayerMap.values()) {
+        if (!seenNames.has(sp.name?.toLowerCase())) {
+          merged.push({ ...sp, side: sp.side || 'batting' });
+        }
+      }
+      source = merged;
+    } else if (statsPlayerMap.size > 0) {
+      // No Sidearm roster — fall back to stats players only
+      source = Array.from(statsPlayerMap.values()).map((p) => ({
+        ...p,
+        side: (['P','RHP','LHP'].includes((p.position || '').toUpperCase())) ? 'pitching' : 'batting',
+      }));
+    }
+
+    // Still loading: both fetches pending
+    if (!source && !rosterErr && !statsErr) {
       return <div className="text-center py-12 text-white/30 mono text-xs tracking-widest uppercase">Loading roster…</div>;
     }
-    if (!statsPlayers) {
+    // No data at all
+    if (!source || source.length === 0) {
+      const note = roster?.meta?.note;
       return (
         <div className="text-center py-12">
-          <div className="text-white/40 text-sm mb-2">Roster not available from conference feed.</div>
-          <div className="text-white/30 text-xs mono">{statsErr}</div>
+          <div className="text-white/40 text-sm mb-2">Roster not available.</div>
+          <div className="text-white/30 text-xs mono">{note || rosterErr || statsErr || 'No roster data from conference site.'}</div>
         </div>
       );
     }
-    const source = statsPlayers;
 
     // Group by position bucket.
     const buckets = {
