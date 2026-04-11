@@ -62,6 +62,8 @@ import { getAccTeamSchedule } from '../_acc-schedule.js';
 import { getBig10TeamSchedule } from '../_big10-schedule.js';
 import { getMwTeamSchedule } from '../_mw-schedule.js';
 import { lookupConference } from '../_conferences.js';
+import { getSidearmOrigin } from '../_sidearm-roster-map.js';
+import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -407,10 +409,16 @@ async function computeTeamStats(teamId) {
     confStatsPromise = getBig10TeamStats(variantList).catch(() => null);
   }
 
+  // Resolve Sidearm origin for this team so we can enrich player rows with
+  // roster photos and bio data (hometown, height, bats/throws, etc.).
+  // getSidearmOrigin accepts the normalized name variant set directly.
+  const sidearmOrigin = getSidearmOrigin(nameVariantSet);
+
   const [
     schedule,
     recordsRaw,
     confStats,
+    sidearmRoster,
     secSchedule,
     big12Schedule,
     accSchedule,
@@ -420,6 +428,7 @@ async function computeTeamStats(teamId) {
     fetchWithRetry(scheduleUrl),
     fetchWithRetry(recordsUrl),
     confStatsPromise,
+    sidearmOrigin ? buildSidearmRosterIndex(sidearmOrigin).catch(() => null) : Promise.resolve(null),
     getSecTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
     getBig12TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
     getAccTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
@@ -506,6 +515,30 @@ async function computeTeamStats(teamId) {
   const players = confStats
     ? normalizeWmtPlayers(confStats.players, confStats.name || team?.displayName || '')
     : { batting: [], pitching: [] };
+
+  // Enrich each player row with Sidearm roster data: photo URL and bio
+  // fields (hometown, highSchool, previousSchool, height, weight,
+  // batThrows). This makes the PlayerModal from Player Compare identical
+  // to the one opened from the Teams tab roster view.
+  if (sidearmRoster) {
+    for (const p of [...players.batting, ...players.pitching]) {
+      const sr = sidearmRoster.map.get(p.name.toLowerCase());
+      if (!sr) continue;
+      if (!p.photoUrl && sr.photoUrl)             p.photoUrl         = sr.photoUrl;
+      if (!p.hometown && sr.hometown)             p.hometown         = sr.hometown;
+      if (!p.highSchool && sr.highSchool)         p.highSchool       = sr.highSchool;
+      if (!p.previousSchool && sr.previousSchool) p.previousSchool   = sr.previousSchool;
+      if (!p.heightDisplay && sr.heightDisplay)   p.heightDisplay    = sr.heightDisplay;
+      if (!p.heightFeet && sr.heightFeet)         p.heightFeet       = sr.heightFeet;
+      if (!p.heightInches && sr.heightInches)     p.heightInches     = sr.heightInches;
+      if (!p.weight && sr.weight)                 p.weight           = sr.weight;
+      if (!p.batThrows && sr.batThrows)           p.batThrows        = sr.batThrows;
+      // WMT jersey comes from stats table (#); Sidearm jersey is authoritative
+      // when WMT doesn't have it.
+      if (!p.jersey && sr.jerseyNumber)           p.jersey           = sr.jerseyNumber;
+      if (!p.classYear && sr.academicYear)        p.classYear        = sr.academicYear;
+    }
+  }
 
   return {
     teamId: String(teamId),
