@@ -582,6 +582,92 @@ async function getPayloadCached() {
   return payloadInFlight;
 }
 
+// ---------------------------------------------------------------------------
+// Hardcoded alias map — ESPN name variant → Boost payload normalizeTeamKey.
+//
+// Boost names all Big Ten teams as "School Mascot" (full name, e.g.
+// "Minnesota Golden Gophers") while ESPN uses shorter forms ("Minnesota
+// Gophers", "Minnesota"). normalizeTeamKey strips spaces, so the keys below
+// must be the ALL-LOWERCASE NO-SPACE form of the Boost full name.
+//
+// Verified 2026-04-11 against bigten.org/sb/stats/ __NEXT_DATA__.
+// ---------------------------------------------------------------------------
+const BIG10_ALIAS_MAP = {
+  // Illinois
+  'illinois':               'illinoisfightingillini',
+  'illinoisillini':         'illinoisfightingillini',
+  'illinoisfightingillini': 'illinoisfightingillini',
+  'fightingillini':         'illinoisfightingillini',
+  // Indiana
+  'indiana':                'indianahoosiers',
+  'indianahoosiers':        'indianahoosiers',
+  'hoosiers':               'indianahoosiers',
+  // Iowa
+  'iowa':                   'iowahawkeyes',
+  'iowahawkeyes':           'iowahawkeyes',
+  'hawkeyes':               'iowahawkeyes',
+  // Maryland
+  'maryland':               'marylandterrapins',
+  'marylandterrapins':      'marylandterrapins',
+  'terrapins':              'marylandterrapins',
+  'terps':                  'marylandterrapins',
+  // Michigan
+  'michigan':               'michiganwolverines',
+  'michiganwolverines':     'michiganwolverines',
+  'wolverines':             'michiganwolverines',
+  // Michigan State
+  'michiganstate':          'michiganstatespartans',
+  'michiganstatespartans':  'michiganstatespartans',
+  'spartans':               'michiganstatespartans',
+  // Minnesota
+  'minnesota':              'minnesotagoldengophers',
+  'minnesotagophers':       'minnesotagoldengophers',
+  'minnesotagoldengophers': 'minnesotagoldengophers',
+  'goldengophers':          'minnesotagoldengophers',
+  'gophers':                'minnesotagoldengophers',
+  // Nebraska
+  'nebraska':               'nebraskahuskers',
+  'nebraskacornhuskers':    'nebraskahuskers',
+  'nebraskahuskers':        'nebraskahuskers',
+  'huskers':                'nebraskahuskers',
+  'cornhuskers':            'nebraskahuskers',
+  // Northwestern
+  'northwestern':           'northwesternwildcats',
+  'northwesternwildcats':   'northwesternwildcats',
+  // Ohio State
+  'ohiostate':              'ohiostatebuckeyes',
+  'ohiostatebuckeyes':      'ohiostatebuckeyes',
+  'buckeyes':               'ohiostatebuckeyes',
+  // Oregon
+  'oregon':                 'oregonducks',
+  'oregonducks':            'oregonducks',
+  'ducks':                  'oregonducks',
+  // Penn State
+  'pennstate':              'pennstatenittanylions',
+  'pennstatenittanylions':  'pennstatenittanylions',
+  'nittanylions':           'pennstatenittanylions',
+  // Purdue
+  'purdue':                 'purdueboilermakers',
+  'purdueboilermakers':     'purdueboilermakers',
+  'boilermakers':           'purdueboilermakers',
+  // Rutgers
+  'rutgers':                'rutgersscarletknights',
+  'rutgersscarletknights':  'rutgersscarletknights',
+  'scarletknights':         'rutgersscarletknights',
+  // UCLA
+  'ucla':                   'uclabruins',
+  'uclabruins':             'uclabruins',
+  'bruins':                 'uclabruins',
+  // Washington
+  'washington':             'washingtonhuskies',
+  'washingtonhuskies':      'washingtonhuskies',
+  'huskies':                'washingtonhuskies',
+  // Wisconsin
+  'wisconsin':              'wisconsinbadgers',
+  'wisconsinbadgers':       'wisconsinbadgers',
+  'badgers':                'wisconsinbadgers',
+};
+
 // Public API. Accepts either a single name or an array of name variants,
 // returns the same shape as the Big 12 / ACC / SEC stats fetchers.
 export async function getBig10TeamStats(nameVariants) {
@@ -594,12 +680,28 @@ export async function getBig10TeamStats(nameVariants) {
   } catch {
     return null;
   }
+
   let match = null;
-  // Exact key match first.
+
+  // 1. Exact key match against the dynamically-built teams map.
   for (const [k, t] of payload.teams) {
     if (keys.has(k)) { match = t; break; }
   }
-  // Prefix fallback: "minnesota" matches key "minnesotagoldengophers" (and vice-versa).
+
+  // 2. Alias map: deterministic ESPN variant → Boost full-name key.
+  //    Runs before prefix scan to avoid false positives (e.g. "michigan"
+  //    prefix-matching "michiganstate").
+  if (!match) {
+    for (const qk of keys) {
+      const aliasKey = BIG10_ALIAS_MAP[qk];
+      if (aliasKey) {
+        match = payload.teams.get(aliasKey) || null;
+        if (match) break;
+      }
+    }
+  }
+
+  // 3. Prefix fallback for any future teams not yet in the alias map.
   if (!match) {
     outer: for (const [k, t] of payload.teams) {
       for (const qk of keys) {
@@ -607,6 +709,7 @@ export async function getBig10TeamStats(nameVariants) {
       }
     }
   }
+
   if (!match) return null;
   return {
     key: match.key,
