@@ -157,7 +157,13 @@ export async function buildSidearmRosterIndex(origin) {
   if (!players || players.length === 0) return null;
   const map = new Map();
   for (const p of players) {
-    if (p.name) map.set(p.name.toLowerCase(), p);
+    if (!p.name) continue;
+    // Primary key: "first last" (Sidearm native format)
+    map.set(p.name.toLowerCase(), p);
+    // Also index by "last, first" so conference-stats rows ("Minor, Kai") match.
+    if (p.firstName && p.lastName) {
+      map.set(`${p.lastName.toLowerCase()}, ${p.firstName.toLowerCase()}`, p);
+    }
   }
   return { players, map };
 }
