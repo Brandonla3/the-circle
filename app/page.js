@@ -1543,6 +1543,7 @@ function renderPlayerTable(stats, group, onSelectPlayer) {
               style={classYearStyle(p.classYear)}
               className={`border-t border-white/5 hover:bg-white/[0.02]${onSelectPlayer ? ' cursor-pointer hover:bg-white/[0.04]' : ''}`}
               onClick={onSelectPlayer ? () => onSelectPlayer({
+                // identity + display
                 name: p.name,
                 team: p.team,
                 side: group,
@@ -1556,6 +1557,17 @@ function renderPlayerTable(stats, group, onSelectPlayer) {
                 heightDisplay: p.heightDisplay || null,
                 weight: p.weight || null,
                 batThrows: p.batThrows || null,
+                // batting stats — passed so buildRowStats() can render them
+                // without falling back to the NCAA leaderboards API
+                games: p.games,
+                AB: p.AB, H: p.H, R: p.R, HR: p.HR, RBI: p.RBI,
+                BB: p.BB, K: p.K, SB: p.SB,
+                '2B': p['2B'], '3B': p['3B'],
+                BA: p.BA, OBP: p.OBP, SLG: p.SLG,
+                // pitching stats
+                IP: p.IP, W: p.W, L: p.L, SV: p.SV,
+                SHO: p.SHO, ERA: p.ERA, WHIP: p.WHIP,
+                'K/7': p['K/7'],
               }) : undefined}
             >
               <td className="py-1 px-2 whitespace-nowrap max-w-[160px]">
@@ -1833,8 +1845,12 @@ function renderSingleTeamTotals(stats, err) {
   const meta = stats.teamMeta || {};
   const batting = stats.totals?.batting || {};
   const pitching = stats.totals?.pitching || {};
+  // Runs Scored = batting totals R; Runs Allowed = pitching totals R.
+  // ESPN records previously supplied these; now they come from the conf feed.
+  const runsFor     = batting.R     ?? meta.runsFor     ?? null;
+  const runsAgainst = pitching.R    ?? meta.runsAgainst ?? null;
   const runDiff =
-    meta.runsFor != null && meta.runsAgainst != null ? meta.runsFor - meta.runsAgainst : null;
+    runsFor != null && runsAgainst != null ? runsFor - runsAgainst : null;
 
   const row = (key, label, short, value, rank) => (
     <div key={key} className="grid grid-cols-[auto_1fr_auto] gap-4 items-baseline py-1.5 border-b border-white/5">
@@ -1858,8 +1874,8 @@ function renderSingleTeamTotals(stats, err) {
       <div>
         <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Season</div>
         {row('record', 'Record',       'W-L',  recordValue)}
-        {row('rs',     'Runs Scored',  'RS',   meta.runsFor)}
-        {row('ra',     'Runs Allowed', 'RA',   meta.runsAgainst)}
+        {row('rs',     'Runs Scored',  'RS',   runsFor)}
+        {row('ra',     'Runs Allowed', 'RA',   runsAgainst)}
         {row('diff',   'Run Diff',     'DIFF', diffValue)}
         {row('strk',   'Streak',       'STRK', meta.streak)}
       </div>
@@ -2204,11 +2220,11 @@ function TeamCompareTab({ home, away, rankings }) {
         <div>
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40 mb-3">Season</div>
           {renderTotalRow('record',  'Record',       'W-L',  (s) => s.teamMeta && s.teamMeta.wins != null ? `${s.teamMeta.wins}-${s.teamMeta.losses}` : null)}
-          {renderTotalRow('rs',      'Runs Scored',  'RS',   (s) => s.teamMeta?.runsFor ?? null)}
-          {renderTotalRow('ra',      'Runs Allowed', 'RA',   (s) => s.teamMeta?.runsAgainst ?? null, true)}
+          {renderTotalRow('rs',      'Runs Scored',  'RS',   (s) => s.totals?.batting?.R ?? s.teamMeta?.runsFor ?? null)}
+          {renderTotalRow('ra',      'Runs Allowed', 'RA',   (s) => s.totals?.pitching?.R ?? s.teamMeta?.runsAgainst ?? null, true)}
           {renderTotalRow('diff',    'Run Diff',     'DIFF', (s) => {
-            const rf = s.teamMeta?.runsFor;
-            const ra = s.teamMeta?.runsAgainst;
+            const rf = s.totals?.batting?.R ?? s.teamMeta?.runsFor;
+            const ra = s.totals?.pitching?.R ?? s.teamMeta?.runsAgainst;
             if (rf == null || ra == null) return null;
             const d = rf - ra;
             return d > 0 ? `+${d}` : String(d);
