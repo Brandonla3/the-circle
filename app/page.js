@@ -980,6 +980,17 @@ function TeamModal({ team, onClose }) {
 
     return (
       <div className="space-y-8">
+        {/* Legend */}
+        <div className="flex items-center gap-5 text-[10px] mono text-white/40">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0" style={{background:'rgba(176,148,96,0.25)',border:'1px solid rgba(176,148,96,0.5)'}} />
+            Senior
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0" style={{background:'rgba(160,32,32,0.25)',border:'1px solid rgba(160,32,32,0.5)'}} />
+            Freshman
+          </div>
+        </div>
         {Object.entries(buckets).map(([label, list]) => {
           if (list.length === 0) return null;
           return (
