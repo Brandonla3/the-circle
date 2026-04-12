@@ -35,6 +35,9 @@ export default function Page() {
   const [filterConference, setFilterConference] = useState('');
   const [filterTeam, setFilterTeam] = useState('');
   const pollRef = useRef(null);
+  // Ref so onGameRefresh can always see the current selectedGame without
+  // being recreated on every render (which would reset the 15s interval).
+  const selectedGameRef = useRef(null);
 
   const fetchScores = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -43,7 +46,15 @@ export default function Page() {
       const r = await fetch(proxy(`${ESPN_SITE}/scoreboard?dates=${fmtDate(date)}&limit=200`));
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
-      setGames(d.events || []);
+      const events = d.events || [];
+      setGames(events);
+      // Keep selectedGame in sync with the fresh scoreboard payload so the
+      // live situation (base runners, count, outs) stays current even when
+      // the game detail endpoint doesn't carry situation data.
+      if (selectedGameRef.current) {
+        const updated = events.find((g) => g.id === selectedGameRef.current.id);
+        if (updated) setSelectedGame(updated);
+      }
       if (!silent) setLastUpdate(new Date());
     } catch (e) { if (!silent) setError(e.message); }
     finally { if (!silent) setLoading(false); }
@@ -57,13 +68,16 @@ export default function Page() {
     } catch (e) { setError(e.message); }
   }, []);
 
-  const fetchGameDetail = async (eventId) => {
-    setGameDetail(null);
+  // silent=true keeps the existing detail visible while the refresh is
+  // in-flight (no blink), used by the 15s live-refresh interval.
+  const fetchGameDetail = useCallback(async (eventId, silent = false) => {
+    if (!silent) setGameDetail(null);
     try {
       const r = await fetch(proxy(`${ESPN_WEBAPI}/summary?event=${eventId}`));
-      setGameDetail(await r.json());
-    } catch (e) { setGameDetail({ error: e.message }); }
-  };
+      const j = await r.json();
+      setGameDetail(j);
+    } catch (e) { if (!silent) setGameDetail({ error: e.message }); }
+  }, []);
 
   useEffect(() => { fetchScores(); fetchRankings(); }, [fetchScores, fetchRankings]);
 
@@ -150,11 +164,15 @@ export default function Page() {
     if (next !== 'team') setFilterTeam('');
   };
 
-  // Stable callbacks for GameModal so live-game polling (setGames) doesn't
-  // create new function references on every render and cause modal re-renders.
+  // Keep the ref in sync so onGameRefresh can access the current game id
+  // without being recreated (which would reset the modal's 15s interval).
+  selectedGameRef.current = selectedGame;
+
+  // Stable callbacks for GameModal — never recreated so the live interval
+  // inside GameModal keeps its 15s cadence even when selectedGame updates.
   const onGameRefresh = useCallback(() => {
-    if (selectedGame) fetchGameDetail(selectedGame.id);
-  }, [selectedGame, fetchGameDetail]);
+    if (selectedGameRef.current) fetchGameDetail(selectedGameRef.current.id, true);
+  }, [fetchGameDetail]);
   const onGameClose = useCallback(() => {
     setSelectedGame(null);
     setGameDetail(null);
@@ -2561,7 +2579,7 @@ function LiveTab({ game, detail }) {
       </div>
 
       <div className="text-[10px] mono uppercase tracking-widest text-white/30 text-center">
-        Auto-refresh every 15s
+        Situation refreshes every 15s · Scoreboard every 45s
       </div>
     </div>
   );
