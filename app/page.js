@@ -311,27 +311,6 @@ export default function Page() {
   );
 }
 
-function Diamond({ onFirst, onSecond, onThird, size = 64 }) {
-  const lit = '#ff6b1a';
-  const dim = 'rgba(255,255,255,0.12)';
-  const stroke = 'rgba(255,255,255,0.35)';
-  // Diamond rotated 45deg. Bases sit at the four points of the rhombus.
-  // Home = bottom, 1B = right, 2B = top, 3B = left.
-  return (
-    <svg viewBox="0 0 100 100" width={size} height={size} aria-label="Baserunners">
-      <polygon points="50,18 82,50 50,82 18,50" fill="none" stroke={stroke} strokeWidth="2" />
-      {/* 2B (top) */}
-      <rect x="42" y="10" width="16" height="16" transform="rotate(45 50 18)" fill={onSecond ? lit : dim} stroke={stroke} strokeWidth="1.5" />
-      {/* 3B (left) */}
-      <rect x="10" y="42" width="16" height="16" transform="rotate(45 18 50)" fill={onThird ? lit : dim} stroke={stroke} strokeWidth="1.5" />
-      {/* 1B (right) */}
-      <rect x="74" y="42" width="16" height="16" transform="rotate(45 82 50)" fill={onFirst ? lit : dim} stroke={stroke} strokeWidth="1.5" />
-      {/* Home (bottom) */}
-      <polygon points="50,74 58,82 50,90 42,82" fill="rgba(255,255,255,0.5)" stroke={stroke} strokeWidth="1.5" />
-    </svg>
-  );
-}
-
 function CountOuts({ balls = 0, strikes = 0, outs = 0 }) {
   const Dot = ({ on, color }) => (
     <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: on ? color : 'rgba(255,255,255,0.15)' }} />
@@ -501,12 +480,6 @@ function GameCard({ game, index, onClick }) {
       </div>
       {isLive && comp.situation && (
         <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-3">
-          <Diamond
-            onFirst={!!comp.situation.onFirst}
-            onSecond={!!comp.situation.onSecond}
-            onThird={!!comp.situation.onThird}
-            size={40}
-          />
           <CountOuts
             balls={comp.situation.balls}
             strikes={comp.situation.strikes}
@@ -2504,18 +2477,7 @@ function LiveTab({ game, detail }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/[0.06] to-transparent p-6">
-        <div className="flex flex-col items-center">
-          <Diamond
-            onFirst={!!sit.onFirst}
-            onSecond={!!sit.onSecond}
-            onThird={!!sit.onThird}
-            size={140}
-          />
-          <div className="mt-3 text-[10px] mono uppercase tracking-[0.3em] text-white/40">
-            {game.status?.type?.shortDetail}
-          </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/[0.06] to-transparent p-6">
         <div className="flex flex-col items-center gap-3">
           <div className="text-[10px] mono uppercase tracking-[0.3em] text-white/40">Count</div>
           <div className="display text-white text-6xl font-black tabular-nums">
@@ -2527,6 +2489,9 @@ function LiveTab({ game, detail }) {
             ))}
           </div>
           <div className="text-[10px] mono uppercase tracking-widest text-white/40">{sit.outs ?? 0} Out{(sit.outs ?? 0) === 1 ? '' : 's'}</div>
+          <div className="text-[10px] mono uppercase tracking-[0.3em] text-white/30 mt-1">
+            {game.status?.type?.shortDetail}
+          </div>
         </div>
         <div className="space-y-3">
           {sit.batter?.athlete && (
@@ -2544,12 +2509,6 @@ function LiveTab({ game, detail }) {
           <div className="text-white text-sm">{lastPlay}</div>
         </div>
       )}
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <RunnerCard base="3B" runner={sit.onThird} />
-        <RunnerCard base="2B" runner={sit.onSecond} />
-        <RunnerCard base="1B" runner={sit.onFirst} />
-      </div>
 
       {dueUp && dueUp.length > 0 && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
@@ -2595,17 +2554,6 @@ function PlayerLine({ label, athlete, note }) {
   );
 }
 
-function RunnerCard({ base, runner }) {
-  const occupied = !!runner;
-  return (
-    <div className={`rounded-lg border p-3 ${occupied ? 'border-orange-500/40 bg-orange-500/5' : 'border-white/5 bg-white/[0.02]'}`}>
-      <div className="text-[10px] mono uppercase tracking-widest" style={{ color: occupied ? '#ff6b1a' : 'rgba(255,255,255,0.3)' }}>{base}</div>
-      <div className={`text-sm mt-1 ${occupied ? 'text-white' : 'text-white/30'}`}>
-        {occupied ? (runner.athlete?.shortName || runner.athlete?.displayName || 'Runner on') : 'Empty'}
-      </div>
-    </div>
-  );
-}
 
 function GameInfoTab({ detail }) {
   const gi = detail?.gameInfo;
