@@ -1,13 +1,13 @@
 {
   "season": 2026,
-  "generatedAt": "2026-04-11T06:33:36.785745+00:00",
+  "generatedAt": "2026-04-25T06:20:55.207668+00:00",
   "conferences": [
     {
       "name": "Big Ten",
       "slug": "big-ten",
       "sections": {
-        "batters": 367,
-        "pitchers": 367,
+        "batters": 368,
+        "pitchers": 368,
         "fielding": 0
       }
     },
