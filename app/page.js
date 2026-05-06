@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, Activity, Users } from 'lucide-react';
+import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, Activity, Users, Star } from 'lucide-react';
 import { lookupConference } from './api/_conferences.js';
 
 const ESPN_SITE = 'https://site.api.espn.com/apis/site/v2/sports/baseball/college-softball';
@@ -212,6 +212,7 @@ export default function Page() {
               {id:'standings',label:'Standings',icon:Activity},
               {id:'leaders',label:'Players',icon:Users},
               {id:'stats',label:'Teams',icon:TrendingUp},
+              {id:'world-series',label:'World Series',icon:Star},
             ].map((t) => {
               const Icon = t.icon; const active = tab === t.id;
               return (
@@ -298,6 +299,7 @@ export default function Page() {
         {tab === 'standings' && <StandingsView />}
         {tab === 'leaders' && <LeadersView onSelectPlayer={setSelectedPlayer} />}
         {tab === 'stats' && <StatsView onSelectTeam={setSelectedTeam} />}
+        {tab === 'world-series' && <WorldSeriesView />}
       </main>
 
       {selectedGame && <GameModal game={selectedGame} detail={gameDetail} rankings={rankings} onRefresh={onGameRefresh} onClose={onGameClose} />}
@@ -3237,6 +3239,434 @@ function PlayerModal({ player, onClose }) {
         <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30">
           {data && !data.appearsIn?.length ? 'Stats via conference feed' : 'Aggregated from NCAA.com season leaderboards'} · Press Esc to close
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Women's College World Series / Tournament Schedule ───────────────────────
+
+// ── WCWS bracket layout constants (8-team, 3-round winner's path) ────────────
+// Fixed slot/card dimensions used by both the SVG connector lines and the
+// absolutely-positioned matchup cards so everything lines up precisely.
+
+const BK_SLOT_H  = 40;   // px — height of each team row inside a card
+const BK_CARD_W  = 164;  // px — width of each matchup card
+const BK_CARD_H  = BK_SLOT_H * 2 + 1; // 81px (two slots + 1px separator)
+const BK_V_GAP   = 44;   // px — vertical gap between opening-round cards
+const BK_CONN_W  = 40;   // px — width of the connector column between rounds
+const BK_STEP    = BK_CARD_H + BK_V_GAP; // 125px per opening-round slot
+
+// Vertical positions (top of card) for each round
+const BK_R1_TOPS = [0, BK_STEP, 2 * BK_STEP, 3 * BK_STEP];
+const BK_R1_CYS  = BK_R1_TOPS.map((t) => t + BK_SLOT_H); // y of slot boundary = bracket line attachment point (≈ card center)
+const BK_R2_CYS  = [
+  (BK_R1_CYS[0] + BK_R1_CYS[1]) / 2,
+  (BK_R1_CYS[2] + BK_R1_CYS[3]) / 2,
+];
+const BK_R2_TOPS = BK_R2_CYS.map((cy) => cy - BK_SLOT_H);
+const BK_R3_CY   = (BK_R2_CYS[0] + BK_R2_CYS[1]) / 2;
+const BK_R3_TOP  = BK_R3_CY - BK_SLOT_H;
+
+// Horizontal positions (left edge of each column)
+const BK_R1_X    = 0;
+const BK_R2_X    = BK_CARD_W + BK_CONN_W;
+const BK_R3_X    = BK_CARD_W + BK_CONN_W + BK_CARD_W + BK_CONN_W;
+const BK_TOTAL_W = BK_R3_X + BK_CARD_W;
+const BK_TOTAL_H = BK_R1_TOPS[3] + BK_CARD_H;
+
+// SVG connector lines: [x1, y1, x2, y2]
+const BK_CONN1_MX = BK_CARD_W + BK_CONN_W / 2; // midpoint x of connector col 1
+const BK_CONN2_MX = BK_CARD_W + BK_CONN_W + BK_CARD_W + BK_CONN_W / 2;
+
+const BK_SVG_LINES = [
+  // Opening → Semis, pair A (M0 & M1 → S0)
+  [BK_CARD_W,       BK_R1_CYS[0], BK_CONN1_MX,       BK_R1_CYS[0]],
+  [BK_CARD_W,       BK_R1_CYS[1], BK_CONN1_MX,       BK_R1_CYS[1]],
+  [BK_CONN1_MX,     BK_R1_CYS[0], BK_CONN1_MX,       BK_R1_CYS[1]], // vertical
+  [BK_CONN1_MX,     BK_R2_CYS[0], BK_R2_X,           BK_R2_CYS[0]],
+  // Opening → Semis, pair B (M2 & M3 → S1)
+  [BK_CARD_W,       BK_R1_CYS[2], BK_CONN1_MX,       BK_R1_CYS[2]],
+  [BK_CARD_W,       BK_R1_CYS[3], BK_CONN1_MX,       BK_R1_CYS[3]],
+  [BK_CONN1_MX,     BK_R1_CYS[2], BK_CONN1_MX,       BK_R1_CYS[3]],
+  [BK_CONN1_MX,     BK_R2_CYS[1], BK_R2_X,           BK_R2_CYS[1]],
+  // Semis → Final
+  [BK_R2_X + BK_CARD_W, BK_R2_CYS[0], BK_CONN2_MX,  BK_R2_CYS[0]],
+  [BK_R2_X + BK_CARD_W, BK_R2_CYS[1], BK_CONN2_MX,  BK_R2_CYS[1]],
+  [BK_CONN2_MX,         BK_R2_CYS[0], BK_CONN2_MX,  BK_R2_CYS[1]],
+  [BK_CONN2_MX,         BK_R3_CY,     BK_R3_X,       BK_R3_CY],
+];
+
+// Single matchup card used inside the SVG bracket (absolutely positioned).
+function BracketMatchupCard({ topTeam, botTeam, gameStatus, style }) {
+  const state    = gameStatus?.state;
+  const isFinal  = state === 'post';
+  const isLive   = state === 'in';
+  const topScore = topTeam?.score;
+  const botScore = botTeam?.score;
+  const topWins  = isFinal && topScore !== undefined && botScore !== undefined && Number(topScore) > Number(botScore);
+  const botWins  = isFinal && topScore !== undefined && botScore !== undefined && Number(botScore) > Number(topScore);
+
+  const BKSlot = ({ team, wins, scored, isBot }) => {
+    const logo = team?.logos?.[0]?.href || team?.logo;
+    return (
+      <div
+        className={`flex items-center justify-between px-2.5 gap-2${isBot ? ' border-t border-white/[0.07]' : ''}`}
+        style={{ height: `${BK_SLOT_H}px` }}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {logo
+            ? <img src={logo} alt="" className="h-4 w-4 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            : <div className="h-4 w-4 rounded bg-white/[0.07] flex-shrink-0" />}
+          {team?.seed && <span className="text-[9px] mono text-white/30 flex-shrink-0">#{team.seed}</span>}
+          <span className={`text-[11px] font-semibold truncate leading-none ${wins ? 'text-white' : team ? 'text-white/55' : 'text-white/20'}`}>
+            {team?.name || 'TBD'}
+          </span>
+        </div>
+        {scored !== undefined && (
+          <span className={`mono text-sm font-bold tabular-nums flex-shrink-0 pl-1 ${wins ? 'text-white' : 'text-white/30'}`}>{scored}</span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className="absolute rounded-md border border-white/[0.12] overflow-hidden"
+      style={{ ...style, width: `${BK_CARD_W}px`, height: `${BK_CARD_H}px`, background: 'rgba(255,255,255,0.025)' }}
+    >
+      {isLive && <span className="live-dot absolute top-1.5 right-2 h-1.5 w-1.5 rounded-full bg-red-500 z-10" />}
+      <BKSlot team={topTeam} wins={topWins} scored={topScore} />
+      <BKSlot team={botTeam} wins={botWins} scored={botScore} isBot />
+    </div>
+  );
+}
+
+// Extract a team object from an ESPN event competitor (or return null for TBD).
+function extractBracketTeam(event, homeAway) {
+  const comp = event?.competitions?.[0];
+  const c = comp?.competitors?.find((x) => x.homeAway === homeAway);
+  if (!c?.team) return null;
+  return {
+    name:  c.team.shortDisplayName || c.team.displayName,
+    logo:  c.team.logos?.[0]?.href || c.team.logo,
+    seed:  c.curatedRank?.current < 99 ? c.curatedRank.current : null,
+    score: c.score,
+  };
+}
+
+// 8-team WCWS bracket — simplified to the winner's-bracket path.
+// Opening round (4 games) → Semifinals (2) → Championship (1).
+// When games=[] the bracket renders with all TBD slots (off-season placeholder).
+function WCWSBracket({ games }) {
+  const sorted = (games || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+  const ev = (idx) => sorted[idx];
+
+  const card = (gameIdx, top, left) => {
+    const game = ev(gameIdx);
+    return (
+      <BracketMatchupCard
+        key={gameIdx}
+        topTeam={game ? extractBracketTeam(game, 'away') : null}
+        botTeam={game ? extractBracketTeam(game, 'home') : null}
+        gameStatus={game?.status?.type}
+        style={{ top, left }}
+      />
+    );
+  };
+
+  const roundHeaders = [
+    { label: 'Opening Round', date: 'May 28–30', x: BK_R1_X },
+    { label: 'Semifinals',    date: 'June 1–4',  x: BK_R2_X },
+    { label: 'Championship',  date: 'June 5–7',  x: BK_R3_X },
+  ];
+
+  return (
+    <div className="overflow-x-auto pb-4">
+      {/* Round column headers */}
+      <div className="flex mb-3" style={{ width: `${BK_TOTAL_W}px` }}>
+        {roundHeaders.map(({ label, date, x }, i) => (
+          <React.Fragment key={label}>
+            <div className="text-center" style={{ width: `${BK_CARD_W}px` }}>
+              <div className="text-[10px] mono uppercase tracking-widest text-white/40">{label}</div>
+              <div className="text-[9px] mono text-white/20 mt-0.5">{date}</div>
+            </div>
+            {i < roundHeaders.length - 1 && <div style={{ width: `${BK_CONN_W}px` }} />}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Bracket */}
+      <div className="relative" style={{ width: `${BK_TOTAL_W}px`, height: `${BK_TOTAL_H}px` }}>
+        {/* SVG connector lines */}
+        <svg className="absolute inset-0" width={BK_TOTAL_W} height={BK_TOTAL_H} style={{ pointerEvents: 'none' }}>
+          {BK_SVG_LINES.map(([x1, y1, x2, y2], i) => (
+            <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+          ))}
+        </svg>
+
+        {/* Opening round: games 0–3 */}
+        {BK_R1_TOPS.map((top, i) => card(i, top, BK_R1_X))}
+        {/* Semifinals: games 4–5 */}
+        {BK_R2_TOPS.map((top, i) => card(4 + i, top, BK_R2_X))}
+        {/* Championship: game 6 */}
+        {card(6, BK_R3_TOP, BK_R3_X)}
+      </div>
+
+      <div className="mt-3 text-[9px] mono uppercase tracking-widest text-white/20">
+        Double-elimination · Oklahoma City, OK · Winner's bracket path shown
+      </div>
+    </div>
+  );
+}
+
+// Game card used for Regionals and Super Regionals (list/grid layout).
+function CWSGameCard({ event, index }) {
+  const comp = event.competitions?.[0];
+  if (!comp) return null;
+  const home = comp.competitors?.find((c) => c.homeAway === 'home');
+  const away = comp.competitors?.find((c) => c.homeAway === 'away');
+  const state  = event.status?.type?.state;
+  const detail = event.status?.type?.shortDetail || event.status?.type?.detail;
+  const isLive = state === 'in';
+  const isFinal = state === 'post';
+  const winner = isFinal ? (Number(home?.score) > Number(away?.score) ? 'home' : 'away') : null;
+  const homeRank = home?.curatedRank?.current;
+  const awayRank = away?.curatedRank?.current;
+  const isTop10 = (homeRank && homeRank <= 10) || (awayRank && awayRank <= 10);
+  const venue = comp.venue;
+  const city = venue?.address?.city;
+  const st = venue?.address?.state;
+  const locationStr = [venue?.fullName, city && st ? `${city}, ${st}` : city].filter(Boolean).join(' · ');
+
+  const CWSTeamRow = ({ team, side }) => {
+    const t = team?.team || {};
+    const rank = team?.curatedRank?.current;
+    const dim = winner && winner !== side;
+    const logo = t.logos?.[0]?.href || t.logo;
+    return (
+      <div className={`flex items-center justify-between py-1.5 ${dim ? 'opacity-40' : ''}`}>
+        <div className="flex items-center gap-2 min-w-0">
+          {logo && <img src={logo} alt="" className="h-5 w-5 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              {rank && rank < 99 && <span className="text-[9px] mono text-white/40">#{rank}</span>}
+              <span className="text-white font-semibold truncate text-xs">{t.shortDisplayName || t.displayName || 'TBD'}</span>
+            </div>
+            <div className="text-[9px] text-white/30 mono uppercase truncate">{team?.records?.[0]?.summary || ''}</div>
+          </div>
+        </div>
+        <div className={`mono text-lg font-bold tabular-nums flex-shrink-0 pl-2 ${winner === side ? 'text-white' : 'text-white/70'}`}>
+          {team?.score ?? '—'}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className="card-enter relative rounded-lg border border-white/10 bg-gradient-to-br from-white/[0.03] to-transparent p-3"
+      style={{
+        animationDelay: `${Math.min(index * 40, 400)}ms`,
+        ...(isTop10 ? { boxShadow: '0 0 0 1px rgba(255,107,26,0.35), 0 0 24px -4px rgba(255,107,26,0.35)', borderColor: 'rgba(255,107,26,0.45)' } : {}),
+      }}
+    >
+      <div className="flex items-center justify-between mb-1.5 gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {isLive && <span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0"></span>}
+          <span className={`text-[9px] mono uppercase tracking-widest truncate ${isLive ? 'text-red-400' : isFinal ? 'text-white/50' : 'text-white/30'}`}>{detail}</span>
+          {isTop10 && (
+            <span className="text-[8px] mono uppercase tracking-widest px-1 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(255,107,26,0.12)', color: '#ff6b1a', border: '1px solid rgba(255,107,26,0.3)' }}>T10</span>
+          )}
+        </div>
+        {comp.broadcasts?.[0]?.names?.[0] && (
+          <span className="text-[8px] mono uppercase text-white/30 flex-shrink-0 truncate max-w-[60px]">{comp.broadcasts[0].names[0]}</span>
+        )}
+      </div>
+      <div>
+        <CWSTeamRow team={away} side="away" />
+        <div className="h-px bg-white/5"></div>
+        <CWSTeamRow team={home} side="home" />
+      </div>
+      {locationStr && (
+        <div className="mt-2 pt-2 border-t border-white/5 text-[9px] text-white/30 mono uppercase tracking-wide truncate">{locationStr}</div>
+      )}
+    </div>
+  );
+}
+
+function WorldSeriesView() {
+  const [data, setData]           = useState(null);
+  const [error, setError]         = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const pollRef = useRef(null);
+
+  const load = useCallback(async (silent = false) => {
+    try {
+      const r = await fetch('/api/cws-bracket');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      setData(j);
+      if (!silent) setLastUpdate(new Date());
+    } catch (e) {
+      if (!silent) setError(e.message);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    const hasLive = data?.rounds?.some((r) =>
+      r.groups?.some((g) => g.games?.some((ev) => ev.status?.type?.state === 'in'))
+    );
+    pollRef.current = setInterval(() => load(true), hasLive ? 30000 : 60000);
+    return () => clearInterval(pollRef.current);
+  }, [data, load]);
+
+  if (error) return (
+    <div className="py-20 text-center"><div className="text-red-400 text-sm">Error loading schedule: {error}</div></div>
+  );
+  if (!data) return (
+    <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading tournament schedule…</div>
+  );
+
+  const { rounds = [] } = data;
+
+  const ROUND_META = {
+    'Regionals':      { label: 'NCAA Regionals',              sub: '64-team field · 16 regional sites' },
+    'Super Regionals':{ label: 'Super Regionals',             sub: '16 teams · 8 best-of-3 series' },
+    'WCWS':           { label: "Women's College World Series", sub: 'Oklahoma City, OK · 8 teams · Double-elimination' },
+    'Tournament':     { label: 'NCAA Tournament',             sub: '' },
+  };
+
+  const renderRound = ({ round, groups }) => {
+    const meta = ROUND_META[round] || { label: round, sub: '' };
+    const allGames = groups.flatMap((g) => g.games);
+    const liveCount = allGames.filter((ev) => ev.status?.type?.state === 'in').length;
+
+    const RoundHeader = () => (
+      <div className="flex items-end justify-between mb-5 pb-2 border-b border-white/10">
+        <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-white text-xl font-bold display">{meta.label}</span>
+            {liveCount > 0 && (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-red-500/30 bg-red-500/10">
+                <span className="live-dot h-1 w-1 rounded-full bg-red-500"></span>
+                <span className="text-red-400 text-[9px] mono font-bold">{liveCount} LIVE</span>
+              </div>
+            )}
+          </div>
+          {meta.sub && <div className="text-white/30 text-xs mono">{meta.sub}</div>}
+        </div>
+        <span className="text-[9px] mono uppercase tracking-widest text-white/30">{allGames.length} game{allGames.length !== 1 ? 's' : ''}</span>
+      </div>
+    );
+
+    if (round === 'WCWS') {
+      return (
+        <div key={round}>
+          <RoundHeader />
+          <WCWSBracket games={allGames} />
+        </div>
+      );
+    }
+
+    // Regionals and Super Regionals: group by venue city (site pods), then by date.
+    const siteMap = new Map();
+    for (const g of allGames) {
+      const city = g.competitions?.[0]?.venue?.address?.city || 'Unknown Site';
+      if (!siteMap.has(city)) siteMap.set(city, []);
+      siteMap.get(city).push(g);
+    }
+    const sites = Array.from(siteMap.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+    return (
+      <div key={round}>
+        <RoundHeader />
+        {sites.length > 0 ? (
+          <div className="space-y-8">
+            {sites.map(([city, siteGames]) => (
+              <div key={city}>
+                <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-2 flex items-center gap-2">
+                  <span className="inline-block h-px w-4 bg-white/20"></span>
+                  {city} Site
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {siteGames.sort((a, b) => new Date(a.date) - new Date(b.date)).map((ev, i) => (
+                    <CWSGameCard key={ev.id} event={ev} index={i} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {groups.map(({ date, games }) => {
+              const d = new Date(date + 'T12:00:00Z');
+              const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+              return (
+                <div key={date}>
+                  <div className="text-[10px] mono tracking-[0.2em] uppercase text-white/40 mb-2">{dayLabel}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {games.map((ev, i) => <CWSGameCard key={ev.id} event={ev} index={i} />)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-12">
+      <div className="flex items-end justify-between border-b border-white/10 pb-3 flex-wrap gap-3">
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">NCAA D1 Softball · 2026</div>
+          <h2 className="display text-white text-3xl font-bold">Tournament Schedule</h2>
+        </div>
+        <div className="text-[9px] mono tracking-widest uppercase text-white/30">
+          {lastUpdate && `Updated ${lastUpdate.toLocaleTimeString()}`}
+        </div>
+      </div>
+
+      {rounds.length === 0 ? (
+        // Off-season: show the WCWS bracket placeholder so the format is visible now.
+        <div>
+          <div className="mb-5 pb-2 border-b border-white/10">
+            <div className="text-white text-xl font-bold display mb-0.5">Women's College World Series</div>
+            <div className="text-white/30 text-xs mono">Oklahoma City, OK · 8 teams · Double-elimination · Bracket announced after Super Regionals</div>
+          </div>
+          <WCWSBracket games={[]} />
+
+          <div className="mt-10 p-5 rounded-xl border border-white/5 bg-white/[0.015]">
+            <div className="text-[10px] mono uppercase tracking-widest text-white/30 mb-3">2026 Tournament Calendar</div>
+            <div className="space-y-2 text-sm">
+              {[
+                { round: 'Regionals',       dates: 'May 14–17',     teams: '64 teams · 16 sites' },
+                { round: 'Super Regionals', dates: 'May 21–24',     teams: '16 teams · 8 sites · Best-of-3' },
+                { round: 'World Series',    dates: 'May 28–June 7', teams: '8 teams · Oklahoma City, OK' },
+              ].map(({ round, dates, teams }) => (
+                <div key={round} className="flex items-center justify-between gap-4">
+                  <span className="text-white/70 font-semibold">{round}</span>
+                  <span className="text-white/30 text-xs mono text-right">{dates} · {teams}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        ['Regionals', 'Super Regionals', 'WCWS', 'Tournament']
+          .map((r) => rounds.find((rd) => rd.round === r))
+          .filter(Boolean)
+          .map(renderRound)
+      )}
+
+      <div className="pt-4 border-t border-white/5 text-[9px] mono uppercase tracking-widest text-white/30">
+        Data via ESPN · Auto-refreshes every minute
       </div>
     </div>
   );
