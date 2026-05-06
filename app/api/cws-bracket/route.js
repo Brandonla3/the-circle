@@ -20,7 +20,8 @@ function fmtDate(d) {
 }
 
 // Tournament window: May 10 – June 10 of the current year.
-// Regionals typically run weeks 1–2, Super Regionals week 3, WCWS weeks 4–5.
+// Regionals start mid-May (≈ May 14), Super Regionals the following week
+// (≈ May 21), WCWS from late May through early June (≈ May 28–June 7).
 function getTournamentDates(year) {
   const dates = [];
   const cur = new Date(Date.UTC(year, 4, 10)); // May 10
@@ -33,8 +34,8 @@ function getTournamentDates(year) {
 }
 
 // Determine the tournament round from ESPN competition notes, falling back to
-// date-based heuristics for the 2026 calendar (Regionals May 14–18,
-// Super Regionals May 21–25, WCWS May 28–June 7).
+// date-based heuristics for the 2026 calendar (Regionals May 14–20,
+// Super Regionals May 21–27, WCWS May 28–June 7).
 function classifyRound(event) {
   const notes = event.competitions?.[0]?.notes || [];
   const noteText = notes.map((n) => (n.headline || n.text || '')).join(' ').toLowerCase();

@@ -3259,7 +3259,7 @@ const BK_STEP    = BK_CARD_H + BK_V_GAP; // 125px per opening-round slot
 
 // Vertical positions (top of card) for each round
 const BK_R1_TOPS = [0, BK_STEP, 2 * BK_STEP, 3 * BK_STEP];
-const BK_R1_CYS  = BK_R1_TOPS.map((t) => t + BK_SLOT_H); // center-y of each card
+const BK_R1_CYS  = BK_R1_TOPS.map((t) => t + BK_SLOT_H); // y of slot boundary = bracket line attachment point (≈ card center)
 const BK_R2_CYS  = [
   (BK_R1_CYS[0] + BK_R1_CYS[1]) / 2,
   (BK_R1_CYS[2] + BK_R1_CYS[3]) / 2,
@@ -3376,7 +3376,7 @@ function WCWSBracket({ games }) {
   };
 
   const roundHeaders = [
-    { label: 'Opening Round', date: 'May 29–30', x: BK_R1_X },
+    { label: 'Opening Round', date: 'May 28–30', x: BK_R1_X },
     { label: 'Semifinals',    date: 'June 1–4',  x: BK_R2_X },
     { label: 'Championship',  date: 'June 5–7',  x: BK_R3_X },
   ];
