@@ -21,4 +21,5 @@ export const getAccTeamSchedule = createSidearmScheduleFetcher({
   origin: 'https://theacc.com',
   sportId: 15,
   idPrefix: 'acc',
+  referer: 'https://theacc.com/calendar.aspx?path=softball',
 });
