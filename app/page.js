@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, Activity, Users } from 'lucide-react';
+import { RefreshCw, Trophy, TrendingUp, X, ChevronLeft, ChevronRight, Zap, Activity, Users, Star } from 'lucide-react';
 import { lookupConference } from './api/_conferences.js';
 
 const ESPN_SITE = 'https://site.api.espn.com/apis/site/v2/sports/baseball/college-softball';
@@ -212,6 +212,7 @@ export default function Page() {
               {id:'standings',label:'Standings',icon:Activity},
               {id:'leaders',label:'Players',icon:Users},
               {id:'stats',label:'Teams',icon:TrendingUp},
+              {id:'world-series',label:'World Series',icon:Star},
             ].map((t) => {
               const Icon = t.icon; const active = tab === t.id;
               return (
@@ -298,6 +299,7 @@ export default function Page() {
         {tab === 'standings' && <StandingsView />}
         {tab === 'leaders' && <LeadersView onSelectPlayer={setSelectedPlayer} />}
         {tab === 'stats' && <StatsView onSelectTeam={setSelectedTeam} />}
+        {tab === 'world-series' && <WorldSeriesView />}
       </main>
 
       {selectedGame && <GameModal game={selectedGame} detail={gameDetail} rankings={rankings} onRefresh={onGameRefresh} onClose={onGameClose} />}
@@ -3237,6 +3239,232 @@ function PlayerModal({ player, onClose }) {
         <div className="px-6 pb-6 pt-4 border-t border-white/5 text-[10px] mono uppercase tracking-widest text-white/30">
           {data && !data.appearsIn?.length ? 'Stats via conference feed' : 'Aggregated from NCAA.com season leaderboards'} · Press Esc to close
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Women's College World Series / Tournament Schedule ───────────────────────
+
+const ROUND_LABELS = {
+  'Regionals': 'NCAA Regionals',
+  'Super Regionals': 'Super Regionals',
+  'WCWS': "Women's College World Series",
+  'Tournament': 'NCAA Tournament',
+};
+
+const ROUND_SUBTITLES = {
+  'Regionals': '64-team field · 16 regional sites',
+  'Super Regionals': '16 teams · 8 sites',
+  'WCWS': 'Oklahoma City, OK · Top 8 teams',
+  'Tournament': '',
+};
+
+function CWSGameCard({ event, index }) {
+  const comp = event.competitions?.[0];
+  if (!comp) return null;
+  const home = comp.competitors?.find((c) => c.homeAway === 'home');
+  const away = comp.competitors?.find((c) => c.homeAway === 'away');
+  const state = event.status?.type?.state;
+  const detail = event.status?.type?.shortDetail || event.status?.type?.detail;
+  const isLive = state === 'in';
+  const isFinal = state === 'post';
+  const winner = isFinal
+    ? Number(home?.score) > Number(away?.score) ? 'home' : 'away'
+    : null;
+
+  const CWSTeamRow = ({ team, side }) => {
+    const t = team?.team || {};
+    const rank = team?.curatedRank?.current;
+    const dim = winner && winner !== side;
+    const logo = t.logos?.[0]?.href || t.logo;
+    return (
+      <div className={`flex items-center justify-between py-1.5 ${dim ? 'opacity-40' : ''}`}>
+        <div className="flex items-center gap-2 min-w-0">
+          {logo && <img src={logo} alt="" className="h-5 w-5 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              {rank && rank < 99 && <span className="text-[9px] mono text-white/40">#{rank}</span>}
+              <span className="text-white font-semibold truncate text-xs">{t.shortDisplayName || t.displayName || 'TBD'}</span>
+            </div>
+            <div className="text-[9px] text-white/30 mono uppercase truncate">{team?.records?.[0]?.summary || ''}</div>
+          </div>
+        </div>
+        <div className={`mono text-lg font-bold tabular-nums flex-shrink-0 pl-2 ${winner === side ? 'text-white' : 'text-white/70'}`}>
+          {team?.score ?? '—'}
+        </div>
+      </div>
+    );
+  };
+
+  const homeRank = home?.curatedRank?.current;
+  const awayRank = away?.curatedRank?.current;
+  const isTop10 = (homeRank && homeRank <= 10) || (awayRank && awayRank <= 10);
+
+  const venue = comp.venue;
+  const city = venue?.address?.city;
+  const state2 = venue?.address?.state;
+  const locationStr = [venue?.fullName, city && state2 ? `${city}, ${state2}` : city].filter(Boolean).join(' · ');
+
+  const note = comp.notes?.[0]?.headline || '';
+
+  return (
+    <div
+      className="card-enter group relative rounded-lg border border-white/10 bg-gradient-to-br from-white/[0.03] to-transparent p-3"
+      style={{
+        animationDelay: `${Math.min(index * 40, 400)}ms`,
+        ...(isTop10 ? { boxShadow: '0 0 0 1px rgba(255,107,26,0.35), 0 0 24px -4px rgba(255,107,26,0.35)', borderColor: 'rgba(255,107,26,0.45)' } : {}),
+      }}
+    >
+      <div className="flex items-center justify-between mb-1.5 gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {isLive && <span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0"></span>}
+          <span className={`text-[9px] mono uppercase tracking-widest truncate ${isLive ? 'text-red-400' : isFinal ? 'text-white/50' : 'text-white/30'}`}>{detail}</span>
+          {isTop10 && (
+            <span className="text-[8px] mono uppercase tracking-widest px-1 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(255,107,26,0.12)', color: '#ff6b1a', border: '1px solid rgba(255,107,26,0.3)' }}>
+              T10
+            </span>
+          )}
+        </div>
+        {comp.broadcasts?.[0]?.names?.[0] && (
+          <span className="text-[8px] mono uppercase text-white/30 flex-shrink-0 truncate max-w-[60px]">{comp.broadcasts[0].names[0]}</span>
+        )}
+      </div>
+      <div>
+        <CWSTeamRow team={away} side="away" />
+        <div className="h-px bg-white/5"></div>
+        <CWSTeamRow team={home} side="home" />
+      </div>
+      {locationStr && (
+        <div className="mt-2 pt-2 border-t border-white/5 text-[9px] text-white/30 mono uppercase tracking-wide truncate">
+          {locationStr}
+        </div>
+      )}
+      {note && !locationStr && (
+        <div className="mt-2 pt-2 border-t border-white/5 text-[9px] text-white/30 mono uppercase tracking-wide truncate">{note}</div>
+      )}
+    </div>
+  );
+}
+
+function WorldSeriesView() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const pollRef = useRef(null);
+
+  const load = useCallback(async (silent = false) => {
+    try {
+      const r = await fetch('/api/cws-bracket');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      setData(j);
+      if (!silent) setLastUpdate(new Date());
+    } catch (e) {
+      if (!silent) setError(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Poll faster when there are live games.
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    const hasLive = data?.rounds?.some((r) =>
+      r.groups?.some((g) => g.games?.some((ev) => ev.status?.type?.state === 'in'))
+    );
+    const interval = hasLive ? 30000 : 60000;
+    pollRef.current = setInterval(() => load(true), interval);
+    return () => clearInterval(pollRef.current);
+  }, [data, load]);
+
+  if (error) return (
+    <div className="py-20 text-center">
+      <div className="text-red-400 text-sm">Error loading schedule: {error}</div>
+    </div>
+  );
+
+  if (!data) return (
+    <div className="text-center py-20 text-white/30 mono text-xs tracking-widest uppercase">Loading tournament schedule…</div>
+  );
+
+  const { rounds = [] } = data;
+
+  return (
+    <div className="space-y-12">
+      <div className="flex items-end justify-between border-b border-white/10 pb-3 flex-wrap gap-3">
+        <div>
+          <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">NCAA D1 Softball · 2026</div>
+          <h2 className="display text-white text-3xl font-bold">Tournament Schedule</h2>
+        </div>
+        <div className="text-[9px] mono tracking-widest uppercase text-white/30">
+          {lastUpdate && `Updated ${lastUpdate.toLocaleTimeString()}`}
+        </div>
+      </div>
+
+      {rounds.length === 0 ? (
+        <div className="py-20 text-center space-y-3">
+          <div className="display text-white/20 text-4xl">No games yet</div>
+          <div className="text-white/40 text-sm max-w-sm mx-auto">
+            The 2026 NCAA Softball Tournament begins in mid-May. Check back then for the full bracket and live scores.
+          </div>
+          <div className="mt-4 text-[10px] mono uppercase tracking-widest text-white/30 space-y-1">
+            <div>Regionals · May 14–17</div>
+            <div>Super Regionals · May 21–24</div>
+            <div>WCWS · May 28–June 7 · Oklahoma City</div>
+          </div>
+        </div>
+      ) : (
+        rounds.map(({ round, groups }) => {
+          const label = ROUND_LABELS[round] || round;
+          const subtitle = ROUND_SUBTITLES[round] || '';
+          const totalGames = groups.reduce((s, g) => s + g.games.length, 0);
+          const liveCount = groups.reduce((s, g) => s + g.games.filter((ev) => ev.status?.type?.state === 'in').length, 0);
+
+          return (
+            <div key={round}>
+              <div className="flex items-end justify-between mb-5 pb-2 border-b border-white/10">
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-white text-xl font-bold display">{label}</span>
+                    {liveCount > 0 && (
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-red-500/30 bg-red-500/10">
+                        <span className="live-dot h-1 w-1 rounded-full bg-red-500"></span>
+                        <span className="text-red-400 text-[9px] mono font-bold">{liveCount} LIVE</span>
+                      </div>
+                    )}
+                  </div>
+                  {subtitle && <div className="text-white/30 text-xs mono">{subtitle}</div>}
+                </div>
+                <span className="text-[9px] mono uppercase tracking-widest text-white/30">{totalGames} game{totalGames !== 1 ? 's' : ''}</span>
+              </div>
+
+              <div className="space-y-6">
+                {groups.map(({ date, games }) => {
+                  const d = new Date(date + 'T12:00:00Z');
+                  const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+                  return (
+                    <div key={date}>
+                      <div className="text-[10px] mono tracking-[0.2em] uppercase text-white/40 mb-2">{dayLabel}</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {games.map((ev, i) => (
+                          <CWSGameCard key={ev.id} event={ev} index={i} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })
+      )}
+
+      <div className="pt-4 border-t border-white/5 text-[9px] mono uppercase tracking-widest text-white/30">
+        Data via ESPN · Auto-refreshes every minute
       </div>
     </div>
   );
