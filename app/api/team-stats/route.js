@@ -52,6 +52,7 @@ import { getBig12TeamSchedule } from '../_big12-schedule.js';
 import { getAccTeamSchedule } from '../_acc-schedule.js';
 import { getBig10TeamSchedule } from '../_big10-schedule.js';
 import { getMwTeamSchedule } from '../_mw-schedule.js';
+import { getEspnTeamSchedule } from '../_espn-schedule.js';
 import { lookupConference } from '../_conferences.js';
 import { getSidearmOrigin } from '../_sidearm-roster-map.js';
 import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
@@ -390,6 +391,7 @@ async function computeTeamStats(teamId) {
     accSchedule,
     big10Schedule,
     mwSchedule,
+    espnSchedule,
   ] = await Promise.all([
     confStatsPromise,
     sidearmOrigin ? buildSidearmRosterIndex(sidearmOrigin).catch(() => null) : Promise.resolve(null),
@@ -398,12 +400,19 @@ async function computeTeamStats(teamId) {
     getAccTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
     getBig10TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
     getMwTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
+    // ESPN fallback: runs in parallel for Big 12 teams so schedule data is
+    // available even when the Sidearm endpoint is blocked (403).
+    conference === 'Big 12' ? getEspnTeamSchedule(teamId).catch(() => null) : Promise.resolve(null),
   ]);
 
   // Pick the best available conference schedule (first non-empty wins).
+  // espnSchedule is a fallback for Big 12 teams when the Sidearm endpoint
+  // is unavailable; it sits between big12 and acc so it never shadows other
+  // conference sources.
   const activeSchedule =
     (secSchedule?.length   ? secSchedule   : null) ||
     (big12Schedule?.length ? big12Schedule : null) ||
+    (espnSchedule?.length  ? espnSchedule  : null) ||
     (accSchedule?.length   ? accSchedule   : null) ||
     (big10Schedule?.length ? big10Schedule : null) ||
     (mwSchedule?.length    ? mwSchedule    : null) ||
@@ -487,11 +496,12 @@ async function computeTeamStats(teamId) {
     conferenceStats: confStats || null,
     schedule: activeSchedule,
     scheduleSource:
-      secSchedule?.length   ? 'sec'   :
-      big12Schedule?.length ? 'big12' :
-      accSchedule?.length   ? 'acc'   :
-      big10Schedule?.length ? 'big10' :
-      mwSchedule?.length    ? 'mw'    :
+      secSchedule?.length   ? 'sec'      :
+      big12Schedule?.length ? 'big12'    :
+      espnSchedule?.length  ? 'big12-espn' :
+      accSchedule?.length   ? 'acc'      :
+      big10Schedule?.length ? 'big10'    :
+      mwSchedule?.length    ? 'mw'       :
       null,
     meta: {
       source: confStats ? `conf-${confStats.conference || conference}` : 'no-conf-feed',
