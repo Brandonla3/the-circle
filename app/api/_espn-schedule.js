@@ -9,7 +9,12 @@
 //
 // NOT a route — Next.js only treats literal route.js files as endpoints.
 
-import { ESPN_SITE, ESPN_HEADERS } from './_espn.js';
+import { ESPN_HEADERS } from './_espn.js';
+
+// The /schedule endpoint lives under the softball path, not baseball.
+// _espn.js uses baseball/college-softball for teams/roster which works
+// there, but the schedule resource requires the softball/ sport segment.
+const ESPN_SCHEDULE_BASE = 'https://site.api.espn.com/apis/site/v2/sports/softball/college-softball';
 
 const TTL_MS = 15 * 60 * 1000;
 const scheduleCache = new Map(); // teamId(string) -> { fetchedAt, schedule }
@@ -81,7 +86,7 @@ export async function getEspnTeamSchedule(teamId) {
   const cached = scheduleCache.get(key);
   if (cached && Date.now() - cached.fetchedAt < TTL_MS) return cached.schedule;
 
-  const r = await fetch(`${ESPN_SITE}/teams/${key}/schedule`, {
+  const r = await fetch(`${ESPN_SCHEDULE_BASE}/teams/${key}/schedule`, {
     headers: ESPN_HEADERS,
     cache: 'no-store',
   });

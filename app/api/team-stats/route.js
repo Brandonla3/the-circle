@@ -53,6 +53,7 @@ import { getAccTeamSchedule } from '../_acc-schedule.js';
 import { getBig10TeamSchedule } from '../_big10-schedule.js';
 import { getMwTeamSchedule } from '../_mw-schedule.js';
 import { getEspnTeamSchedule } from '../_espn-schedule.js';
+import { getNcaaTeamSchedule } from '../_ncaa-schedule.js';
 import { lookupConference } from '../_conferences.js';
 import { getSidearmOrigin } from '../_sidearm-roster-map.js';
 import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
@@ -391,6 +392,7 @@ async function computeTeamStats(teamId) {
     accSchedule,
     big10Schedule,
     mwSchedule,
+    ncaaSchedule,
     espnSchedule,
   ] = await Promise.all([
     confStatsPromise,
@@ -400,18 +402,22 @@ async function computeTeamStats(teamId) {
     getAccTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
     getBig10TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
     getMwTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    // ESPN fallback: runs in parallel for Big 12 teams so schedule data is
-    // available even when the Sidearm endpoint is blocked (403).
+    // NCAA scoreboard fallback via henrygd.me proxy (same proxy used for
+    // player stats). Fetches the full season date-by-date in parallel and
+    // caches conference-wide for 15 min. Runs for Big 12 only.
+    conference === 'Big 12' ? getNcaaTeamSchedule(Array.from(nameVariantSet)).catch(() => null) : Promise.resolve(null),
+    // ESPN fallback: secondary option if NCAA is also unavailable.
     conference === 'Big 12' ? getEspnTeamSchedule(teamId).catch(() => null) : Promise.resolve(null),
   ]);
 
   // Pick the best available conference schedule (first non-empty wins).
-  // espnSchedule is a fallback for Big 12 teams when the Sidearm endpoint
-  // is unavailable; it sits between big12 and acc so it never shadows other
-  // conference sources.
+  // ncaaSchedule and espnSchedule are Big 12 fallbacks (in priority order)
+  // when the Sidearm endpoint is unavailable. Both sit between big12 and acc
+  // so they never shadow other conference sources.
   const activeSchedule =
     (secSchedule?.length   ? secSchedule   : null) ||
     (big12Schedule?.length ? big12Schedule : null) ||
+    (ncaaSchedule?.length  ? ncaaSchedule  : null) ||
     (espnSchedule?.length  ? espnSchedule  : null) ||
     (accSchedule?.length   ? accSchedule   : null) ||
     (big10Schedule?.length ? big10Schedule : null) ||
@@ -496,12 +502,13 @@ async function computeTeamStats(teamId) {
     conferenceStats: confStats || null,
     schedule: activeSchedule,
     scheduleSource:
-      secSchedule?.length   ? 'sec'      :
-      big12Schedule?.length ? 'big12'    :
+      secSchedule?.length   ? 'sec'       :
+      big12Schedule?.length ? 'big12'     :
+      ncaaSchedule?.length  ? 'big12-ncaa' :
       espnSchedule?.length  ? 'big12-espn' :
-      accSchedule?.length   ? 'acc'      :
-      big10Schedule?.length ? 'big10'    :
-      mwSchedule?.length    ? 'mw'       :
+      accSchedule?.length   ? 'acc'       :
+      big10Schedule?.length ? 'big10'     :
+      mwSchedule?.length    ? 'mw'        :
       null,
     meta: {
       source: confStats ? `conf-${confStats.conference || conference}` : 'no-conf-feed',
