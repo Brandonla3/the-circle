@@ -28,10 +28,13 @@ let allGamesInFlight = null;
 
 function getSeasonWindow() {
   const now = new Date();
-  const year = now.getUTCMonth() >= 5 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
+  const year = now.getUTCFullYear();
+  // Roll to next season in August (month >= 7); June and July are still
+  // current-season months (CWS runs through mid-June).
+  const seasonYear = now.getUTCMonth() >= 7 ? year + 1 : year;
   return {
-    start: new Date(Date.UTC(year, 1, 1)),  // Feb 1
-    end:   new Date(Date.UTC(year, 5, 30)), // Jun 30
+    start: new Date(Date.UTC(seasonYear, 1, 1)),  // Feb 1
+    end:   new Date(Date.UTC(seasonYear, 5, 30)), // Jun 30
   };
 }
 
