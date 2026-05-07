@@ -52,8 +52,7 @@ import { getBig12TeamSchedule } from '../_big12-schedule.js';
 import { getAccTeamSchedule } from '../_acc-schedule.js';
 import { getBig10TeamSchedule } from '../_big10-schedule.js';
 import { getMwTeamSchedule } from '../_mw-schedule.js';
-import { getEspnTeamSchedule } from '../_espn-schedule.js';
-import { getNcaaTeamSchedule } from '../_ncaa-schedule.js';
+import { getEspnScoreboardSchedule } from '../_espn-scoreboard-schedule.js';
 import { lookupConference } from '../_conferences.js';
 import { getSidearmOrigin } from '../_sidearm-roster-map.js';
 import { buildSidearmRosterIndex } from '../_sidearm-roster.js';
@@ -384,6 +383,11 @@ async function computeTeamStats(teamId) {
   // getSidearmOrigin accepts the normalized name variant set directly.
   const sidearmOrigin = getSidearmOrigin(nameVariantSet);
 
+  const nameVariantList = Array.from(nameVariantSet);
+
+  // Each fetcher is gated to its own conference. Without gating the SEC
+  // fetcher returns cross-conference games (e.g. Kansas vs. Arkansas) and
+  // wins the priority race, showing a partial/wrong schedule.
   const [
     confStats,
     sidearmRoster,
@@ -392,36 +396,28 @@ async function computeTeamStats(teamId) {
     accSchedule,
     big10Schedule,
     mwSchedule,
-    ncaaSchedule,
-    espnSchedule,
+    espnSbSchedule,
   ] = await Promise.all([
     confStatsPromise,
     sidearmOrigin ? buildSidearmRosterIndex(sidearmOrigin).catch(() => null) : Promise.resolve(null),
-    getSecTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    getBig12TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    getAccTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    getBig10TeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    getMwTeamSchedule(Array.from(nameVariantSet)).catch(() => null),
-    // NCAA scoreboard fallback via henrygd.me proxy (same proxy used for
-    // player stats). Fetches the full season date-by-date in parallel and
-    // caches conference-wide for 15 min. Runs for Big 12 only.
-    conference === 'Big 12' ? getNcaaTeamSchedule(Array.from(nameVariantSet)).catch(() => null) : Promise.resolve(null),
-    // ESPN fallback: secondary option if NCAA is also unavailable.
-    conference === 'Big 12' ? getEspnTeamSchedule(teamId).catch(() => null) : Promise.resolve(null),
+    conference === 'SEC'           ? getSecTeamSchedule(nameVariantList).catch(() => null)        : Promise.resolve(null),
+    conference === 'Big 12'        ? getBig12TeamSchedule(nameVariantList).catch(() => null)       : Promise.resolve(null),
+    conference === 'ACC'           ? getAccTeamSchedule(nameVariantList).catch(() => null)         : Promise.resolve(null),
+    conference === 'Big Ten'       ? getBig10TeamSchedule(nameVariantList).catch(() => null)       : Promise.resolve(null),
+    conference === 'Mountain West' ? getMwTeamSchedule(nameVariantList).catch(() => null)          : Promise.resolve(null),
+    // ESPN scoreboard fallback for Big 12: uses the same daily scoreboard
+    // endpoint the main app uses — proven to work from Vercel.
+    conference === 'Big 12'        ? getEspnScoreboardSchedule(nameVariantList).catch(() => null) : Promise.resolve(null),
   ]);
 
   // Pick the best available conference schedule (first non-empty wins).
-  // ncaaSchedule and espnSchedule are Big 12 fallbacks (in priority order)
-  // when the Sidearm endpoint is unavailable. Both sit between big12 and acc
-  // so they never shadow other conference sources.
   const activeSchedule =
-    (secSchedule?.length   ? secSchedule   : null) ||
-    (big12Schedule?.length ? big12Schedule : null) ||
-    (ncaaSchedule?.length  ? ncaaSchedule  : null) ||
-    (espnSchedule?.length  ? espnSchedule  : null) ||
-    (accSchedule?.length   ? accSchedule   : null) ||
-    (big10Schedule?.length ? big10Schedule : null) ||
-    (mwSchedule?.length    ? mwSchedule    : null) ||
+    (secSchedule?.length     ? secSchedule     : null) ||
+    (big12Schedule?.length   ? big12Schedule   : null) ||
+    (espnSbSchedule?.length  ? espnSbSchedule  : null) ||
+    (accSchedule?.length     ? accSchedule     : null) ||
+    (big10Schedule?.length   ? big10Schedule   : null) ||
+    (mwSchedule?.length      ? mwSchedule      : null) ||
     [];
 
   // Derive W-L from the conference schedule. If no conference schedule is
@@ -502,13 +498,12 @@ async function computeTeamStats(teamId) {
     conferenceStats: confStats || null,
     schedule: activeSchedule,
     scheduleSource:
-      secSchedule?.length   ? 'sec'       :
-      big12Schedule?.length ? 'big12'     :
-      ncaaSchedule?.length  ? 'big12-ncaa' :
-      espnSchedule?.length  ? 'big12-espn' :
-      accSchedule?.length   ? 'acc'       :
-      big10Schedule?.length ? 'big10'     :
-      mwSchedule?.length    ? 'mw'        :
+      secSchedule?.length    ? 'sec'      :
+      big12Schedule?.length  ? 'big12'    :
+      espnSbSchedule?.length ? 'big12-espn-sb' :
+      accSchedule?.length    ? 'acc'      :
+      big10Schedule?.length  ? 'big10'    :
+      mwSchedule?.length     ? 'mw'       :
       null,
     meta: {
       source: confStats ? `conf-${confStats.conference || conference}` : 'no-conf-feed',
