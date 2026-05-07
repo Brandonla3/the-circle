@@ -21,4 +21,5 @@ export const getBig12TeamSchedule = createSidearmScheduleFetcher({
   origin: 'https://big12sports.com',
   sportId: 12,
   idPrefix: 'big12',
+  referer: 'https://big12sports.com/calendar.aspx?path=softball',
 });

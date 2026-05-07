@@ -26,17 +26,24 @@ import { normalizeTeamKey } from './_wmt.js';
 
 const TTL_MS = 15 * 60 * 1000;
 
-const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (compatible; TheCircle/1.0)',
-  'Accept': 'application/json, text/javascript, */*; q=0.01',
-  'X-Requested-With': 'XMLHttpRequest',
-};
+function buildHeaders(referer) {
+  const h = {
+    'User-Agent': 'Mozilla/5.0 (compatible; TheCircle/1.0)',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+  if (referer) {
+    h['Referer'] = referer;
+    h['Origin'] = new URL(referer).origin;
+  }
+  return h;
+}
 
-async function fetchJson(url, timeoutMs = 15000) {
+async function fetchJson(url, headers, timeoutMs = 15000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch(url, { headers: HEADERS, signal: ctrl.signal, cache: 'no-store' });
+    const r = await fetch(url, { headers, signal: ctrl.signal, cache: 'no-store' });
     if (!r.ok) throw new Error(`Sidearm ${r.status}: ${url}`);
     return await r.json();
   } finally {
@@ -148,7 +155,8 @@ function normalizeEventForTeam(ev, nameKeySet, { idPrefix, origin }) {
 // Sidearm property. Each caller gets its own module-scope cache, so the
 // ACC and Big 12 fetchers never collide and warm-path calls skip the
 // upstream entirely.
-export function createSidearmScheduleFetcher({ origin, sportId, idPrefix }) {
+export function createSidearmScheduleFetcher({ origin, sportId, idPrefix, referer }) {
+  const HEADERS = buildHeaders(referer || `${origin}/calendar.aspx`);
   let eventsCache = null;
   let eventsCacheAt = 0;
   let eventsInFlight = null;
@@ -162,7 +170,7 @@ export function createSidearmScheduleFetcher({ origin, sportId, idPrefix }) {
       school_id: '0',
     });
     const url = `${origin}/services/responsive-calendar.ashx?${params.toString()}`;
-    const data = await fetchJson(url);
+    const data = await fetchJson(url, HEADERS);
     return Array.isArray(data) ? data : [];
   }
 
