@@ -3358,7 +3358,7 @@ function extractBracketTeam(event, homeAway) {
 // 8-team WCWS bracket — simplified to the winner's-bracket path.
 // Opening round (4 games) → Semifinals (2) → Championship (1).
 // When games=[] the bracket renders with all TBD slots (off-season placeholder).
-function WCWSBracket({ games }) {
+function WCWSBracket({ games, zoom = 1, onZoomChange }) {
   const sorted = (games || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
   const ev = (idx) => sorted[idx];
 
@@ -3381,40 +3381,91 @@ function WCWSBracket({ games }) {
     { label: 'Championship',  date: 'June 5–7',  x: BK_R3_X },
   ];
 
+  const ZOOM_STEPS = [0.5, 0.65, 0.8, 1];
+  const zoomIdx = ZOOM_STEPS.indexOf(zoom);
+  const canZoomOut = zoomIdx > 0;
+  const canZoomIn  = zoomIdx < ZOOM_STEPS.length - 1;
+
+  const scaledW = Math.ceil(BK_TOTAL_W * zoom);
+  const scaledH = Math.ceil(BK_TOTAL_H * zoom);
+
   return (
-    <div className="overflow-x-auto pb-4">
-      {/* Round column headers */}
-      <div className="flex mb-3" style={{ width: `${BK_TOTAL_W}px` }}>
-        {roundHeaders.map(({ label, date, x }, i) => (
-          <React.Fragment key={label}>
-            <div className="text-center" style={{ width: `${BK_CARD_W}px` }}>
-              <div className="text-[10px] mono uppercase tracking-widest text-white/40">{label}</div>
-              <div className="text-[9px] mono text-white/20 mt-0.5">{date}</div>
+    <div className="pb-4">
+      {/* Zoom controls */}
+      {onZoomChange && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-[9px] mono uppercase tracking-widest text-white/30">Zoom</span>
+          <div className="flex items-center gap-1 rounded-md border border-white/10 overflow-hidden">
+            <button
+              onClick={() => canZoomOut && onZoomChange(ZOOM_STEPS[zoomIdx - 1])}
+              disabled={!canZoomOut}
+              className="px-2.5 py-1 text-xs mono text-white/60 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+              title="Zoom out"
+            >−</button>
+            <span className="px-2 py-1 text-[10px] mono text-white/40 border-x border-white/10 tabular-nums">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              onClick={() => canZoomIn && onZoomChange(ZOOM_STEPS[zoomIdx + 1])}
+              disabled={!canZoomIn}
+              className="px-2.5 py-1 text-xs mono text-white/60 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+              title="Zoom in"
+            >+</button>
+          </div>
+          {zoom < 1 && (
+            <button
+              onClick={() => onZoomChange(1)}
+              className="text-[9px] mono uppercase tracking-widest text-white/30 hover:text-white/60 transition-colors"
+            >Reset</button>
+          )}
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        {/* Outer container sized to the scaled bracket so scroll works correctly */}
+        <div style={{ width: `${scaledW}px`, height: `${scaledH + 28}px` /* 28 = header rows */ }}>
+          <div
+            style={{
+              width: `${BK_TOTAL_W}px`,
+              transformOrigin: 'top left',
+              transform: `scale(${zoom})`,
+            }}
+          >
+            {/* Round column headers */}
+            <div className="flex mb-3" style={{ width: `${BK_TOTAL_W}px` }}>
+              {roundHeaders.map(({ label, date }, i) => (
+                <React.Fragment key={label}>
+                  <div className="text-center" style={{ width: `${BK_CARD_W}px` }}>
+                    <div className="text-[10px] mono uppercase tracking-widest text-white/40">{label}</div>
+                    <div className="text-[9px] mono text-white/20 mt-0.5">{date}</div>
+                  </div>
+                  {i < roundHeaders.length - 1 && <div style={{ width: `${BK_CONN_W}px` }} />}
+                </React.Fragment>
+              ))}
             </div>
-            {i < roundHeaders.length - 1 && <div style={{ width: `${BK_CONN_W}px` }} />}
-          </React.Fragment>
-        ))}
-      </div>
 
-      {/* Bracket */}
-      <div className="relative" style={{ width: `${BK_TOTAL_W}px`, height: `${BK_TOTAL_H}px` }}>
-        {/* SVG connector lines */}
-        <svg className="absolute inset-0" width={BK_TOTAL_W} height={BK_TOTAL_H} style={{ pointerEvents: 'none' }}>
-          {BK_SVG_LINES.map(([x1, y1, x2, y2], i) => (
-            <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
-          ))}
-        </svg>
+            {/* Bracket */}
+            <div className="relative" style={{ width: `${BK_TOTAL_W}px`, height: `${BK_TOTAL_H}px` }}>
+              {/* SVG connector lines */}
+              <svg className="absolute inset-0" width={BK_TOTAL_W} height={BK_TOTAL_H} style={{ pointerEvents: 'none' }}>
+                {BK_SVG_LINES.map(([x1, y1, x2, y2], i) => (
+                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                ))}
+              </svg>
 
-        {/* Opening round: games 0–3 */}
-        {BK_R1_TOPS.map((top, i) => card(i, top, BK_R1_X))}
-        {/* Semifinals: games 4–5 */}
-        {BK_R2_TOPS.map((top, i) => card(4 + i, top, BK_R2_X))}
-        {/* Championship: game 6 */}
-        {card(6, BK_R3_TOP, BK_R3_X)}
-      </div>
+              {/* Opening round: games 0–3 */}
+              {BK_R1_TOPS.map((top, i) => card(i, top, BK_R1_X))}
+              {/* Semifinals: games 4–5 */}
+              {BK_R2_TOPS.map((top, i) => card(4 + i, top, BK_R2_X))}
+              {/* Championship: game 6 */}
+              {card(6, BK_R3_TOP, BK_R3_X)}
+            </div>
 
-      <div className="mt-3 text-[9px] mono uppercase tracking-widest text-white/20">
-        Double-elimination · Oklahoma City, OK · Winner's bracket path shown
+            <div className="mt-3 text-[9px] mono uppercase tracking-widest text-white/20">
+              Double-elimination · Oklahoma City, OK · Winner's bracket path shown
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -3499,6 +3550,9 @@ function WorldSeriesView() {
   const [data, setData]           = useState(null);
   const [error, setError]         = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [activeRound, setActiveRound] = useState(null); // null = all
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'live' | 'upcoming' | 'final'
+  const [bracketZoom, setBracketZoom] = useState(1);
   const pollRef = useRef(null);
 
   const load = useCallback(async (silent = false) => {
@@ -3543,8 +3597,17 @@ function WorldSeriesView() {
 
   const renderRound = ({ round, groups }) => {
     const meta = ROUND_META[round] || { label: round, sub: '' };
-    const allGames = groups.flatMap((g) => g.games);
-    const liveCount = allGames.filter((ev) => ev.status?.type?.state === 'in').length;
+    const allGamesRaw = groups.flatMap((g) => g.games);
+    const filterGame = (ev) => {
+      if (statusFilter === 'all' || round === 'WCWS') return true;
+      const state = ev.status?.type?.state;
+      if (statusFilter === 'live') return state === 'in';
+      if (statusFilter === 'final') return state === 'post';
+      if (statusFilter === 'upcoming') return state === 'pre';
+      return true;
+    };
+    const allGames = allGamesRaw.filter(filterGame);
+    const liveCount = allGamesRaw.filter((ev) => ev.status?.type?.state === 'in').length;
 
     const RoundHeader = () => (
       <div className="flex items-end justify-between mb-5 pb-2 border-b border-white/10">
@@ -3568,7 +3631,7 @@ function WorldSeriesView() {
       return (
         <div key={round}>
           <RoundHeader />
-          <WCWSBracket games={allGames} />
+          <WCWSBracket games={allGames} zoom={bracketZoom} onZoomChange={setBracketZoom} />
         </div>
       );
     }
@@ -3585,9 +3648,13 @@ function WorldSeriesView() {
     return (
       <div key={round}>
         <RoundHeader />
-        {sites.length > 0 ? (
+        {allGames.length === 0 && statusFilter !== 'all' ? (
+          <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">No {statusFilter} games</div>
+        ) : sites.length > 0 ? (
           <div className="space-y-8">
-            {sites.map(([city, siteGames]) => (
+            {sites.map(([city, siteGames]) => {
+              if (!siteGames.length) return null;
+              return (
               <div key={city}>
                 <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-2 flex items-center gap-2">
                   <span className="inline-block h-px w-4 bg-white/20"></span>
@@ -3599,18 +3666,20 @@ function WorldSeriesView() {
                   ))}
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         ) : (
           <div className="space-y-6">
             {groups.map(({ date, games }) => {
+              const filteredGames = games.filter(filterGame);
+              if (!filteredGames.length) return null;
               const d = new Date(date + 'T12:00:00Z');
               const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
               return (
                 <div key={date}>
                   <div className="text-[10px] mono tracking-[0.2em] uppercase text-white/40 mb-2">{dayLabel}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {games.map((ev, i) => <CWSGameCard key={ev.id} event={ev} index={i} />)}
+                    {filteredGames.map((ev, i) => <CWSGameCard key={ev.id} event={ev} index={i} />)}
                   </div>
                 </div>
               );
@@ -3621,8 +3690,16 @@ function WorldSeriesView() {
     );
   };
 
+  const availableRounds = ['Regionals', 'Super Regionals', 'WCWS', 'Tournament']
+    .filter((r) => rounds.find((rd) => rd.round === r));
+
+  // Which rounds to show after round filter
+  const visibleRounds = availableRounds.filter((r) => !activeRound || r === activeRound);
+  const showStatusFilter = visibleRounds.some((r) => r !== 'WCWS') && rounds.length > 0;
+  const ROUND_SHORT = { 'Regionals': 'Regionals', 'Super Regionals': 'Super Reg', 'WCWS': 'World Series', 'Tournament': 'Tournament' };
+
   return (
-    <div className="space-y-12">
+    <div className="space-y-10">
       <div className="flex items-end justify-between border-b border-white/10 pb-3 flex-wrap gap-3">
         <div>
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">NCAA D1 Softball · 2026</div>
@@ -3633,6 +3710,52 @@ function WorldSeriesView() {
         </div>
       </div>
 
+      {/* Filter bar — only shown when there are rounds to filter */}
+      {rounds.length > 0 && (
+        <div className="flex flex-wrap gap-4 items-center -mt-4">
+          {/* Round filter */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[null, ...availableRounds].map((r) => (
+              <button
+                key={r ?? 'all'}
+                onClick={() => setActiveRound(r)}
+                className={`px-3 py-1 rounded-full text-[10px] mono uppercase tracking-widest transition-colors border ${
+                  activeRound === r
+                    ? 'bg-white text-black border-white'
+                    : 'text-white/50 border-white/15 hover:text-white hover:border-white/30'
+                }`}
+              >
+                {r ? ROUND_SHORT[r] : 'All Rounds'}
+              </button>
+            ))}
+          </div>
+
+          {/* Status filter — only for non-WCWS rounds */}
+          {showStatusFilter && (
+            <div className="flex items-center gap-1 rounded-md border border-white/10 overflow-hidden">
+              {[
+                { id: 'all',      label: 'All' },
+                { id: 'live',     label: 'Live' },
+                { id: 'upcoming', label: 'Upcoming' },
+                { id: 'final',    label: 'Final' },
+              ].map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setStatusFilter(id)}
+                  className={`px-2.5 py-1 text-[10px] mono uppercase tracking-widest transition-colors ${
+                    statusFilter === id
+                      ? 'bg-white/[0.08] text-white'
+                      : 'text-white/35 hover:text-white/60'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {rounds.length === 0 ? (
         // Off-season: show the WCWS bracket placeholder so the format is visible now.
         <div>
@@ -3640,7 +3763,7 @@ function WorldSeriesView() {
             <div className="text-white text-xl font-bold display mb-0.5">Women's College World Series</div>
             <div className="text-white/30 text-xs mono">Oklahoma City, OK · 8 teams · Double-elimination · Bracket announced after Super Regionals</div>
           </div>
-          <WCWSBracket games={[]} />
+          <WCWSBracket games={[]} zoom={bracketZoom} onZoomChange={setBracketZoom} />
 
           <div className="mt-10 p-5 rounded-xl border border-white/5 bg-white/[0.015]">
             <div className="text-[10px] mono uppercase tracking-widest text-white/30 mb-3">2026 Tournament Calendar</div>
@@ -3659,10 +3782,12 @@ function WorldSeriesView() {
           </div>
         </div>
       ) : (
-        ['Regionals', 'Super Regionals', 'WCWS', 'Tournament']
-          .map((r) => rounds.find((rd) => rd.round === r))
-          .filter(Boolean)
-          .map(renderRound)
+        <div className="space-y-12">
+          {visibleRounds
+            .map((r) => rounds.find((rd) => rd.round === r))
+            .filter(Boolean)
+            .map(renderRound)}
+        </div>
       )}
 
       <div className="pt-4 border-t border-white/5 text-[9px] mono uppercase tracking-widest text-white/30">
