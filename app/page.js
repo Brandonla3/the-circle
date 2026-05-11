@@ -3551,26 +3551,57 @@ const RB_HEADER_H = 24;
 const RB_SLOT_H   = 32;
 const RB_CARD_H   = RB_HEADER_H + RB_SLOT_H * 2 + 1; // 89px
 const RB_CARD_W   = 200;
-const RB_V_GAP    = 44;
 const RB_CONN_W   = 40;
-const RB_STEP     = RB_CARD_H + RB_V_GAP;             // 133
-const RB_CY0      = RB_CARD_H / 2;
-const RB_CY1      = RB_STEP + RB_CARD_H / 2;
-const RB_CY_MID   = (RB_CY0 + RB_CY1) / 2;
-const RB_R2_TOP   = Math.round(RB_CY_MID - RB_CARD_H / 2);
-const RB_R2_X     = RB_CARD_W + RB_CONN_W;
-const RB_TOTAL_W  = RB_R2_X + RB_CARD_W;
-const RB_TOTAL_H  = Math.ceil(RB_STEP + RB_CARD_H);
-const RB_MX       = RB_CARD_W + RB_CONN_W / 2;
-const RB_LINES    = [
-  [RB_CARD_W, RB_CY0,     RB_MX,   RB_CY0    ],
-  [RB_CARD_W, RB_CY1,     RB_MX,   RB_CY1    ],
-  [RB_MX,     RB_CY0,     RB_MX,   RB_CY1    ],
-  [RB_MX,     RB_CY_MID,  RB_R2_X, RB_CY_MID ],
+
+// ── Unified bracket (WB + Elim merged, extending right through SR → WCWS) ────
+// WB pair: cards at y=0 and y=WB_STEP
+const RB_U_WB_STEP  = RB_CARD_H + 24;                                  // 113
+// Elim pair starts below WB pair with a visual gap
+const RB_U_EL_OFF   = RB_U_WB_STEP + RB_CARD_H + 64;                  // 266
+// Vertical centers
+const RB_U_WB_CY1   = RB_CARD_H / 2;                                   // 44.5
+const RB_U_WB_CY2   = RB_U_WB_STEP + RB_CARD_H / 2;                   // 157.5
+const RB_U_WB_FC    = (RB_U_WB_CY1 + RB_U_WB_CY2) / 2;               // 101
+const RB_U_WB_FT    = Math.round(RB_U_WB_FC - RB_CARD_H / 2);         // 57
+const RB_U_EL_CY1   = RB_U_EL_OFF + RB_CARD_H / 2;                    // 310.5
+const RB_U_EL_CY2   = RB_U_EL_OFF + RB_U_WB_STEP + RB_CARD_H / 2;    // 423.5
+const RB_U_EL_FC    = (RB_U_EL_CY1 + RB_U_EL_CY2) / 2;               // 367
+const RB_U_EL_FT    = Math.round(RB_U_EL_FC - RB_CARD_H / 2);         // 323
+const RB_U_CH_CY    = (RB_U_WB_FC + RB_U_EL_FC) / 2;                  // 234
+const RB_U_CH_TOP   = Math.round(RB_U_CH_CY - RB_CARD_H / 2);         // 190
+// Column x positions: C0=Round1, C1=Round2, C2=Championship, C3=SuperReg, C4=WCWS
+const RB_U_C1_X     = RB_CARD_W + RB_CONN_W;                           // 240
+const RB_U_C2_X     = RB_U_C1_X + RB_CARD_W + RB_CONN_W;              // 480
+const RB_U_C3_X     = RB_U_C2_X + RB_CARD_W + RB_CONN_W;              // 720
+const RB_U_C4_X     = RB_U_C3_X + RB_CARD_W + RB_CONN_W;              // 960
+const RB_U_FULL_W   = RB_U_C4_X + RB_CARD_W;                          // 1160
+const RB_U_FULL_H   = Math.ceil(RB_U_EL_OFF + RB_U_WB_STEP + RB_CARD_H); // 468
+const RB_U_MX01     = RB_CARD_W + RB_CONN_W / 2;                      // 220
+const RB_U_MX12     = RB_U_C1_X + RB_CARD_W + RB_CONN_W / 2;          // 460
+const RB_U_SVG_LINES = [
+  // WB G1 + G2 → WB Final
+  [RB_CARD_W,              RB_U_WB_CY1, RB_U_MX01,              RB_U_WB_CY1],
+  [RB_CARD_W,              RB_U_WB_CY2, RB_U_MX01,              RB_U_WB_CY2],
+  [RB_U_MX01,              RB_U_WB_CY1, RB_U_MX01,              RB_U_WB_CY2],
+  [RB_U_MX01,              RB_U_WB_FC,  RB_U_C1_X,              RB_U_WB_FC ],
+  // Elim G1 + WB-Final-loser slot → Elim R2
+  [RB_CARD_W,              RB_U_EL_CY1, RB_U_MX01,              RB_U_EL_CY1],
+  [RB_CARD_W,              RB_U_EL_CY2, RB_U_MX01,              RB_U_EL_CY2],
+  [RB_U_MX01,              RB_U_EL_CY1, RB_U_MX01,              RB_U_EL_CY2],
+  [RB_U_MX01,              RB_U_EL_FC,  RB_U_C1_X,              RB_U_EL_FC ],
+  // WB Final + Elim R2 → Championship
+  [RB_U_C1_X + RB_CARD_W, RB_U_WB_FC,  RB_U_MX12,              RB_U_WB_FC ],
+  [RB_U_C1_X + RB_CARD_W, RB_U_EL_FC,  RB_U_MX12,              RB_U_EL_FC ],
+  [RB_U_MX12,              RB_U_WB_FC,  RB_U_MX12,              RB_U_EL_FC ],
+  [RB_U_MX12,              RB_U_CH_CY,  RB_U_C2_X,              RB_U_CH_CY ],
+  // Championship → Super Regional → WCWS
+  [RB_U_C2_X + RB_CARD_W, RB_U_CH_CY,  RB_U_C3_X,              RB_U_CH_CY ],
+  [RB_U_C3_X + RB_CARD_W, RB_U_CH_CY,  RB_U_C4_X,              RB_U_CH_CY ],
 ];
 
 // Game card used inside the regional bracket (absolutely positioned).
-function BracketGameCard({ event, style }) {
+// Pass `placeholder={{ label, team1, team2 }}` to render a TBD future-round slot.
+function BracketGameCard({ event, style, placeholder }) {
   const comp   = event?.competitions?.[0];
   const home   = comp?.competitors?.find((c) => c.homeAway === 'home');
   const away   = comp?.competitors?.find((c) => c.homeAway === 'away');
@@ -3614,6 +3645,25 @@ function BracketGameCard({ event, style }) {
       </div>
     );
   };
+
+  if (!event && placeholder) {
+    return (
+      <div
+        className="absolute rounded-lg overflow-hidden"
+        style={{ ...style, width: `${RB_CARD_W}px`, height: `${RB_CARD_H}px`, background: 'rgba(255,255,255,0.008)', border: '1px dashed rgba(255,255,255,0.12)' }}
+      >
+        <div style={{ height: `${RB_HEADER_H}px` }} className="flex items-center px-2.5 border-b border-white/[0.06]">
+          <span className="text-[8px] mono uppercase tracking-wide text-white/20 truncate">{placeholder.label}</span>
+        </div>
+        <div style={{ height: `${RB_SLOT_H}px` }} className="flex items-center px-2.5">
+          <span className="text-[11px] text-white/25 truncate">{placeholder.team1 || 'TBD'}</span>
+        </div>
+        <div style={{ height: `${RB_SLOT_H}px` }} className="flex items-center px-2.5 border-t border-white/[0.05]">
+          <span className="text-[11px] text-white/25 truncate">{placeholder.team2 || 'TBD'}</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!event) {
     return (
@@ -3848,44 +3898,44 @@ function WorldSeriesView() {
 
     // ── Regionals: pod grid view or drill-down ────────────────────────────────
     if (round === 'Regionals') {
-      // Drill-down: bracket view for a specific regional site.
+      // Drill-down: unified scrollable bracket for a regional site.
       if (selectedSite) {
         const siteGames = siteMapAll.get(selectedSite) || [];
         const hasLive   = siteGames.some((g) => g.status?.type?.state === 'in');
         const sorted    = [...siteGames].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // Assign games to bracket slots by chronological order.
-        // Day-1 pair = WB Round 1. Day-2+ games follow double-elim order.
+        // Slot assignment (chronological; double-elim order):
+        // 0,1 = WB R1 · 2 = WB Final · 3 = Elim R1 · 4 = Elim R2 · 5+ = Championship
         const wbG1  = sorted[0] || null;
         const wbG2  = sorted[1] || null;
         const wbFin = sorted[2] || null;
-        const elim1 = sorted[3] || null;
-        const elim2 = sorted[4] || null;
+        const elG1  = sorted[3] || null;
+        const elR2  = sorted[4] || null;
         const champ = sorted.length > 5 ? sorted[sorted.length - 1] : (sorted[5] || null);
 
-        const BracketSection = ({ label, top, mid, note }) => (
-          <div className="mb-8">
-            <div className="text-[9px] mono uppercase tracking-[0.25em] text-white/40 font-semibold mb-4 flex items-center gap-2">
-              <span className="inline-block h-px w-3 bg-white/20" />{label}
-            </div>
-            <div className="overflow-x-auto pb-2">
-              <div className="relative" style={{ width: `${RB_TOTAL_W}px`, height: `${RB_TOTAL_H}px` }}>
-                <svg className="absolute inset-0" width={RB_TOTAL_W} height={RB_TOTAL_H} style={{ pointerEvents: 'none' }}>
-                  {RB_LINES.map(([x1, y1, x2, y2], i) => (
-                    <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
-                  ))}
-                </svg>
-                <BracketGameCard event={top}  style={{ top: 0,       left: 0       }} />
-                <BracketGameCard event={mid}  style={{ top: RB_STEP, left: 0       }} />
-                <BracketGameCard event={note} style={{ top: RB_R2_TOP, left: RB_R2_X }} />
-              </div>
-            </div>
-          </div>
-        );
+        // Look up whether there's a matching Super Regional for this site.
+        const srRound   = rounds.find((r) => r.round === 'Super Regionals');
+        const srGames   = srRound ? srRound.groups.flatMap((g) => g.games) : [];
+        const srForSite = srGames.find((g) => {
+          const host = g.competitions?.[0]?.venue?.address?.city;
+          const teams = extractSiteTeams([g]);
+          return host === selectedSite || teams.some((t) => t.name?.toLowerCase().includes(selectedSite.toLowerCase()));
+        }) || null;
+
+        // Column headers
+        const COL_HEADERS = [
+          { label: 'Round 1',       sub: 'Day 1' },
+          { label: 'Round 2',       sub: 'Day 2' },
+          { label: 'Championship',  sub: 'Day 3–4' },
+          { label: 'Super Regional',sub: 'TBD' },
+          { label: 'WCWS',          sub: 'Okla. City' },
+        ];
+        const COL_XS = [0, RB_U_C1_X, RB_U_C2_X, RB_U_C3_X, RB_U_C4_X];
 
         return (
           <div key={round}>
-            <div className="flex items-center gap-3 mb-6 pb-3 border-b border-white/10">
+            {/* Back + title */}
+            <div className="flex items-center gap-3 mb-5 pb-3 border-b border-white/10">
               <button onClick={() => setSelectedSite(null)} className="flex items-center gap-1.5 text-white/40 hover:text-white transition-colors">
                 <ChevronLeft className="h-4 w-4" />
                 <span className="text-[10px] mono uppercase tracking-widest">All Regionals</span>
@@ -3902,25 +3952,73 @@ function WorldSeriesView() {
               </div>
             </div>
 
-            <BracketSection label="Winners' Bracket" top={wbG1} mid={wbG2} note={wbFin} />
-
-            {(elim1 || elim2) && (
-              <BracketSection label="Elimination Bracket" top={elim1} mid={elim2} note={champ} />
-            )}
-
-            {/* Championship stands alone if it doesn't fit above */}
-            {champ && !elim1 && (
-              <div className="mb-6">
-                <div className="text-[9px] mono uppercase tracking-[0.25em] text-white/40 font-semibold mb-4 flex items-center gap-2">
-                  <span className="inline-block h-px w-3 bg-white/20" />Championship
-                </div>
-                <div className="overflow-x-auto pb-2">
-                  <div className="relative inline-block">
-                    <BracketGameCard event={champ} style={{ position: 'relative', top: 0, left: 0 }} />
-                  </div>
-                </div>
+            {/* Unified horizontally-scrollable bracket */}
+            <div className="overflow-x-auto pb-4">
+              {/* Column headers */}
+              <div style={{ width: `${RB_U_FULL_W}px` }} className="flex mb-3">
+                {COL_HEADERS.map(({ label, sub }, i) => (
+                  <React.Fragment key={label}>
+                    <div className="text-center flex-shrink-0" style={{ width: `${RB_CARD_W}px` }}>
+                      <div className="text-[9px] mono uppercase tracking-widest text-white/40">{label}</div>
+                      <div className="text-[8px] mono text-white/20 mt-0.5">{sub}</div>
+                    </div>
+                    {i < COL_HEADERS.length - 1 && <div style={{ width: `${RB_CONN_W}px` }} />}
+                  </React.Fragment>
+                ))}
               </div>
-            )}
+
+              {/* Bracket canvas */}
+              <div className="relative" style={{ width: `${RB_U_FULL_W}px`, height: `${RB_U_FULL_H}px` }}>
+                {/* Section labels inside the SVG */}
+                <svg className="absolute inset-0" width={RB_U_FULL_W} height={RB_U_FULL_H} style={{ pointerEvents: 'none' }}>
+                  <text x="4" y="11" fill="rgba(255,255,255,0.25)" fontSize="7.5" fontFamily="ui-monospace,monospace" letterSpacing="0.15em">WINNERS&apos; BRACKET</text>
+                  <text x="4" y={RB_U_EL_OFF + 11} fill="rgba(255,255,255,0.25)" fontSize="7.5" fontFamily="ui-monospace,monospace" letterSpacing="0.15em">ELIMINATION BRACKET</text>
+                  {RB_U_SVG_LINES.map(([x1, y1, x2, y2], i) => (
+                    <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                  ))}
+                </svg>
+
+                {/* WB Round 1 */}
+                <BracketGameCard event={wbG1} style={{ top: 0,            left: 0 }} />
+                <BracketGameCard event={wbG2} style={{ top: RB_U_WB_STEP, left: 0 }} />
+
+                {/* WB Final */}
+                <BracketGameCard event={wbFin} style={{ top: RB_U_WB_FT, left: RB_U_C1_X }} />
+
+                {/* Elim Round 1 */}
+                <BracketGameCard event={elG1} style={{ top: RB_U_EL_OFF, left: 0 }} />
+                {/* WB Final loser feeds into Elim R2 — show as TBD until determined */}
+                <BracketGameCard
+                  event={null}
+                  placeholder={{ label: 'WB Final Loser · TBD', team1: 'Loser of WB Final', team2: '' }}
+                  style={{ top: RB_U_EL_OFF + RB_U_WB_STEP, left: 0 }}
+                />
+
+                {/* Elim R2 */}
+                <BracketGameCard event={elR2} style={{ top: RB_U_EL_FT, left: RB_U_C1_X }} />
+
+                {/* Championship */}
+                <BracketGameCard
+                  event={champ}
+                  placeholder={!champ ? { label: 'Championship · TBD', team1: 'WB Final Winner', team2: 'Elim R2 Winner' } : undefined}
+                  style={{ top: RB_U_CH_TOP, left: RB_U_C2_X }}
+                />
+
+                {/* Super Regional */}
+                <BracketGameCard
+                  event={srForSite}
+                  placeholder={!srForSite ? { label: 'Super Regional · TBD', team1: `Winner of ${selectedSite} Regional`, team2: 'vs TBD' } : undefined}
+                  style={{ top: RB_U_CH_TOP, left: RB_U_C3_X }}
+                />
+
+                {/* WCWS slot */}
+                <BracketGameCard
+                  event={null}
+                  placeholder={{ label: 'WCWS · Oklahoma City', team1: 'Super Regional Winner', team2: 'TBD' }}
+                  style={{ top: RB_U_CH_TOP, left: RB_U_C4_X }}
+                />
+              </div>
+            </div>
           </div>
         );
       }
