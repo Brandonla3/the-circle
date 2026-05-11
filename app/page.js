@@ -3559,23 +3559,24 @@ const RB_U_WB_STEP  = RB_CARD_H + 24;                                  // 113
 // Elim pair starts below WB pair with a visual gap
 const RB_U_EL_OFF   = RB_U_WB_STEP + RB_CARD_H + 64;                  // 266
 // Vertical centers
-const RB_U_WB_CY1   = RB_CARD_H / 2;                                   // 44.5
-const RB_U_WB_CY2   = RB_U_WB_STEP + RB_CARD_H / 2;                   // 157.5
-const RB_U_WB_FC    = (RB_U_WB_CY1 + RB_U_WB_CY2) / 2;               // 101
-const RB_U_WB_FT    = Math.round(RB_U_WB_FC - RB_CARD_H / 2);         // 57
-const RB_U_EL_CY1   = RB_U_EL_OFF + RB_CARD_H / 2;                    // 310.5
-const RB_U_EL_CY2   = RB_U_EL_OFF + RB_U_WB_STEP + RB_CARD_H / 2;    // 423.5
-const RB_U_EL_FC    = (RB_U_EL_CY1 + RB_U_EL_CY2) / 2;               // 367
-const RB_U_EL_FT    = Math.round(RB_U_EL_FC - RB_CARD_H / 2);         // 323
-const RB_U_CH_CY    = (RB_U_WB_FC + RB_U_EL_FC) / 2;                  // 234
-const RB_U_CH_TOP   = Math.round(RB_U_CH_CY - RB_CARD_H / 2);         // 190
+const RB_SECTION_OFF = 16;                                               // reserved height for section label above each section
+const RB_U_WB_CY1   = RB_SECTION_OFF + RB_CARD_H / 2;                  // 60.5
+const RB_U_WB_CY2   = RB_SECTION_OFF + RB_U_WB_STEP + RB_CARD_H / 2;  // 173.5
+const RB_U_WB_FC    = (RB_U_WB_CY1 + RB_U_WB_CY2) / 2;               // 117
+const RB_U_WB_FT    = Math.round(RB_U_WB_FC - RB_CARD_H / 2);         // 73
+const RB_U_EL_CY1   = RB_U_EL_OFF + RB_SECTION_OFF * 2 + RB_CARD_H / 2;            // 342.5
+const RB_U_EL_CY2   = RB_U_EL_OFF + RB_SECTION_OFF * 2 + RB_U_WB_STEP + RB_CARD_H / 2; // 455.5
+const RB_U_EL_FC    = (RB_U_EL_CY1 + RB_U_EL_CY2) / 2;               // 399
+const RB_U_EL_FT    = Math.round(RB_U_EL_FC - RB_CARD_H / 2);         // 355
+const RB_U_CH_CY    = (RB_U_WB_FC + RB_U_EL_FC) / 2;                  // 258
+const RB_U_CH_TOP   = Math.round(RB_U_CH_CY - RB_CARD_H / 2);         // 214
 // Column x positions: C0=Round1, C1=Round2, C2=Championship, C3=SuperReg, C4=WCWS
 const RB_U_C1_X     = RB_CARD_W + RB_CONN_W;                           // 240
 const RB_U_C2_X     = RB_U_C1_X + RB_CARD_W + RB_CONN_W;              // 480
 const RB_U_C3_X     = RB_U_C2_X + RB_CARD_W + RB_CONN_W;              // 720
 const RB_U_C4_X     = RB_U_C3_X + RB_CARD_W + RB_CONN_W;              // 960
 const RB_U_FULL_W   = RB_U_C4_X + RB_CARD_W;                          // 1160
-const RB_U_FULL_H   = Math.ceil(RB_U_EL_OFF + RB_U_WB_STEP + RB_CARD_H); // 468
+const RB_U_FULL_H   = Math.ceil(RB_U_EL_OFF + RB_SECTION_OFF * 2 + RB_U_WB_STEP + RB_CARD_H); // 500
 const RB_U_MX01     = RB_CARD_W + RB_CONN_W / 2;                      // 220
 const RB_U_MX12     = RB_U_C1_X + RB_CARD_W + RB_CONN_W / 2;          // 460
 const RB_U_SVG_LINES = [
@@ -3987,27 +3988,27 @@ function WorldSeriesView() {
               <div className="relative" style={{ width: `${RB_U_FULL_W}px`, height: `${RB_U_FULL_H}px` }}>
                 {/* Section labels inside the SVG */}
                 <svg className="absolute inset-0" width={RB_U_FULL_W} height={RB_U_FULL_H} style={{ pointerEvents: 'none' }}>
-                  <text x="4" y="11" fill="rgba(255,255,255,0.25)" fontSize="7.5" fontFamily="ui-monospace,monospace" letterSpacing="0.15em">WINNERS&apos; BRACKET</text>
-                  <text x="4" y={RB_U_EL_OFF + 11} fill="rgba(255,255,255,0.25)" fontSize="7.5" fontFamily="ui-monospace,monospace" letterSpacing="0.15em">ELIMINATION BRACKET</text>
+                  <text x="4" y={RB_SECTION_OFF - 4} fill="rgba(255,255,255,0.25)" fontSize="7.5" fontFamily="ui-monospace,monospace" letterSpacing="0.15em">WINNERS&apos; BRACKET</text>
+                  <text x="4" y={RB_U_EL_OFF + RB_SECTION_OFF * 2 - 4} fill="rgba(255,255,255,0.25)" fontSize="7.5" fontFamily="ui-monospace,monospace" letterSpacing="0.15em">ELIMINATION BRACKET</text>
                   {RB_U_SVG_LINES.map(([x1, y1, x2, y2], i) => (
                     <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
                   ))}
                 </svg>
 
                 {/* WB Round 1 */}
-                <BracketGameCard event={wbG1} style={{ top: 0,            left: 0 }} />
-                <BracketGameCard event={wbG2} style={{ top: RB_U_WB_STEP, left: 0 }} />
+                <BracketGameCard event={wbG1} style={{ top: RB_SECTION_OFF,                    left: 0 }} />
+                <BracketGameCard event={wbG2} style={{ top: RB_SECTION_OFF + RB_U_WB_STEP,     left: 0 }} />
 
                 {/* WB Final */}
                 <BracketGameCard event={wbFin} style={{ top: RB_U_WB_FT, left: RB_U_C1_X }} />
 
                 {/* Elim Round 1 */}
-                <BracketGameCard event={elG1} style={{ top: RB_U_EL_OFF, left: 0 }} />
+                <BracketGameCard event={elG1} style={{ top: RB_U_EL_OFF + RB_SECTION_OFF * 2, left: 0 }} />
                 {/* WB Final loser feeds into Elim R2 — show as TBD until determined */}
                 <BracketGameCard
                   event={null}
                   placeholder={{ label: 'WB Final Loser · TBD', team1: 'Loser of WB Final', team2: '' }}
-                  style={{ top: RB_U_EL_OFF + RB_U_WB_STEP, left: 0 }}
+                  style={{ top: RB_U_EL_OFF + RB_SECTION_OFF * 2 + RB_U_WB_STEP, left: 0 }}
                 />
 
                 {/* Elim R2 */}
