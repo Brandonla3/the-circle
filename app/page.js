@@ -3904,14 +3904,21 @@ function WorldSeriesView() {
       );
     }
 
-    // Build site map from ALL games (not status-filtered) so pods always show all teams.
+    // siteMapAll: all raw games per city — used only for drill-down so every game in the site is shown.
+    // siteMapFiltered: status-filtered games per city — drives the pod grid so the filter actually narrows it.
     const siteMapAll = new Map();
     for (const g of allGamesRaw) {
       const city = g.competitions?.[0]?.venue?.address?.city || 'Unknown Site';
       if (!siteMapAll.has(city)) siteMapAll.set(city, []);
       siteMapAll.get(city).push(g);
     }
-    const sitesAll = Array.from(siteMapAll.entries()).sort(([a], [b]) => a.localeCompare(b));
+    const siteMapFiltered = new Map();
+    for (const g of allGames) {
+      const city = g.competitions?.[0]?.venue?.address?.city || 'Unknown Site';
+      if (!siteMapFiltered.has(city)) siteMapFiltered.set(city, []);
+      siteMapFiltered.get(city).push(g);
+    }
+    const sitesAll = Array.from(siteMapFiltered.entries()).sort(([a], [b]) => a.localeCompare(b));
 
     // ── Regionals: pod grid view or drill-down ────────────────────────────────
     if (round === 'Regionals') {
@@ -4127,8 +4134,10 @@ function WorldSeriesView() {
         return (
           <div key={round}>
             <RoundHeader />
-            {allGamesRaw.length === 0 ? (
-              <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">No games scheduled yet</div>
+            {sitesAll.length === 0 ? (
+              <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">
+                {allGamesRaw.length === 0 ? 'No games scheduled yet' : `No ${statusFilter} games`}
+              </div>
             ) : (
               <div className="overflow-x-auto pb-4">
                 {/* Column headers */}
@@ -4298,8 +4307,10 @@ function WorldSeriesView() {
       return (
         <div key={round}>
           <RoundHeader />
-          {allGamesRaw.length === 0 ? (
-            <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">Matchups TBD</div>
+          {sitesAll.length === 0 ? (
+            <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">
+              {allGamesRaw.length === 0 ? 'Matchups TBD' : `No ${statusFilter} games`}
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {sitesAll.map(([city, siteGames]) => {
@@ -4409,6 +4420,18 @@ function WorldSeriesView() {
 
   // Which rounds to show after round filter
   const visibleRounds = availableRounds.filter((r) => !activeRound || r === activeRound);
+  // When a site is drilled into, only render the round that owns that site to avoid duplicate drill-downs.
+  const renderedRounds = selectedSite
+    ? (() => {
+        const owning = visibleRounds.filter((r) => {
+          const rd = rounds.find((x) => x.round === r);
+          return rd?.groups.flatMap((g) => g.games).some(
+            (g) => (g.competitions?.[0]?.venue?.address?.city || 'Unknown Site') === selectedSite
+          );
+        });
+        return owning.length ? owning : visibleRounds;
+      })()
+    : visibleRounds;
   // Hide status filter and round pills when the user is drilled into a site.
   const showStatusFilter = visibleRounds.some((r) => r !== 'WCWS') && rounds.length > 0 && !selectedSite;
   const ROUND_SHORT = { 'Regionals': 'Regionals', 'Super Regionals': 'Super Reg', 'WCWS': 'World Series', 'Tournament': 'Tournament' };
@@ -4498,7 +4521,7 @@ function WorldSeriesView() {
         </div>
       ) : (
         <div className="space-y-12">
-          {visibleRounds
+          {renderedRounds
             .map((r) => rounds.find((rd) => rd.round === r))
             .filter(Boolean)
             .map(renderRound)}
