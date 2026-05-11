@@ -3358,7 +3358,7 @@ function extractBracketTeam(event, homeAway) {
 // 8-team WCWS bracket — simplified to the winner's-bracket path.
 // Opening round (4 games) → Semifinals (2) → Championship (1).
 // When games=[] the bracket renders with all TBD slots (off-season placeholder).
-function WCWSBracket({ games }) {
+function WCWSBracket({ games, zoom = 1, onZoomChange }) {
   const sorted = (games || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
   const ev = (idx) => sorted[idx];
 
@@ -3381,40 +3381,91 @@ function WCWSBracket({ games }) {
     { label: 'Championship',  date: 'June 5–7',  x: BK_R3_X },
   ];
 
+  const ZOOM_STEPS = [0.5, 0.65, 0.8, 1];
+  const zoomIdx = ZOOM_STEPS.indexOf(zoom);
+  const canZoomOut = zoomIdx > 0;
+  const canZoomIn  = zoomIdx < ZOOM_STEPS.length - 1;
+
+  const scaledW = Math.ceil(BK_TOTAL_W * zoom);
+  const scaledH = Math.ceil(BK_TOTAL_H * zoom);
+
   return (
-    <div className="overflow-x-auto pb-4">
-      {/* Round column headers */}
-      <div className="flex mb-3" style={{ width: `${BK_TOTAL_W}px` }}>
-        {roundHeaders.map(({ label, date, x }, i) => (
-          <React.Fragment key={label}>
-            <div className="text-center" style={{ width: `${BK_CARD_W}px` }}>
-              <div className="text-[10px] mono uppercase tracking-widest text-white/40">{label}</div>
-              <div className="text-[9px] mono text-white/20 mt-0.5">{date}</div>
+    <div className="pb-4">
+      {/* Zoom controls */}
+      {onZoomChange && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-[9px] mono uppercase tracking-widest text-white/30">Zoom</span>
+          <div className="flex items-center gap-1 rounded-md border border-white/10 overflow-hidden">
+            <button
+              onClick={() => canZoomOut && onZoomChange(ZOOM_STEPS[zoomIdx - 1])}
+              disabled={!canZoomOut}
+              className="px-2.5 py-1 text-xs mono text-white/60 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+              title="Zoom out"
+            >−</button>
+            <span className="px-2 py-1 text-[10px] mono text-white/40 border-x border-white/10 tabular-nums">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              onClick={() => canZoomIn && onZoomChange(ZOOM_STEPS[zoomIdx + 1])}
+              disabled={!canZoomIn}
+              className="px-2.5 py-1 text-xs mono text-white/60 hover:text-white hover:bg-white/[0.06] disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+              title="Zoom in"
+            >+</button>
+          </div>
+          {zoom < 1 && (
+            <button
+              onClick={() => onZoomChange(1)}
+              className="text-[9px] mono uppercase tracking-widest text-white/30 hover:text-white/60 transition-colors"
+            >Reset</button>
+          )}
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        {/* Outer container sized to the scaled bracket so scroll works correctly */}
+        <div style={{ width: `${scaledW}px`, height: `${scaledH + 28}px` /* 28 = header rows */ }}>
+          <div
+            style={{
+              width: `${BK_TOTAL_W}px`,
+              transformOrigin: 'top left',
+              transform: `scale(${zoom})`,
+            }}
+          >
+            {/* Round column headers */}
+            <div className="flex mb-3" style={{ width: `${BK_TOTAL_W}px` }}>
+              {roundHeaders.map(({ label, date }, i) => (
+                <React.Fragment key={label}>
+                  <div className="text-center" style={{ width: `${BK_CARD_W}px` }}>
+                    <div className="text-[10px] mono uppercase tracking-widest text-white/40">{label}</div>
+                    <div className="text-[9px] mono text-white/20 mt-0.5">{date}</div>
+                  </div>
+                  {i < roundHeaders.length - 1 && <div style={{ width: `${BK_CONN_W}px` }} />}
+                </React.Fragment>
+              ))}
             </div>
-            {i < roundHeaders.length - 1 && <div style={{ width: `${BK_CONN_W}px` }} />}
-          </React.Fragment>
-        ))}
-      </div>
 
-      {/* Bracket */}
-      <div className="relative" style={{ width: `${BK_TOTAL_W}px`, height: `${BK_TOTAL_H}px` }}>
-        {/* SVG connector lines */}
-        <svg className="absolute inset-0" width={BK_TOTAL_W} height={BK_TOTAL_H} style={{ pointerEvents: 'none' }}>
-          {BK_SVG_LINES.map(([x1, y1, x2, y2], i) => (
-            <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
-          ))}
-        </svg>
+            {/* Bracket */}
+            <div className="relative" style={{ width: `${BK_TOTAL_W}px`, height: `${BK_TOTAL_H}px` }}>
+              {/* SVG connector lines */}
+              <svg className="absolute inset-0" width={BK_TOTAL_W} height={BK_TOTAL_H} style={{ pointerEvents: 'none' }}>
+                {BK_SVG_LINES.map(([x1, y1, x2, y2], i) => (
+                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                ))}
+              </svg>
 
-        {/* Opening round: games 0–3 */}
-        {BK_R1_TOPS.map((top, i) => card(i, top, BK_R1_X))}
-        {/* Semifinals: games 4–5 */}
-        {BK_R2_TOPS.map((top, i) => card(4 + i, top, BK_R2_X))}
-        {/* Championship: game 6 */}
-        {card(6, BK_R3_TOP, BK_R3_X)}
-      </div>
+              {/* Opening round: games 0–3 */}
+              {BK_R1_TOPS.map((top, i) => card(i, top, BK_R1_X))}
+              {/* Semifinals: games 4–5 */}
+              {BK_R2_TOPS.map((top, i) => card(4 + i, top, BK_R2_X))}
+              {/* Championship: game 6 */}
+              {card(6, BK_R3_TOP, BK_R3_X)}
+            </div>
 
-      <div className="mt-3 text-[9px] mono uppercase tracking-widest text-white/20">
-        Double-elimination · Oklahoma City, OK · Winner's bracket path shown
+            <div className="mt-3 text-[9px] mono uppercase tracking-widest text-white/20">
+              Double-elimination · Oklahoma City, OK · Winner's bracket path shown
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -3495,10 +3546,281 @@ function CWSGameCard({ event, index }) {
   );
 }
 
+// ── Regional bracket layout constants ────────────────────────────────────────
+const RB_HEADER_H = 24;
+const RB_SLOT_H   = 32;
+const RB_CARD_H   = RB_HEADER_H + RB_SLOT_H * 2 + 1; // 89px
+const RB_CARD_W   = 200;
+const RB_CONN_W   = 40;
+
+// ── Unified bracket (WB + Elim merged, extending right through SR → WCWS) ────
+// WB pair: cards at y=0 and y=WB_STEP
+const RB_U_WB_STEP  = RB_CARD_H + 24;                                  // 113
+// Elim pair starts below WB pair with a visual gap
+const RB_U_EL_OFF   = RB_U_WB_STEP + RB_CARD_H + 64;                  // 266
+// Vertical centers
+const RB_SECTION_OFF = 16;                                               // reserved height for section label above each section
+const RB_U_WB_CY1   = RB_SECTION_OFF + RB_CARD_H / 2;                  // 60.5
+const RB_U_WB_CY2   = RB_SECTION_OFF + RB_U_WB_STEP + RB_CARD_H / 2;  // 173.5
+const RB_U_WB_FC    = (RB_U_WB_CY1 + RB_U_WB_CY2) / 2;               // 117
+const RB_U_WB_FT    = Math.round(RB_U_WB_FC - RB_CARD_H / 2);         // 73
+const RB_U_EL_CY1   = RB_U_EL_OFF + RB_SECTION_OFF * 2 + RB_CARD_H / 2;            // 342.5
+const RB_U_EL_CY2   = RB_U_EL_OFF + RB_SECTION_OFF * 2 + RB_U_WB_STEP + RB_CARD_H / 2; // 455.5
+const RB_U_EL_FC    = (RB_U_EL_CY1 + RB_U_EL_CY2) / 2;               // 399
+const RB_U_EL_FT    = Math.round(RB_U_EL_FC - RB_CARD_H / 2);         // 355
+const RB_U_CH_CY    = (RB_U_WB_FC + RB_U_EL_FC) / 2;                  // 258
+const RB_U_CH_TOP   = Math.round(RB_U_CH_CY - RB_CARD_H / 2);         // 214
+// Column x positions: C0=Round1, C1=Round2, C2=Championship, C3=SuperReg, C4=WCWS
+const RB_U_C1_X     = RB_CARD_W + RB_CONN_W;                           // 240
+const RB_U_C2_X     = RB_U_C1_X + RB_CARD_W + RB_CONN_W;              // 480
+const RB_U_C3_X     = RB_U_C2_X + RB_CARD_W + RB_CONN_W;              // 720
+const RB_U_C4_X     = RB_U_C3_X + RB_CARD_W + RB_CONN_W;              // 960
+const RB_U_FULL_W   = RB_U_C4_X + RB_CARD_W;                          // 1160
+const RB_U_FULL_H   = Math.ceil(RB_U_EL_OFF + RB_SECTION_OFF * 2 + RB_U_WB_STEP + RB_CARD_H); // 500
+const RB_U_MX01     = RB_CARD_W + RB_CONN_W / 2;                      // 220
+const RB_U_MX12     = RB_U_C1_X + RB_CARD_W + RB_CONN_W / 2;          // 460
+const RB_U_SVG_LINES = [
+  // WB G1 + G2 → WB Final
+  [RB_CARD_W,              RB_U_WB_CY1, RB_U_MX01,              RB_U_WB_CY1],
+  [RB_CARD_W,              RB_U_WB_CY2, RB_U_MX01,              RB_U_WB_CY2],
+  [RB_U_MX01,              RB_U_WB_CY1, RB_U_MX01,              RB_U_WB_CY2],
+  [RB_U_MX01,              RB_U_WB_FC,  RB_U_C1_X,              RB_U_WB_FC ],
+  // Elim G1 + WB-Final-loser slot → Elim R2
+  [RB_CARD_W,              RB_U_EL_CY1, RB_U_MX01,              RB_U_EL_CY1],
+  [RB_CARD_W,              RB_U_EL_CY2, RB_U_MX01,              RB_U_EL_CY2],
+  [RB_U_MX01,              RB_U_EL_CY1, RB_U_MX01,              RB_U_EL_CY2],
+  [RB_U_MX01,              RB_U_EL_FC,  RB_U_C1_X,              RB_U_EL_FC ],
+  // WB Final + Elim R2 → Championship
+  [RB_U_C1_X + RB_CARD_W, RB_U_WB_FC,  RB_U_MX12,              RB_U_WB_FC ],
+  [RB_U_C1_X + RB_CARD_W, RB_U_EL_FC,  RB_U_MX12,              RB_U_EL_FC ],
+  [RB_U_MX12,              RB_U_WB_FC,  RB_U_MX12,              RB_U_EL_FC ],
+  [RB_U_MX12,              RB_U_CH_CY,  RB_U_C2_X,              RB_U_CH_CY ],
+  // Championship → Super Regional → WCWS
+  [RB_U_C2_X + RB_CARD_W, RB_U_CH_CY,  RB_U_C3_X,              RB_U_CH_CY ],
+  [RB_U_C3_X + RB_CARD_W, RB_U_CH_CY,  RB_U_C4_X,              RB_U_CH_CY ],
+];
+
+// ── Main bracket overview (all pods → SR → WCWS, horizontally scrollable) ────
+const BR_POD_H   = 192;          // fixed pod card height
+const BR_POD_W   = 264;          // fixed pod card width
+const BR_POD_GAP = 10;           // gap between two pods in a pair
+const BR_GRP_GAP = 20;           // gap between pairs
+const BR_CONN_W  = 44;           // connector column width
+const BR_SR_W    = 200;          // Super Regional card width
+const BR_SR_H    = RB_CARD_H;    // 89px — matches BracketGameCard height
+const BR_WCWS_W  = 200;
+const BR_WCWS_H  = RB_CARD_H;
+const BR_PAIR_H  = BR_POD_H * 2 + BR_POD_GAP;           // 394
+const BR_STRIDE  = BR_PAIR_H + BR_GRP_GAP;               // 414
+const BR_SR_X    = BR_POD_W + BR_CONN_W;                 // 308
+const BR_WCWS_X  = BR_SR_X + BR_SR_W + BR_CONN_W;        // 552
+const BR_TOTAL_W = BR_WCWS_X + BR_WCWS_W;                // 752
+
+// Game card used inside the regional bracket (absolutely positioned).
+// Pass `placeholder={{ label, team1, team2 }}` to render a TBD future-round slot.
+function BracketGameCard({ event, style, placeholder }) {
+  const comp   = event?.competitions?.[0];
+  const home   = comp?.competitors?.find((c) => c.homeAway === 'home');
+  const away   = comp?.competitors?.find((c) => c.homeAway === 'away');
+  const state  = event?.status?.type?.state;
+  const isLive = state === 'in';
+  const isFinal = state === 'post';
+  const winner = isFinal ? (Number(home?.score) > Number(away?.score) ? 'home' : 'away') : null;
+  const network = comp?.broadcasts?.[0]?.names?.[0];
+
+  const headerParts = [];
+  if (event?.date) {
+    const d = new Date(event.date);
+    headerParts.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).toUpperCase());
+    headerParts.push(d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET');
+  }
+  if (network) headerParts.push(network);
+
+  const TeamRow = ({ team, side, isBot }) => {
+    const t    = team?.team || {};
+    const rank = team?.curatedRank?.current;
+    const logo = t.logos?.[0]?.href || t.logo;
+    const wins = winner === side;
+    const dim  = winner && !wins;
+    return (
+      <div
+        className={`flex items-center justify-between px-2.5 gap-2${isBot ? ' border-t border-white/[0.07]' : ''}${dim ? ' opacity-35' : ''}`}
+        style={{ height: `${RB_SLOT_H}px` }}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {logo
+            ? <img src={logo} alt="" className="h-4 w-4 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            : <div className="h-4 w-4 rounded bg-white/[0.06] flex-shrink-0" />}
+          {rank && rank < 99 && <span className="text-[9px] mono text-white/35 flex-shrink-0">#{rank}</span>}
+          <span className={`text-[11px] font-semibold truncate leading-none ${wins ? 'text-white' : (t.id ? 'text-white/60' : 'text-white/25')}`}>
+            {t.shortDisplayName || t.displayName || 'TBD'}
+          </span>
+        </div>
+        {(isLive || isFinal) && team && (
+          <span className={`mono text-sm font-bold tabular-nums flex-shrink-0 pl-1 ${wins ? 'text-white' : 'text-white/35'}`}>{team.score ?? '—'}</span>
+        )}
+      </div>
+    );
+  };
+
+  if (!event && placeholder) {
+    return (
+      <div
+        className="absolute rounded-lg overflow-hidden"
+        style={{ ...style, width: `${RB_CARD_W}px`, height: `${RB_CARD_H}px`, background: 'rgba(255,255,255,0.008)', border: '1px dashed rgba(255,255,255,0.12)' }}
+      >
+        <div style={{ height: `${RB_HEADER_H}px` }} className="flex items-center px-2.5 border-b border-white/[0.06]">
+          <span className="text-[8px] mono uppercase tracking-wide text-white/20 truncate">{placeholder.label}</span>
+        </div>
+        <div style={{ height: `${RB_SLOT_H}px` }} className="flex items-center px-2.5">
+          <span className="text-[11px] text-white/25 truncate">{placeholder.team1 || 'TBD'}</span>
+        </div>
+        <div style={{ height: `${RB_SLOT_H}px` }} className="flex items-center px-2.5 border-t border-white/[0.05]">
+          <span className="text-[11px] text-white/25 truncate">{placeholder.team2 || 'TBD'}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div
+        className="absolute rounded-lg border border-white/[0.07] overflow-hidden flex items-center justify-center"
+        style={{ ...style, width: `${RB_CARD_W}px`, height: `${RB_CARD_H}px`, background: 'rgba(255,255,255,0.01)' }}
+      >
+        <span className="text-[9px] mono text-white/20 uppercase tracking-widest">TBD</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`absolute rounded-lg border overflow-hidden ${isLive ? 'border-red-500/30' : 'border-white/[0.12]'}`}
+      style={{ ...style, width: `${RB_CARD_W}px`, height: `${RB_CARD_H}px`, background: 'rgba(255,255,255,0.025)' }}
+    >
+      <div className={`flex items-center gap-1.5 px-2.5 border-b border-white/[0.07]`} style={{ height: `${RB_HEADER_H}px` }}>
+        {isLive && <span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0" />}
+        <span className={`text-[8px] mono uppercase tracking-wide truncate ${isLive ? 'text-red-400' : 'text-white/30'}`}>
+          {headerParts.join(' · ')}
+        </span>
+      </div>
+      <TeamRow team={away} side="away" />
+      <TeamRow team={home} side="home" isBot />
+    </div>
+  );
+}
+
+// Collect unique teams from a set of games at one site, sorted by national seed.
+function extractSiteTeams(games) {
+  const teamMap = new Map();
+  for (const game of games) {
+    const comp = game.competitions?.[0];
+    for (const c of (comp?.competitors || [])) {
+      const tid = c.team?.id;
+      if (!tid || teamMap.has(tid)) continue;
+      teamMap.set(tid, {
+        id: tid,
+        name: c.team?.shortDisplayName || c.team?.displayName,
+        logo: c.team?.logos?.[0]?.href || c.team?.logo,
+        seed: c.curatedRank?.current < 99 ? c.curatedRank?.current : null,
+        record: c.records?.[0]?.summary || null,
+      });
+    }
+  }
+  return Array.from(teamMap.values()).sort((a, b) => {
+    if (a.seed && b.seed) return a.seed - b.seed;
+    if (a.seed) return -1;
+    if (b.seed) return 1;
+    return 0;
+  });
+}
+
+// 4-team regional pod card that mirrors the NCAA bracket look.
+// Top row: seed-1 vs seed-4 (or last). Bottom row: seed-2 vs seed-3.
+// Bracket connector SVG on the right shows the winner's path.
+function RegionalPodCard({ city, games, onClick }) {
+  const teams = extractSiteTeams(games);
+  const hasLive = games.some((g) => g.status?.type?.state === 'in');
+  const played  = games.filter((g) => g.status?.type?.state === 'post').length;
+
+  // Arrange into bracket pairs: [t1, t4, t2, t3]
+  const slots = [teams[0], teams[3] || null, teams[1] || null, teams[2] || null];
+
+  const TeamCell = ({ team, border }) => {
+    const logo = team?.logo;
+    return (
+      <div className={`flex flex-col items-center justify-center py-3 px-2 gap-1${border ? ' border-t border-white/[0.07]' : ''}`}>
+        {logo
+          ? <img src={logo} alt="" className="h-9 w-9 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          : <div className="h-9 w-9 rounded-full bg-white/[0.06]" />}
+        {team?.seed && <span className="text-[9px] mono text-white/35">#{team.seed}</span>}
+        <span className="text-[11px] font-semibold text-white text-center leading-tight w-full truncate px-1">
+          {team?.name || 'TBD'}
+        </span>
+        {team?.record && (
+          <span className="text-[9px] mono text-white/30">{team.record}</span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left rounded-xl border border-white/10 bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/20 transition-all overflow-hidden group"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.07]">
+        <span className="text-[9px] mono uppercase tracking-widest text-white/50 font-semibold">{city} Regional</span>
+        <div className="flex items-center gap-2">
+          {hasLive && (
+            <div className="flex items-center gap-1">
+              <span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500" />
+              <span className="text-[8px] mono text-red-400 uppercase tracking-widest">Live</span>
+            </div>
+          )}
+          {played > 0 && !hasLive && (
+            <span className="text-[8px] mono text-white/25">{played}/{games.length} done</span>
+          )}
+          <ChevronRight className="h-3 w-3 text-white/20 group-hover:text-white/50 transition-colors flex-shrink-0" />
+        </div>
+      </div>
+
+      {/* 2×2 team grid + bracket connector */}
+      <div className="flex">
+        <div className="grid grid-cols-2 flex-1" style={{ borderRight: '1px solid rgba(255,255,255,0.07)' }}>
+          <TeamCell team={slots[0]} />
+          <TeamCell team={slots[1]} />
+          <TeamCell team={slots[2]} border />
+          <TeamCell team={slots[3]} border />
+        </div>
+
+        {/* Bracket connector — horizontal lines from each pair to midpoint, vertical joiner, then arrow out */}
+        <div className="flex-shrink-0 relative" style={{ width: '36px' }}>
+          <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            {/* top pair → midpoint */}
+            <line x1="0" y1="25%" x2="55%" y2="25%" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" />
+            {/* bottom pair → midpoint */}
+            <line x1="0" y1="75%" x2="55%" y2="75%" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" />
+            {/* vertical joiner */}
+            <line x1="55%" y1="25%" x2="55%" y2="75%" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" />
+            {/* centre out */}
+            <line x1="55%" y1="50%" x2="100%" y2="50%" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" />
+          </svg>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function WorldSeriesView() {
   const [data, setData]           = useState(null);
   const [error, setError]         = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [activeRound, setActiveRound] = useState(null); // null = all
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'live' | 'upcoming' | 'final'
+  const [bracketZoom, setBracketZoom] = useState(1);
+  const [selectedSite, setSelectedSite] = useState(null); // city string or null
   const pollRef = useRef(null);
 
   const load = useCallback(async (silent = false) => {
@@ -3543,8 +3865,17 @@ function WorldSeriesView() {
 
   const renderRound = ({ round, groups }) => {
     const meta = ROUND_META[round] || { label: round, sub: '' };
-    const allGames = groups.flatMap((g) => g.games);
-    const liveCount = allGames.filter((ev) => ev.status?.type?.state === 'in').length;
+    const allGamesRaw = groups.flatMap((g) => g.games);
+    const filterGame = (ev) => {
+      if (statusFilter === 'all' || round === 'WCWS') return true;
+      const state = ev.status?.type?.state;
+      if (statusFilter === 'live') return state === 'in';
+      if (statusFilter === 'final') return state === 'post';
+      if (statusFilter === 'upcoming') return state === 'pre';
+      return true;
+    };
+    const allGames = allGamesRaw.filter(filterGame);
+    const liveCount = allGamesRaw.filter((ev) => ev.status?.type?.state === 'in').length;
 
     const RoundHeader = () => (
       <div className="flex items-end justify-between mb-5 pb-2 border-b border-white/10">
@@ -3568,12 +3899,457 @@ function WorldSeriesView() {
       return (
         <div key={round}>
           <RoundHeader />
-          <WCWSBracket games={allGames} />
+          <WCWSBracket games={allGames} zoom={bracketZoom} onZoomChange={setBracketZoom} />
         </div>
       );
     }
 
-    // Regionals and Super Regionals: group by venue city (site pods), then by date.
+    // Build site map from ALL games (not status-filtered) so pods always show all teams.
+    const siteMapAll = new Map();
+    for (const g of allGamesRaw) {
+      const city = g.competitions?.[0]?.venue?.address?.city || 'Unknown Site';
+      if (!siteMapAll.has(city)) siteMapAll.set(city, []);
+      siteMapAll.get(city).push(g);
+    }
+    const sitesAll = Array.from(siteMapAll.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+    // ── Regionals: pod grid view or drill-down ────────────────────────────────
+    if (round === 'Regionals') {
+      // Drill-down: unified scrollable bracket for a regional site.
+      if (selectedSite) {
+        const siteGames = siteMapAll.get(selectedSite) || [];
+        const hasLive   = siteGames.some((g) => g.status?.type?.state === 'in');
+        const sorted    = [...siteGames].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Slot assignment (chronological; double-elim order):
+        // 0,1 = WB R1 · 2 = WB Final · 3 = Elim R1 · 4 = Elim R2 · 5+ = Championship
+        const wbG1  = sorted[0] || null;
+        const wbG2  = sorted[1] || null;
+        const wbFin = sorted[2] || null;
+        const elG1  = sorted[3] || null;
+        const elR2  = sorted[4] || null;
+        const champ = sorted.length > 5 ? sorted[sorted.length - 1] : (sorted[5] || null);
+
+        // Look up whether there's a matching Super Regional for this site.
+        const srRound   = rounds.find((r) => r.round === 'Super Regionals');
+        const srGames   = srRound ? srRound.groups.flatMap((g) => g.games) : [];
+        const srForSite = srGames.find((g) => {
+          const host = g.competitions?.[0]?.venue?.address?.city;
+          const teams = extractSiteTeams([g]);
+          return host === selectedSite || teams.some((t) => t.name?.toLowerCase().includes(selectedSite.toLowerCase()));
+        }) || null;
+
+        // Column headers
+        const COL_HEADERS = [
+          { label: 'Round 1',       sub: 'Day 1' },
+          { label: 'Round 2',       sub: 'Day 2' },
+          { label: 'Championship',  sub: 'Day 3–4' },
+          { label: 'Super Regional',sub: 'TBD' },
+          { label: 'WCWS',          sub: 'Okla. City' },
+        ];
+        const COL_XS = [0, RB_U_C1_X, RB_U_C2_X, RB_U_C3_X, RB_U_C4_X];
+
+        return (
+          <div key={round}>
+            {/* Back + title */}
+            <div className="flex items-center gap-3 mb-5 pb-3 border-b border-white/10">
+              <button onClick={() => setSelectedSite(null)} className="flex items-center gap-1.5 text-white/40 hover:text-white transition-colors">
+                <ChevronLeft className="h-4 w-4" />
+                <span className="text-[10px] mono uppercase tracking-widest">All Regionals</span>
+              </button>
+              <span className="text-white/15">·</span>
+              <div className="flex items-center gap-2">
+                <span className="text-white text-xl font-bold display">{selectedSite} Regional</span>
+                {hasLive && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-red-500/30 bg-red-500/10">
+                    <span className="live-dot h-1 w-1 rounded-full bg-red-500" />
+                    <span className="text-red-400 text-[9px] mono font-bold">LIVE</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Unified horizontally-scrollable bracket */}
+            <div className="overflow-x-auto pb-4">
+              {/* Column headers */}
+              <div style={{ width: `${RB_U_FULL_W}px` }} className="flex mb-3">
+                {COL_HEADERS.map(({ label, sub }, i) => (
+                  <React.Fragment key={label}>
+                    <div className="text-center flex-shrink-0" style={{ width: `${RB_CARD_W}px` }}>
+                      <div className="text-[9px] mono uppercase tracking-widest text-white/40">{label}</div>
+                      <div className="text-[8px] mono text-white/20 mt-0.5">{sub}</div>
+                    </div>
+                    {i < COL_HEADERS.length - 1 && <div style={{ width: `${RB_CONN_W}px` }} />}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {/* Bracket canvas */}
+              <div className="relative" style={{ width: `${RB_U_FULL_W}px`, height: `${RB_U_FULL_H}px` }}>
+                {/* Section labels inside the SVG */}
+                <svg className="absolute inset-0" width={RB_U_FULL_W} height={RB_U_FULL_H} style={{ pointerEvents: 'none' }}>
+                  <text x="4" y={RB_SECTION_OFF - 4} fill="rgba(255,255,255,0.25)" fontSize="7.5" fontFamily="ui-monospace,monospace" letterSpacing="0.15em">WINNERS&apos; BRACKET</text>
+                  <text x="4" y={RB_U_EL_OFF + RB_SECTION_OFF * 2 - 4} fill="rgba(255,255,255,0.25)" fontSize="7.5" fontFamily="ui-monospace,monospace" letterSpacing="0.15em">ELIMINATION BRACKET</text>
+                  {RB_U_SVG_LINES.map(([x1, y1, x2, y2], i) => (
+                    <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                  ))}
+                </svg>
+
+                {/* WB Round 1 */}
+                <BracketGameCard event={wbG1} style={{ top: RB_SECTION_OFF,                    left: 0 }} />
+                <BracketGameCard event={wbG2} style={{ top: RB_SECTION_OFF + RB_U_WB_STEP,     left: 0 }} />
+
+                {/* WB Final */}
+                <BracketGameCard event={wbFin} style={{ top: RB_U_WB_FT, left: RB_U_C1_X }} />
+
+                {/* Elim Round 1 */}
+                <BracketGameCard event={elG1} style={{ top: RB_U_EL_OFF + RB_SECTION_OFF * 2, left: 0 }} />
+                {/* WB Final loser feeds into Elim R2 — show as TBD until determined */}
+                <BracketGameCard
+                  event={null}
+                  placeholder={{ label: 'WB Final Loser · TBD', team1: 'Loser of WB Final', team2: '' }}
+                  style={{ top: RB_U_EL_OFF + RB_SECTION_OFF * 2 + RB_U_WB_STEP, left: 0 }}
+                />
+
+                {/* Elim R2 */}
+                <BracketGameCard event={elR2} style={{ top: RB_U_EL_FT, left: RB_U_C1_X }} />
+
+                {/* Championship */}
+                <BracketGameCard
+                  event={champ}
+                  placeholder={!champ ? { label: 'Championship · TBD', team1: 'WB Final Winner', team2: 'Elim R2 Winner' } : undefined}
+                  style={{ top: RB_U_CH_TOP, left: RB_U_C2_X }}
+                />
+
+                {/* Super Regional */}
+                <BracketGameCard
+                  event={srForSite}
+                  placeholder={!srForSite ? { label: 'Super Regional · TBD', team1: `Winner of ${selectedSite} Regional`, team2: 'vs TBD' } : undefined}
+                  style={{ top: RB_U_CH_TOP, left: RB_U_C3_X }}
+                />
+
+                {/* WCWS slot */}
+                <BracketGameCard
+                  event={null}
+                  placeholder={{ label: 'WCWS · Oklahoma City', team1: 'Super Regional Winner', team2: 'TBD' }}
+                  style={{ top: RB_U_CH_TOP, left: RB_U_C4_X }}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ── Pod bracket view — all regional sites in a horizontal scrollable bracket ──
+      {
+        const srRound  = rounds.find((r) => r.round === 'Super Regionals');
+        const srGames  = srRound ? srRound.groups.flatMap((g) => g.games) : [];
+
+        // Pair adjacent sites alphabetically: pair 0 = sites[0]+sites[1], etc.
+        const pairs = [];
+        for (let i = 0; i < sitesAll.length; i += 2)
+          pairs.push({ s0: sitesAll[i], s1: sitesAll[i + 1] || null });
+
+        const N = pairs.length;
+        const TOTAL_H = N * BR_PAIR_H + (N - 1) * BR_GRP_GAP;
+
+        // Per-pair vertical positions
+        const pairPos = pairs.map((_, i) => {
+          const base   = i * BR_STRIDE;
+          const cy0    = base + BR_POD_H / 2;
+          const cy1    = base + BR_POD_H + BR_POD_GAP + BR_POD_H / 2;
+          const srCy   = (cy0 + cy1) / 2;
+          return { base, cy0, cy1, srCy, srTop: Math.round(srCy - BR_SR_H / 2) };
+        });
+
+        // WCWS slots: each connects two SR cards
+        const wcwsSlots = pairPos.reduce((acc, _, i) => {
+          if (i % 2 === 0) {
+            const a = pairPos[i].srCy;
+            const b = pairPos[i + 1]?.srCy ?? a;
+            const cy = (a + b) / 2;
+            acc.push({ cy, top: Math.round(cy - BR_WCWS_H / 2), a, b });
+          }
+          return acc;
+        }, []);
+
+        const MX_POD_SR   = BR_POD_W + BR_CONN_W / 2;  // midpoint of pod→SR connector
+        const MX_SR_WCWS  = BR_SR_X + BR_SR_W + BR_CONN_W / 2; // midpoint of SR→WCWS connector
+
+        // Inline pod card renderer (not a component — avoids remount on each render)
+        const renderPod = (city, games, top) => {
+          const teams  = extractSiteTeams(games);
+          const slots  = [teams[0], teams[3] || null, teams[1] || null, teams[2] || null];
+          const live   = games.some((g) => g.status?.type?.state === 'in');
+          const played = games.filter((g) => g.status?.type?.state === 'post').length;
+          const ROW_H  = (BR_POD_H - 40) / 2;  // height of each 2-col team row
+          return (
+            <button
+              key={city}
+              onClick={() => setSelectedSite(city)}
+              className="absolute text-left rounded-xl border border-white/10 bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/20 transition-all overflow-hidden group"
+              style={{ top, left: 0, width: `${BR_POD_W}px`, height: `${BR_POD_H}px` }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-3 border-b border-white/[0.07]" style={{ height: '40px' }}>
+                <span className="text-[9px] mono uppercase tracking-widest text-white/50 truncate">{city} Regional</span>
+                <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                  {live && <span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500" />}
+                  {played > 0 && !live && <span className="text-[8px] mono text-white/25">{played}/{games.length}</span>}
+                  <ChevronRight className="h-3 w-3 text-white/20 group-hover:text-white/40 transition-colors" />
+                </div>
+              </div>
+              {/* 2×2 team grid */}
+              <div className="grid grid-cols-2" style={{ height: `${BR_POD_H - 40}px` }}>
+                {slots.map((team, idx) => {
+                  const logo = team?.logo;
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex items-center gap-1.5 px-2${idx >= 2 ? ' border-t border-white/[0.07]' : ''}${idx % 2 === 1 ? ' border-l border-white/[0.07]' : ''}`}
+                      style={{ height: `${ROW_H}px` }}
+                    >
+                      {logo
+                        ? <img src={logo} alt="" className="h-4 w-4 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        : <div className="h-4 w-4 rounded-full bg-white/[0.05] flex-shrink-0" />}
+                      <div className="min-w-0 flex items-center gap-1">
+                        {team?.seed && <span className="text-[8px] mono text-white/30 flex-shrink-0">#{team.seed}</span>}
+                        <span className="text-[11px] font-semibold text-white/80 truncate">{team?.name || 'TBD'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </button>
+          );
+        };
+
+        return (
+          <div key={round}>
+            <RoundHeader />
+            {allGamesRaw.length === 0 ? (
+              <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">No games scheduled yet</div>
+            ) : (
+              <div className="overflow-x-auto pb-4">
+                {/* Column headers */}
+                <div className="flex mb-3" style={{ width: `${BR_TOTAL_W}px` }}>
+                  {[
+                    { label: 'Regional',       w: BR_POD_W   },
+                    { label: 'Super Regional', w: BR_SR_W    },
+                    { label: 'WCWS',           w: BR_WCWS_W  },
+                  ].reduce((acc, col, i, arr) => {
+                    acc.push(
+                      <div key={col.label} className="text-center flex-shrink-0" style={{ width: `${col.w}px` }}>
+                        <div className="text-[9px] mono uppercase tracking-widest text-white/35">{col.label}</div>
+                      </div>
+                    );
+                    if (i < arr.length - 1) acc.push(<div key={`g${i}`} style={{ width: `${BR_CONN_W}px` }} />);
+                    return acc;
+                  }, [])}
+                </div>
+
+                {/* Bracket canvas */}
+                <div className="relative" style={{ width: `${BR_TOTAL_W}px`, height: `${TOTAL_H}px` }}>
+                  {/* SVG bracket lines */}
+                  <svg className="absolute inset-0" width={BR_TOTAL_W} height={TOTAL_H} style={{ pointerEvents: 'none' }}>
+                    {/* Pods → SR connectors */}
+                    {pairPos.map(({ cy0, cy1, srCy }, i) => (
+                      <React.Fragment key={i}>
+                        <line x1={BR_POD_W} y1={cy0}  x2={MX_POD_SR} y2={cy0}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={BR_POD_W} y1={cy1}  x2={MX_POD_SR} y2={cy1}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={MX_POD_SR} y1={cy0} x2={MX_POD_SR} y2={cy1}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={MX_POD_SR} y1={srCy} x2={BR_SR_X}  y2={srCy} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                      </React.Fragment>
+                    ))}
+                    {/* SR → WCWS connectors */}
+                    {wcwsSlots.map(({ cy, a, b }, i) => (
+                      <React.Fragment key={i}>
+                        <line x1={BR_SR_X + BR_SR_W} y1={a}  x2={MX_SR_WCWS}  y2={a}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={BR_SR_X + BR_SR_W} y1={b}  x2={MX_SR_WCWS}  y2={b}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={MX_SR_WCWS} y1={a}          x2={MX_SR_WCWS}  y2={b}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={MX_SR_WCWS} y1={cy}         x2={BR_WCWS_X}   y2={cy} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                      </React.Fragment>
+                    ))}
+                  </svg>
+
+                  {/* Pod cards */}
+                  {pairs.map(({ s0, s1 }, i) => {
+                    const { base } = pairPos[i];
+                    return (
+                      <React.Fragment key={i}>
+                        {renderPod(s0[0], s0[1], base)}
+                        {s1 && renderPod(s1[0], s1[1], base + BR_POD_H + BR_POD_GAP)}
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {/* Super Regional cards */}
+                  {pairPos.map(({ srTop, srCy }, i) => {
+                    const [s0name] = pairs[i].s0;
+                    const s1name   = pairs[i].s1?.[0];
+                    const srGame   = srGames.find((g) => {
+                      const city  = g.competitions?.[0]?.venue?.address?.city;
+                      return city === s0name || city === s1name;
+                    }) || null;
+                    const t1 = srGame ? extractBracketTeam(srGame, 'away') : null;
+                    const t2 = srGame ? extractBracketTeam(srGame, 'home') : null;
+                    return (
+                      <div
+                        key={i}
+                        className="absolute rounded-lg overflow-hidden"
+                        style={{ top: srTop, left: BR_SR_X, width: `${BR_SR_W}px`, height: `${BR_SR_H}px`, background: srGame ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.008)', border: srGame ? '1px solid rgba(255,255,255,0.12)' : '1px dashed rgba(255,255,255,0.1)' }}
+                      >
+                        <div className="px-2.5 flex items-center border-b border-white/[0.07]" style={{ height: `${RB_HEADER_H}px` }}>
+                          <span className="text-[8px] mono uppercase tracking-wide text-white/25 truncate">Super Regional{srGame ? '' : ' · TBD'}</span>
+                        </div>
+                        <div className="px-2.5 flex items-center gap-1.5" style={{ height: `${RB_SLOT_H}px` }}>
+                          {t1?.logo && <img src={t1.logo} alt="" className="h-3.5 w-3.5 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+                          {t1?.seed && <span className="text-[8px] mono text-white/30 flex-shrink-0">#{t1.seed}</span>}
+                          <span className="text-[11px] text-white/50 truncate">{t1?.name || `Winner of ${s0name}`}</span>
+                        </div>
+                        <div className="px-2.5 flex items-center gap-1.5 border-t border-white/[0.05]" style={{ height: `${RB_SLOT_H}px` }}>
+                          {t2?.logo && <img src={t2.logo} alt="" className="h-3.5 w-3.5 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+                          {t2?.seed && <span className="text-[8px] mono text-white/30 flex-shrink-0">#{t2.seed}</span>}
+                          <span className="text-[11px] text-white/50 truncate">{t2?.name || (s1name ? `Winner of ${s1name}` : 'TBD')}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* WCWS slot cards */}
+                  {wcwsSlots.map(({ top, a, b }, i) => (
+                    <div
+                      key={i}
+                      className="absolute rounded-lg overflow-hidden"
+                      style={{ top, left: BR_WCWS_X, width: `${BR_WCWS_W}px`, height: `${BR_WCWS_H}px`, background: 'rgba(255,255,255,0.006)', border: '1px dashed rgba(255,255,255,0.08)' }}
+                    >
+                      <div className="px-2.5 flex items-center border-b border-white/[0.05]" style={{ height: `${RB_HEADER_H}px` }}>
+                        <span className="text-[8px] mono uppercase tracking-wide text-white/18 truncate">WCWS · Oklahoma City · TBD</span>
+                      </div>
+                      <div className="px-2.5 flex items-center" style={{ height: `${RB_SLOT_H}px` }}>
+                        <span className="text-[11px] text-white/25 truncate">SR Winner {i * 2 + 1}</span>
+                      </div>
+                      <div className="px-2.5 flex items-center border-t border-white/[0.04]" style={{ height: `${RB_SLOT_H}px` }}>
+                        <span className="text-[11px] text-white/25 truncate">vs SR Winner {i * 2 + 2}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+    }
+
+    // ── Super Regionals: two-team series cards ────────────────────────────────
+    if (round === 'Super Regionals') {
+      // Drill-down for a Super Regional site.
+      if (selectedSite) {
+        const siteGames = siteMapAll.get(selectedSite) || [];
+        const siteTeams = extractSiteTeams(siteGames);
+        const hasLive = siteGames.some((g) => g.status?.type?.state === 'in');
+        return (
+          <div key={round}>
+            <div className="flex items-center gap-3 mb-6 pb-3 border-b border-white/10">
+              <button
+                onClick={() => setSelectedSite(null)}
+                className="flex items-center gap-1.5 text-white/40 hover:text-white transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span className="text-[10px] mono uppercase tracking-widest">All Super Regionals</span>
+              </button>
+              <span className="text-white/15">·</span>
+              <div className="flex items-center gap-2">
+                <span className="text-white text-xl font-bold display">{selectedSite} Super Regional</span>
+                {hasLive && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-red-500/30 bg-red-500/10">
+                    <span className="live-dot h-1 w-1 rounded-full bg-red-500" />
+                    <span className="text-red-400 text-[9px] mono font-bold">LIVE</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            {siteTeams.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
+                {siteTeams.map((t) => {
+                  const logo = t.logo;
+                  return (
+                    <div key={t.id} className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.03]">
+                      {logo && <img src={logo} alt="" className="h-4 w-4 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+                      {t.seed && <span className="text-[9px] mono text-white/35">#{t.seed}</span>}
+                      <span className="text-xs font-semibold text-white">{t.name}</span>
+                      {t.record && <span className="text-[9px] mono text-white/30">{t.record}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {siteGames.sort((a, b) => new Date(a.date) - new Date(b.date)).map((ev, i) => (
+                <CWSGameCard key={ev.id} event={ev} index={i} />
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      // Super Regionals pod grid (2-team matchup pods).
+      return (
+        <div key={round}>
+          <RoundHeader />
+          {allGamesRaw.length === 0 ? (
+            <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">Matchups TBD</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {sitesAll.map(([city, siteGames]) => {
+                const teams = extractSiteTeams(siteGames);
+                const hasLive = siteGames.some((g) => g.status?.type?.state === 'in');
+                const played = siteGames.filter((g) => g.status?.type?.state === 'post').length;
+                const [tA, tB] = teams;
+                const SeriesTeam = ({ t }) => {
+                  if (!t) return <div className="flex-1 flex flex-col items-center justify-center py-3 gap-1"><span className="text-white/20 text-[11px] mono">TBD</span></div>;
+                  return (
+                    <div className="flex-1 flex flex-col items-center justify-center py-3 px-2 gap-1">
+                      {t.logo && <img src={t.logo} alt="" className="h-9 w-9 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+                      {t.seed && <span className="text-[9px] mono text-white/35">#{t.seed}</span>}
+                      <span className="text-[11px] font-semibold text-white text-center leading-tight">{t.name}</span>
+                      {t.record && <span className="text-[9px] mono text-white/30">{t.record}</span>}
+                    </div>
+                  );
+                };
+                return (
+                  <button
+                    key={city}
+                    onClick={() => setSelectedSite(city)}
+                    className="w-full text-left rounded-xl border border-white/10 bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/20 transition-all overflow-hidden group"
+                  >
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.07]">
+                      <span className="text-[9px] mono uppercase tracking-widest text-white/50 font-semibold">{city} Super Regional</span>
+                      <div className="flex items-center gap-2">
+                        {hasLive && <div className="flex items-center gap-1"><span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500" /><span className="text-[8px] mono text-red-400 uppercase">Live</span></div>}
+                        {played > 0 && !hasLive && <span className="text-[8px] mono text-white/25">Game {played}/{siteGames.length}</span>}
+                        <ChevronRight className="h-3 w-3 text-white/20 group-hover:text-white/50 transition-colors" />
+                      </div>
+                    </div>
+                    <div className="flex items-stretch divide-x divide-white/[0.07]">
+                      <SeriesTeam t={tA} />
+                      <div className="flex items-center justify-center px-2 flex-shrink-0">
+                        <span className="text-[9px] mono text-white/25 uppercase tracking-widest">vs</span>
+                      </div>
+                      <SeriesTeam t={tB} />
+                    </div>
+                    <div className="px-3 py-1.5 border-t border-white/[0.05] text-[8px] mono text-white/20 uppercase tracking-widest">Best of 3</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── Fallback: generic game list (Tournament round etc.) ───────────────────
     const siteMap = new Map();
     for (const g of allGames) {
       const city = g.competitions?.[0]?.venue?.address?.city || 'Unknown Site';
@@ -3585,32 +4361,39 @@ function WorldSeriesView() {
     return (
       <div key={round}>
         <RoundHeader />
-        {sites.length > 0 ? (
+        {allGames.length === 0 && statusFilter !== 'all' ? (
+          <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">No {statusFilter} games</div>
+        ) : sites.length > 0 ? (
           <div className="space-y-8">
-            {sites.map(([city, siteGames]) => (
-              <div key={city}>
-                <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-2 flex items-center gap-2">
-                  <span className="inline-block h-px w-4 bg-white/20"></span>
-                  {city} Site
+            {sites.map(([city, siteGames]) => {
+              if (!siteGames.length) return null;
+              return (
+                <div key={city}>
+                  <div className="text-[10px] mono tracking-[0.25em] uppercase text-white/40 mb-2 flex items-center gap-2">
+                    <span className="inline-block h-px w-4 bg-white/20"></span>
+                    {city} Site
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {siteGames.sort((a, b) => new Date(a.date) - new Date(b.date)).map((ev, i) => (
+                      <CWSGameCard key={ev.id} event={ev} index={i} />
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {siteGames.sort((a, b) => new Date(a.date) - new Date(b.date)).map((ev, i) => (
-                    <CWSGameCard key={ev.id} event={ev} index={i} />
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="space-y-6">
             {groups.map(({ date, games }) => {
+              const filteredGames = games.filter(filterGame);
+              if (!filteredGames.length) return null;
               const d = new Date(date + 'T12:00:00Z');
               const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
               return (
                 <div key={date}>
                   <div className="text-[10px] mono tracking-[0.2em] uppercase text-white/40 mb-2">{dayLabel}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {games.map((ev, i) => <CWSGameCard key={ev.id} event={ev} index={i} />)}
+                    {filteredGames.map((ev, i) => <CWSGameCard key={ev.id} event={ev} index={i} />)}
                   </div>
                 </div>
               );
@@ -3621,8 +4404,17 @@ function WorldSeriesView() {
     );
   };
 
+  const availableRounds = ['Regionals', 'Super Regionals', 'WCWS', 'Tournament']
+    .filter((r) => rounds.find((rd) => rd.round === r));
+
+  // Which rounds to show after round filter
+  const visibleRounds = availableRounds.filter((r) => !activeRound || r === activeRound);
+  // Hide status filter and round pills when the user is drilled into a site.
+  const showStatusFilter = visibleRounds.some((r) => r !== 'WCWS') && rounds.length > 0 && !selectedSite;
+  const ROUND_SHORT = { 'Regionals': 'Regionals', 'Super Regionals': 'Super Reg', 'WCWS': 'World Series', 'Tournament': 'Tournament' };
+
   return (
-    <div className="space-y-12">
+    <div className="space-y-10">
       <div className="flex items-end justify-between border-b border-white/10 pb-3 flex-wrap gap-3">
         <div>
           <div className="text-[10px] mono tracking-[0.3em] uppercase text-white/40">NCAA D1 Softball · 2026</div>
@@ -3633,6 +4425,52 @@ function WorldSeriesView() {
         </div>
       </div>
 
+      {/* Filter bar — only shown when there are rounds to filter and not drilled into a site */}
+      {rounds.length > 0 && !selectedSite && (
+        <div className="flex flex-wrap gap-4 items-center -mt-4">
+          {/* Round filter */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[null, ...availableRounds].map((r) => (
+              <button
+                key={r ?? 'all'}
+                onClick={() => { setActiveRound(r); setSelectedSite(null); }}
+                className={`px-3 py-1 rounded-full text-[10px] mono uppercase tracking-widest transition-colors border ${
+                  activeRound === r
+                    ? 'bg-white text-black border-white'
+                    : 'text-white/50 border-white/15 hover:text-white hover:border-white/30'
+                }`}
+              >
+                {r ? ROUND_SHORT[r] : 'All Rounds'}
+              </button>
+            ))}
+          </div>
+
+          {/* Status filter — only for non-WCWS rounds */}
+          {showStatusFilter && (
+            <div className="flex items-center gap-1 rounded-md border border-white/10 overflow-hidden">
+              {[
+                { id: 'all',      label: 'All' },
+                { id: 'live',     label: 'Live' },
+                { id: 'upcoming', label: 'Upcoming' },
+                { id: 'final',    label: 'Final' },
+              ].map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setStatusFilter(id)}
+                  className={`px-2.5 py-1 text-[10px] mono uppercase tracking-widest transition-colors ${
+                    statusFilter === id
+                      ? 'bg-white/[0.08] text-white'
+                      : 'text-white/35 hover:text-white/60'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {rounds.length === 0 ? (
         // Off-season: show the WCWS bracket placeholder so the format is visible now.
         <div>
@@ -3640,7 +4478,7 @@ function WorldSeriesView() {
             <div className="text-white text-xl font-bold display mb-0.5">Women's College World Series</div>
             <div className="text-white/30 text-xs mono">Oklahoma City, OK · 8 teams · Double-elimination · Bracket announced after Super Regionals</div>
           </div>
-          <WCWSBracket games={[]} />
+          <WCWSBracket games={[]} zoom={bracketZoom} onZoomChange={setBracketZoom} />
 
           <div className="mt-10 p-5 rounded-xl border border-white/5 bg-white/[0.015]">
             <div className="text-[10px] mono uppercase tracking-widest text-white/30 mb-3">2026 Tournament Calendar</div>
@@ -3659,10 +4497,12 @@ function WorldSeriesView() {
           </div>
         </div>
       ) : (
-        ['Regionals', 'Super Regionals', 'WCWS', 'Tournament']
-          .map((r) => rounds.find((rd) => rd.round === r))
-          .filter(Boolean)
-          .map(renderRound)
+        <div className="space-y-12">
+          {visibleRounds
+            .map((r) => rounds.find((rd) => rd.round === r))
+            .filter(Boolean)
+            .map(renderRound)}
+        </div>
       )}
 
       <div className="pt-4 border-t border-white/5 text-[9px] mono uppercase tracking-widest text-white/30">
