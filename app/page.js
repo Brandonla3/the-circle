@@ -3599,6 +3599,22 @@ const RB_U_SVG_LINES = [
   [RB_U_C3_X + RB_CARD_W, RB_U_CH_CY,  RB_U_C4_X,              RB_U_CH_CY ],
 ];
 
+// ── Main bracket overview (all pods → SR → WCWS, horizontally scrollable) ────
+const BR_POD_H   = 192;          // fixed pod card height
+const BR_POD_W   = 264;          // fixed pod card width
+const BR_POD_GAP = 10;           // gap between two pods in a pair
+const BR_GRP_GAP = 20;           // gap between pairs
+const BR_CONN_W  = 44;           // connector column width
+const BR_SR_W    = 200;          // Super Regional card width
+const BR_SR_H    = RB_CARD_H;    // 89px — matches BracketGameCard height
+const BR_WCWS_W  = 200;
+const BR_WCWS_H  = RB_CARD_H;
+const BR_PAIR_H  = BR_POD_H * 2 + BR_POD_GAP;           // 394
+const BR_STRIDE  = BR_PAIR_H + BR_GRP_GAP;               // 414
+const BR_SR_X    = BR_POD_W + BR_CONN_W;                 // 308
+const BR_WCWS_X  = BR_SR_X + BR_SR_W + BR_CONN_W;        // 552
+const BR_TOTAL_W = BR_WCWS_X + BR_WCWS_W;                // 752
+
 // Game card used inside the regional bracket (absolutely positioned).
 // Pass `placeholder={{ label, team1, team2 }}` to render a TBD future-round slot.
 function BracketGameCard({ event, style, placeholder }) {
@@ -4023,21 +4039,206 @@ function WorldSeriesView() {
         );
       }
 
-      // Pod grid view — all regional sites.
-      return (
-        <div key={round}>
-          <RoundHeader />
-          {allGamesRaw.length === 0 ? (
-            <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">No games scheduled yet</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {sitesAll.map(([city, siteGames]) => (
-                <RegionalPodCard key={city} city={city} games={siteGames} onClick={() => setSelectedSite(city)} />
-              ))}
-            </div>
-          )}
-        </div>
-      );
+      // ── Pod bracket view — all regional sites in a horizontal scrollable bracket ──
+      {
+        const srRound  = rounds.find((r) => r.round === 'Super Regionals');
+        const srGames  = srRound ? srRound.groups.flatMap((g) => g.games) : [];
+
+        // Pair adjacent sites alphabetically: pair 0 = sites[0]+sites[1], etc.
+        const pairs = [];
+        for (let i = 0; i < sitesAll.length; i += 2)
+          pairs.push({ s0: sitesAll[i], s1: sitesAll[i + 1] || null });
+
+        const N = pairs.length;
+        const TOTAL_H = N * BR_PAIR_H + (N - 1) * BR_GRP_GAP;
+
+        // Per-pair vertical positions
+        const pairPos = pairs.map((_, i) => {
+          const base   = i * BR_STRIDE;
+          const cy0    = base + BR_POD_H / 2;
+          const cy1    = base + BR_POD_H + BR_POD_GAP + BR_POD_H / 2;
+          const srCy   = (cy0 + cy1) / 2;
+          return { base, cy0, cy1, srCy, srTop: Math.round(srCy - BR_SR_H / 2) };
+        });
+
+        // WCWS slots: each connects two SR cards
+        const wcwsSlots = pairPos.reduce((acc, _, i) => {
+          if (i % 2 === 0) {
+            const a = pairPos[i].srCy;
+            const b = pairPos[i + 1]?.srCy ?? a;
+            const cy = (a + b) / 2;
+            acc.push({ cy, top: Math.round(cy - BR_WCWS_H / 2), a, b });
+          }
+          return acc;
+        }, []);
+
+        const MX_POD_SR   = BR_POD_W + BR_CONN_W / 2;  // midpoint of pod→SR connector
+        const MX_SR_WCWS  = BR_SR_X + BR_SR_W + BR_CONN_W / 2; // midpoint of SR→WCWS connector
+
+        // Inline pod card renderer (not a component — avoids remount on each render)
+        const renderPod = (city, games, top) => {
+          const teams  = extractSiteTeams(games);
+          const slots  = [teams[0], teams[3] || null, teams[1] || null, teams[2] || null];
+          const live   = games.some((g) => g.status?.type?.state === 'in');
+          const played = games.filter((g) => g.status?.type?.state === 'post').length;
+          const ROW_H  = (BR_POD_H - 40) / 2;  // height of each 2-col team row
+          return (
+            <button
+              key={city}
+              onClick={() => setSelectedSite(city)}
+              className="absolute text-left rounded-xl border border-white/10 bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/20 transition-all overflow-hidden group"
+              style={{ top, left: 0, width: `${BR_POD_W}px`, height: `${BR_POD_H}px` }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-3 border-b border-white/[0.07]" style={{ height: '40px' }}>
+                <span className="text-[9px] mono uppercase tracking-widest text-white/50 truncate">{city} Regional</span>
+                <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                  {live && <span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500" />}
+                  {played > 0 && !live && <span className="text-[8px] mono text-white/25">{played}/{games.length}</span>}
+                  <ChevronRight className="h-3 w-3 text-white/20 group-hover:text-white/40 transition-colors" />
+                </div>
+              </div>
+              {/* 2×2 team grid */}
+              <div className="grid grid-cols-2" style={{ height: `${BR_POD_H - 40}px` }}>
+                {slots.map((team, idx) => {
+                  const logo = team?.logo;
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex items-center gap-1.5 px-2${idx >= 2 ? ' border-t border-white/[0.07]' : ''}${idx % 2 === 1 ? ' border-l border-white/[0.07]' : ''}`}
+                      style={{ height: `${ROW_H}px` }}
+                    >
+                      {logo
+                        ? <img src={logo} alt="" className="h-4 w-4 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        : <div className="h-4 w-4 rounded-full bg-white/[0.05] flex-shrink-0" />}
+                      <div className="min-w-0 flex items-center gap-1">
+                        {team?.seed && <span className="text-[8px] mono text-white/30 flex-shrink-0">#{team.seed}</span>}
+                        <span className="text-[11px] font-semibold text-white/80 truncate">{team?.name || 'TBD'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </button>
+          );
+        };
+
+        return (
+          <div key={round}>
+            <RoundHeader />
+            {allGamesRaw.length === 0 ? (
+              <div className="py-8 text-center text-white/30 text-xs mono uppercase tracking-widest">No games scheduled yet</div>
+            ) : (
+              <div className="overflow-x-auto pb-4">
+                {/* Column headers */}
+                <div className="flex mb-3" style={{ width: `${BR_TOTAL_W}px` }}>
+                  {[
+                    { label: 'Regional',       w: BR_POD_W   },
+                    { label: 'Super Regional', w: BR_SR_W    },
+                    { label: 'WCWS',           w: BR_WCWS_W  },
+                  ].reduce((acc, col, i, arr) => {
+                    acc.push(
+                      <div key={col.label} className="text-center flex-shrink-0" style={{ width: `${col.w}px` }}>
+                        <div className="text-[9px] mono uppercase tracking-widest text-white/35">{col.label}</div>
+                      </div>
+                    );
+                    if (i < arr.length - 1) acc.push(<div key={`g${i}`} style={{ width: `${BR_CONN_W}px` }} />);
+                    return acc;
+                  }, [])}
+                </div>
+
+                {/* Bracket canvas */}
+                <div className="relative" style={{ width: `${BR_TOTAL_W}px`, height: `${TOTAL_H}px` }}>
+                  {/* SVG bracket lines */}
+                  <svg className="absolute inset-0" width={BR_TOTAL_W} height={TOTAL_H} style={{ pointerEvents: 'none' }}>
+                    {/* Pods → SR connectors */}
+                    {pairPos.map(({ cy0, cy1, srCy }, i) => (
+                      <React.Fragment key={i}>
+                        <line x1={BR_POD_W} y1={cy0}  x2={MX_POD_SR} y2={cy0}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={BR_POD_W} y1={cy1}  x2={MX_POD_SR} y2={cy1}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={MX_POD_SR} y1={cy0} x2={MX_POD_SR} y2={cy1}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={MX_POD_SR} y1={srCy} x2={BR_SR_X}  y2={srCy} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                      </React.Fragment>
+                    ))}
+                    {/* SR → WCWS connectors */}
+                    {wcwsSlots.map(({ cy, a, b }, i) => (
+                      <React.Fragment key={i}>
+                        <line x1={BR_SR_X + BR_SR_W} y1={a}  x2={MX_SR_WCWS}  y2={a}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={BR_SR_X + BR_SR_W} y1={b}  x2={MX_SR_WCWS}  y2={b}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={MX_SR_WCWS} y1={a}          x2={MX_SR_WCWS}  y2={b}  stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                        <line x1={MX_SR_WCWS} y1={cy}         x2={BR_WCWS_X}   y2={cy} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                      </React.Fragment>
+                    ))}
+                  </svg>
+
+                  {/* Pod cards */}
+                  {pairs.map(({ s0, s1 }, i) => {
+                    const { base } = pairPos[i];
+                    return (
+                      <React.Fragment key={i}>
+                        {renderPod(s0[0], s0[1], base)}
+                        {s1 && renderPod(s1[0], s1[1], base + BR_POD_H + BR_POD_GAP)}
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {/* Super Regional cards */}
+                  {pairPos.map(({ srTop, srCy }, i) => {
+                    const [s0name] = pairs[i].s0;
+                    const s1name   = pairs[i].s1?.[0];
+                    const srGame   = srGames.find((g) => {
+                      const city  = g.competitions?.[0]?.venue?.address?.city;
+                      return city === s0name || city === s1name;
+                    }) || null;
+                    const t1 = srGame ? extractBracketTeam(srGame, 'away') : null;
+                    const t2 = srGame ? extractBracketTeam(srGame, 'home') : null;
+                    return (
+                      <div
+                        key={i}
+                        className="absolute rounded-lg overflow-hidden"
+                        style={{ top: srTop, left: BR_SR_X, width: `${BR_SR_W}px`, height: `${BR_SR_H}px`, background: srGame ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.008)', border: srGame ? '1px solid rgba(255,255,255,0.12)' : '1px dashed rgba(255,255,255,0.1)' }}
+                      >
+                        <div className="px-2.5 flex items-center border-b border-white/[0.07]" style={{ height: `${RB_HEADER_H}px` }}>
+                          <span className="text-[8px] mono uppercase tracking-wide text-white/25 truncate">Super Regional{srGame ? '' : ' · TBD'}</span>
+                        </div>
+                        <div className="px-2.5 flex items-center gap-1.5" style={{ height: `${RB_SLOT_H}px` }}>
+                          {t1?.logo && <img src={t1.logo} alt="" className="h-3.5 w-3.5 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+                          {t1?.seed && <span className="text-[8px] mono text-white/30 flex-shrink-0">#{t1.seed}</span>}
+                          <span className="text-[11px] text-white/50 truncate">{t1?.name || `Winner of ${s0name}`}</span>
+                        </div>
+                        <div className="px-2.5 flex items-center gap-1.5 border-t border-white/[0.05]" style={{ height: `${RB_SLOT_H}px` }}>
+                          {t2?.logo && <img src={t2.logo} alt="" className="h-3.5 w-3.5 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+                          {t2?.seed && <span className="text-[8px] mono text-white/30 flex-shrink-0">#{t2.seed}</span>}
+                          <span className="text-[11px] text-white/50 truncate">{t2?.name || (s1name ? `Winner of ${s1name}` : 'TBD')}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* WCWS slot cards */}
+                  {wcwsSlots.map(({ top, a, b }, i) => (
+                    <div
+                      key={i}
+                      className="absolute rounded-lg overflow-hidden"
+                      style={{ top, left: BR_WCWS_X, width: `${BR_WCWS_W}px`, height: `${BR_WCWS_H}px`, background: 'rgba(255,255,255,0.006)', border: '1px dashed rgba(255,255,255,0.08)' }}
+                    >
+                      <div className="px-2.5 flex items-center border-b border-white/[0.05]" style={{ height: `${RB_HEADER_H}px` }}>
+                        <span className="text-[8px] mono uppercase tracking-wide text-white/18 truncate">WCWS · Oklahoma City · TBD</span>
+                      </div>
+                      <div className="px-2.5 flex items-center" style={{ height: `${RB_SLOT_H}px` }}>
+                        <span className="text-[11px] text-white/25 truncate">SR Winner {i * 2 + 1}</span>
+                      </div>
+                      <div className="px-2.5 flex items-center border-t border-white/[0.04]" style={{ height: `${RB_SLOT_H}px` }}>
+                        <span className="text-[11px] text-white/25 truncate">vs SR Winner {i * 2 + 2}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
     }
 
     // ── Super Regionals: two-team series cards ────────────────────────────────
