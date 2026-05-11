@@ -3546,6 +3546,103 @@ function CWSGameCard({ event, index }) {
   );
 }
 
+// ── Regional bracket layout constants ────────────────────────────────────────
+const RB_HEADER_H = 24;
+const RB_SLOT_H   = 32;
+const RB_CARD_H   = RB_HEADER_H + RB_SLOT_H * 2 + 1; // 89px
+const RB_CARD_W   = 200;
+const RB_V_GAP    = 44;
+const RB_CONN_W   = 40;
+const RB_STEP     = RB_CARD_H + RB_V_GAP;             // 133
+const RB_CY0      = RB_CARD_H / 2;
+const RB_CY1      = RB_STEP + RB_CARD_H / 2;
+const RB_CY_MID   = (RB_CY0 + RB_CY1) / 2;
+const RB_R2_TOP   = Math.round(RB_CY_MID - RB_CARD_H / 2);
+const RB_R2_X     = RB_CARD_W + RB_CONN_W;
+const RB_TOTAL_W  = RB_R2_X + RB_CARD_W;
+const RB_TOTAL_H  = Math.ceil(RB_STEP + RB_CARD_H);
+const RB_MX       = RB_CARD_W + RB_CONN_W / 2;
+const RB_LINES    = [
+  [RB_CARD_W, RB_CY0,     RB_MX,   RB_CY0    ],
+  [RB_CARD_W, RB_CY1,     RB_MX,   RB_CY1    ],
+  [RB_MX,     RB_CY0,     RB_MX,   RB_CY1    ],
+  [RB_MX,     RB_CY_MID,  RB_R2_X, RB_CY_MID ],
+];
+
+// Game card used inside the regional bracket (absolutely positioned).
+function BracketGameCard({ event, style }) {
+  const comp   = event?.competitions?.[0];
+  const home   = comp?.competitors?.find((c) => c.homeAway === 'home');
+  const away   = comp?.competitors?.find((c) => c.homeAway === 'away');
+  const state  = event?.status?.type?.state;
+  const isLive = state === 'in';
+  const isFinal = state === 'post';
+  const winner = isFinal ? (Number(home?.score) > Number(away?.score) ? 'home' : 'away') : null;
+  const network = comp?.broadcasts?.[0]?.names?.[0];
+
+  const headerParts = [];
+  if (event?.date) {
+    const d = new Date(event.date);
+    headerParts.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).toUpperCase());
+    headerParts.push(d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET');
+  }
+  if (network) headerParts.push(network);
+
+  const TeamRow = ({ team, side, isBot }) => {
+    const t    = team?.team || {};
+    const rank = team?.curatedRank?.current;
+    const logo = t.logos?.[0]?.href || t.logo;
+    const wins = winner === side;
+    const dim  = winner && !wins;
+    return (
+      <div
+        className={`flex items-center justify-between px-2.5 gap-2${isBot ? ' border-t border-white/[0.07]' : ''}${dim ? ' opacity-35' : ''}`}
+        style={{ height: `${RB_SLOT_H}px` }}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {logo
+            ? <img src={logo} alt="" className="h-4 w-4 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            : <div className="h-4 w-4 rounded bg-white/[0.06] flex-shrink-0" />}
+          {rank && rank < 99 && <span className="text-[9px] mono text-white/35 flex-shrink-0">#{rank}</span>}
+          <span className={`text-[11px] font-semibold truncate leading-none ${wins ? 'text-white' : (t.id ? 'text-white/60' : 'text-white/25')}`}>
+            {t.shortDisplayName || t.displayName || 'TBD'}
+          </span>
+        </div>
+        {(isLive || isFinal) && team && (
+          <span className={`mono text-sm font-bold tabular-nums flex-shrink-0 pl-1 ${wins ? 'text-white' : 'text-white/35'}`}>{team.score ?? '—'}</span>
+        )}
+      </div>
+    );
+  };
+
+  if (!event) {
+    return (
+      <div
+        className="absolute rounded-lg border border-white/[0.07] overflow-hidden flex items-center justify-center"
+        style={{ ...style, width: `${RB_CARD_W}px`, height: `${RB_CARD_H}px`, background: 'rgba(255,255,255,0.01)' }}
+      >
+        <span className="text-[9px] mono text-white/20 uppercase tracking-widest">TBD</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`absolute rounded-lg border overflow-hidden ${isLive ? 'border-red-500/30' : 'border-white/[0.12]'}`}
+      style={{ ...style, width: `${RB_CARD_W}px`, height: `${RB_CARD_H}px`, background: 'rgba(255,255,255,0.025)' }}
+    >
+      <div className={`flex items-center gap-1.5 px-2.5 border-b border-white/[0.07]`} style={{ height: `${RB_HEADER_H}px` }}>
+        {isLive && <span className="live-dot h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0" />}
+        <span className={`text-[8px] mono uppercase tracking-wide truncate ${isLive ? 'text-red-400' : 'text-white/30'}`}>
+          {headerParts.join(' · ')}
+        </span>
+      </div>
+      <TeamRow team={away} side="away" />
+      <TeamRow team={home} side="home" isBot />
+    </div>
+  );
+}
+
 // Collect unique teams from a set of games at one site, sorted by national seed.
 function extractSiteTeams(games) {
   const teamMap = new Map();
@@ -3751,28 +3848,45 @@ function WorldSeriesView() {
 
     // ── Regionals: pod grid view or drill-down ────────────────────────────────
     if (round === 'Regionals') {
-      // Drill-down: user clicked into a specific regional site.
+      // Drill-down: bracket view for a specific regional site.
       if (selectedSite) {
         const siteGames = siteMapAll.get(selectedSite) || [];
-        const siteTeams = extractSiteTeams(siteGames);
-        const hasLive = siteGames.some((g) => g.status?.type?.state === 'in');
+        const hasLive   = siteGames.some((g) => g.status?.type?.state === 'in');
+        const sorted    = [...siteGames].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // Group games by date within the regional.
-        const dateMap = new Map();
-        for (const g of siteGames.sort((a, b) => new Date(a.date) - new Date(b.date))) {
-          const key = g.date?.slice(0, 10) || '?';
-          if (!dateMap.has(key)) dateMap.set(key, []);
-          dateMap.get(key).push(g);
-        }
+        // Assign games to bracket slots by chronological order.
+        // Day-1 pair = WB Round 1. Day-2+ games follow double-elim order.
+        const wbG1  = sorted[0] || null;
+        const wbG2  = sorted[1] || null;
+        const wbFin = sorted[2] || null;
+        const elim1 = sorted[3] || null;
+        const elim2 = sorted[4] || null;
+        const champ = sorted.length > 5 ? sorted[sorted.length - 1] : (sorted[5] || null);
+
+        const BracketSection = ({ label, top, mid, note }) => (
+          <div className="mb-8">
+            <div className="text-[9px] mono uppercase tracking-[0.25em] text-white/40 font-semibold mb-4 flex items-center gap-2">
+              <span className="inline-block h-px w-3 bg-white/20" />{label}
+            </div>
+            <div className="overflow-x-auto pb-2">
+              <div className="relative" style={{ width: `${RB_TOTAL_W}px`, height: `${RB_TOTAL_H}px` }}>
+                <svg className="absolute inset-0" width={RB_TOTAL_W} height={RB_TOTAL_H} style={{ pointerEvents: 'none' }}>
+                  {RB_LINES.map(([x1, y1, x2, y2], i) => (
+                    <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.13)" strokeWidth="1" />
+                  ))}
+                </svg>
+                <BracketGameCard event={top}  style={{ top: 0,       left: 0       }} />
+                <BracketGameCard event={mid}  style={{ top: RB_STEP, left: 0       }} />
+                <BracketGameCard event={note} style={{ top: RB_R2_TOP, left: RB_R2_X }} />
+              </div>
+            </div>
+          </div>
+        );
 
         return (
           <div key={round}>
-            {/* Back button + regional title */}
             <div className="flex items-center gap-3 mb-6 pb-3 border-b border-white/10">
-              <button
-                onClick={() => setSelectedSite(null)}
-                className="flex items-center gap-1.5 text-white/40 hover:text-white transition-colors"
-              >
+              <button onClick={() => setSelectedSite(null)} className="flex items-center gap-1.5 text-white/40 hover:text-white transition-colors">
                 <ChevronLeft className="h-4 w-4" />
                 <span className="text-[10px] mono uppercase tracking-widest">All Regionals</span>
               </button>
@@ -3788,38 +3902,25 @@ function WorldSeriesView() {
               </div>
             </div>
 
-            {/* Teams strip */}
-            {siteTeams.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-6">
-                {siteTeams.map((t) => {
-                  const logo = t.logo;
-                  return (
-                    <div key={t.id} className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.03]">
-                      {logo && <img src={logo} alt="" className="h-4 w-4 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
-                      {t.seed && <span className="text-[9px] mono text-white/35">#{t.seed}</span>}
-                      <span className="text-xs font-semibold text-white">{t.name}</span>
-                      {t.record && <span className="text-[9px] mono text-white/30">{t.record}</span>}
-                    </div>
-                  );
-                })}
-              </div>
+            <BracketSection label="Winners' Bracket" top={wbG1} mid={wbG2} note={wbFin} />
+
+            {(elim1 || elim2) && (
+              <BracketSection label="Elimination Bracket" top={elim1} mid={elim2} note={champ} />
             )}
 
-            {/* Games grouped by date */}
-            <div className="space-y-6">
-              {Array.from(dateMap.entries()).map(([dateKey, dateGames]) => {
-                const d = new Date(dateKey + 'T12:00:00Z');
-                const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
-                return (
-                  <div key={dateKey}>
-                    <div className="text-[10px] mono tracking-[0.2em] uppercase text-white/40 mb-2">{dayLabel}</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {dateGames.map((ev, i) => <CWSGameCard key={ev.id} event={ev} index={i} />)}
-                    </div>
+            {/* Championship stands alone if it doesn't fit above */}
+            {champ && !elim1 && (
+              <div className="mb-6">
+                <div className="text-[9px] mono uppercase tracking-[0.25em] text-white/40 font-semibold mb-4 flex items-center gap-2">
+                  <span className="inline-block h-px w-3 bg-white/20" />Championship
+                </div>
+                <div className="overflow-x-auto pb-2">
+                  <div className="relative inline-block">
+                    <BracketGameCard event={champ} style={{ position: 'relative', top: 0, left: 0 }} />
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       }
