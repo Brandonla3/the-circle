@@ -435,15 +435,36 @@ async function fetchLeaderboardFromNcaaCom(statId, page = 1) {
   const url = `https://www.ncaa.com/stats/softball/d1/current/individual/${statId}${suffix}`;
   try {
     const r = await fetchWithTimeout(url, 12000);
-    if (!r.ok) return null;
+    if (!r.ok) {
+      console.log(`[ncaa-player] fallback HTTP ${r.status} for ${url}`);
+      return null;
+    }
     const html = await r.text();
     const table = parseNcaaStatsHtml(html);
-    if (!table || table.rows.length === 0) return null;
+    if (!table || table.rows.length === 0) {
+      // Log diagnostics so we can iterate the parser without flying blind.
+      const tables = (html.match(/<table/gi) || []).length;
+      const tbodies = (html.match(/<tbody/gi) || []).length;
+      const trCount = (html.match(/<tr/gi) || []).length;
+      const optCount = (html.match(/<option/gi) || []).length;
+      console.log(
+        `[ncaa-player] fallback HTML had no parseable table for statId=${statId} (page=${page}) ` +
+        `bytes=${html.length} <table>=${tables} <tbody>=${tbodies} <tr>=${trCount} <option>=${optCount}`,
+      );
+      // First chunk of the first table (if any) — helps see what shape NCAA
+      // is now serving.
+      const firstTable = html.match(/<table[^>]*>[\s\S]{0,1200}/i);
+      if (firstTable) {
+        console.log(`[ncaa-player] first <table> excerpt: ${firstTable[0].slice(0, 1200)}`);
+      }
+      return null;
+    }
     return {
       rows: table.rows,
       totalPages: parseNcaaTotalPages(html, statId),
     };
-  } catch {
+  } catch (e) {
+    console.log(`[ncaa-player] fallback threw for ${url}: ${e?.message || e}`);
     return null;
   }
 }
