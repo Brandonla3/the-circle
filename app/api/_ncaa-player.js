@@ -351,8 +351,113 @@ async function fetchWithRetry(url) {
   return null;
 }
 
+// Strip HTML tags + decode common entities from a cell/header chunk.
+function decodeHtmlText(html) {
+  return (html || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#\d+;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Parse a NCAA.com individual-stats page HTML and return the first stats
+// table that looks like a leaderboard (has Name + Team columns and rows).
+// NCAA.com renders these tables server-side under a Drupal block — same
+// pages used for category discovery — so this works whenever the dropdown
+// scrape works.
+function parseNcaaStatsHtml(html) {
+  const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+  let m;
+  while ((m = tableRegex.exec(html)) !== null) {
+    const inner = m[1];
+    const theadMatch = inner.match(/<thead[^>]*>([\s\S]*?)<\/thead>/i);
+    const tbodyMatch = inner.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+    if (!theadMatch || !tbodyMatch) continue;
+
+    const headers = [...theadMatch[1].matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)]
+      .map((h) => decodeHtmlText(h[1]));
+    if (headers.length < 4) continue;
+
+    const lower = new Set(headers.map((h) => h.toLowerCase()));
+    if (!lower.has('name') && !lower.has('player')) continue;
+    if (!lower.has('team') && !lower.has('school')) continue;
+
+    const rowMatches = [...tbodyMatch[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+    if (rowMatches.length === 0) continue;
+
+    const rows = rowMatches
+      .map((rm) => {
+        // NCAA sometimes renders the rank cell as <th> and the rest as <td>,
+        // so accept either and read them in document order. Team cells often
+        // wrap a logo <img> plus a link — stripping tags leaves just the
+        // team text, which is what normalizeRow expects.
+        const cells = [...rm[1].matchAll(/<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)]
+          .map((c) => decodeHtmlText(c[1]));
+        if (cells.length === 0) return null;
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = cells[i] || ''; });
+        return obj;
+      })
+      .filter(Boolean);
+
+    if (rows.length === 0) continue;
+    return { headers, rows };
+  }
+  return null;
+}
+
+// Total pages on NCAA.com are reflected in the pager — find the highest
+// /pN suffix referenced for this stat ID. Falls back to 1 if no pager.
+function parseNcaaTotalPages(html, statId) {
+  const re = new RegExp(`\\/individual\\/${statId}\\/p(\\d+)`, 'gi');
+  let max = 1;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return max;
+}
+
+// Direct NCAA.com fallback for when the henrygd.me JSON wrapper is failing
+// or has stopped parsing a specific stat. Same data, just from the source
+// HTML. Returns null when the page is unreachable or doesn't contain a
+// parseable stats table.
+async function fetchLeaderboardFromNcaaCom(statId, page = 1) {
+  const suffix = page > 1 ? `/p${page}` : '';
+  const url = `https://www.ncaa.com/stats/softball/d1/current/individual/${statId}${suffix}`;
+  try {
+    const r = await fetchWithTimeout(url, 12000);
+    if (!r.ok) return null;
+    const html = await r.text();
+    const table = parseNcaaStatsHtml(html);
+    if (!table || table.rows.length === 0) return null;
+    return {
+      rows: table.rows,
+      totalPages: parseNcaaTotalPages(html, statId),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Fetch a single page of one individual leaderboard. Cached per-(slug, page)
 // so repeated calls across teams only hit the wrapper once per TTL window.
+//
+// Two-stage fetch: try the henrygd.me JSON wrapper first (fast, structured),
+// and on null fall through to scraping NCAA.com's server-rendered HTML
+// directly. The wrapper has periodic outages and individual stat IDs that
+// it can't parse (see WHIP note above), and when both stats-section APIs
+// went down on 2026-05-16 the front-end showed "Failed to fetch
+// leaderboard batting-avg" with no recourse — the direct fallback exists
+// so a wrapper outage no longer takes the Players tab down.
 export async function fetchLeaderboardPage(slug, page = 1) {
   const key = `${slug}:p${page}`;
   const cached = leaderboardCache.get(key);
@@ -363,25 +468,43 @@ export async function fetchLeaderboardPage(slug, page = 1) {
   if (!cat) throw new Error(`Unknown category: ${slug}`);
 
   const suffix = page > 1 ? `/p${page}` : '';
-  const url = `https://ncaa-api.henrygd.me/stats/softball/d1/current/individual/${cat.id}${suffix}`;
-  const json = await fetchWithRetry(url);
-  if (!json) {
-    // Don't cache failures — let the next request retry.
-    return null;
+  const wrapperUrl = `https://ncaa-api.henrygd.me/stats/softball/d1/current/individual/${cat.id}${suffix}`;
+  const json = await fetchWithRetry(wrapperUrl);
+
+  let rows;
+  let totalPages;
+  let updated = '';
+  let title = cat.label;
+  let source = 'henrygd';
+
+  if (json) {
+    rows = (json.data || []).map((row) => normalizeRow(row, cat));
+    totalPages = json.pages || 1;
+    updated = json.updated || '';
+    title = json.title || cat.label;
+  } else {
+    const fallback = await fetchLeaderboardFromNcaaCom(cat.id, page);
+    if (!fallback) {
+      // Don't cache failures — let the next request retry both paths.
+      return null;
+    }
+    rows = fallback.rows.map((row) => normalizeRow(row, cat));
+    totalPages = fallback.totalPages;
+    source = 'ncaa.com';
   }
 
-  const rows = (json.data || []).map((row) => normalizeRow(row, cat));
   const data = {
     slug,
     label: cat.label,
     short: cat.short,
     side: cat.side,
     statId: cat.id,
-    title: json.title || cat.label,
-    updated: json.updated || '',
-    page: json.page || page,
-    totalPages: json.pages || 1,
+    title,
+    updated,
+    page,
+    totalPages,
     rows,
+    source,
   };
   leaderboardCache.set(key, { ts: Date.now(), data });
   return data;
