@@ -111,11 +111,12 @@ function processBracket(raw) {
   }
 
   // Per-regional winner: the single non-eliminated team in a regional section,
-  // provided the regional has actually finished. "Finished" means no required
-  // game (gameState 'I' live, or 'P' scheduled and not marked
-  // isIfNecessary) is still pending. An if-necessary Game 7 can be scheduled
-  // but unneeded — we only care about it if more than one team is still
-  // alive, which the eliminated-count check below already handles.
+  // provided the regional has actually finished. "Finished" means:
+  //   - No game is currently in progress (gameState 'I'), even an
+  //     if-necessary Game 7 — if it's being played, the regional isn't done.
+  //   - No required (non-if-necessary) game is still scheduled (gameState
+  //     'P'). A scheduled if-necessary game may end up unneeded; we let the
+  //     surviving=1 check below decide.
   const regionals = {};
   const winners   = {};
   for (const [sid, info] of sectionInfo.entries()) {
@@ -123,7 +124,7 @@ function processBracket(raw) {
     const teams = [...(sectionTeams.get(sid) || new Map()).values()];
     const games = sectionGames.get(sid) || [];
     const requiredPending = games.some(
-      (g) => (g.gameState === 'I' || g.gameState === 'P') && !g.isIfNecessary,
+      (g) => g.gameState === 'I' || (g.gameState === 'P' && !g.isIfNecessary),
     );
     const surviving = teams.filter((t) => !t.eliminated);
     const winner =
