@@ -108,18 +108,22 @@ function slugify(name) {
   return s || null;
 }
 
-// Route every NCAA-hosted logo through our /api/logo proxy, which fetches
-// server-side with the right Referer (ncaa.com refuses hotlinks). Prefer
-// `?team=<seoname>` mode — the proxy tries multiple known URL patterns per
-// team, so we don't depend on NCAA always shipping the exact same path.
-function proxyLogoForTeam(t) {
+// Direct NCAA logo URL. Our root layout sets `referrer: no-referrer`, so the
+// browser's image fetches reach ncaa.com without a hot-link-tripping Referer
+// header. (Server-side proxying via /api/logo fails — NCAA's Cloudflare
+// returns 503 for non-browser fetches regardless of headers.)
+function ncaaLogoUrl(t) {
   const seoname =
     (typeof t?.seoname === 'string' && t.seoname.trim()) ||
     slugify(t?.nameFull) ||
     slugify(t?.nameShort);
-  if (seoname) return `/api/logo?team=${encodeURIComponent(seoname)}`;
-  const direct = pickDirectLogo(t);
-  return direct ? `/api/logo?u=${encodeURIComponent(direct)}` : null;
+  if (!seoname) {
+    // No slug we can build from — use whatever the team carried.
+    return pickDirectLogo(t);
+  }
+  // NCAA's GraphQL ships logos at this exact path for softball.
+  const letter = seoname[0];
+  return `https://www.ncaa.com/sites/default/files/images/logos/schools/${letter}/${seoname}-wsb.70.png`;
 }
 
 function pickDirectLogo(t) {
@@ -141,7 +145,7 @@ function competitorFor(t, homeAway) {
   if (!t) return null;
   const full  = t.nameFull  || t.nameShort || 'TBD';
   const short = t.nameShort || t.nameFull  || 'TBD';
-  const logo  = proxyLogoForTeam(t);
+  const logo  = ncaaLogoUrl(t);
   return {
     homeAway,
     team: {
@@ -294,7 +298,7 @@ export function buildWinnersAndMatchups(champ) {
         sectionRecord: t.sectionRecord || '',
         isWinner:      Boolean(t.isWinner),
         eliminated:    Boolean(t.eliminated),
-        logoUrl:       proxyLogoForTeam(t),
+        logoUrl:       ncaaLogoUrl(t),
         color:         t.color || '',
       };
       if (!prior) {
