@@ -4578,7 +4578,12 @@ function WorldSeriesView() {
     );
   };
 
-  const availableRounds = ['Regionals', 'Super Regionals', 'WCWS', 'Tournament']
+  // 'Super Regionals' is intentionally omitted: ESPN's round classification
+  // of SR games is unreliable (it leaks regional-final matchups), and the
+  // Super Regional matchups are already shown in the Regionals bracket pod
+  // view (sourced from NCAA's GraphQL bracket). Bringing it back means
+  // wiring this section to NCAA's data, not ESPN's.
+  const availableRounds = ['Regionals', 'WCWS', 'Tournament']
     .filter((r) => rounds.find((rd) => rd.round === r));
 
   // Which rounds to show after round filter
@@ -4692,7 +4697,7 @@ function WorldSeriesView() {
       )}
 
       <div className="pt-4 border-t border-white/5 text-[9px] mono uppercase tracking-widest text-white/30">
-        Data via ESPN · Auto-refreshes every minute
+        Auto-refreshes every minute
       </div>
     </div>
   );
