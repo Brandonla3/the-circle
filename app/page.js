@@ -4070,6 +4070,7 @@ function WorldSeriesView() {
         const pairs = [];
         const used  = new Set();
 
+        // Stage 1: honor explicit NCAA pairings for sites that match by name.
         if (Array.isArray(ncaaPairings) && ncaaPairings.length) {
           for (const [c1, c2] of ncaaPairings) {
             const k1 = norm(c1);
@@ -4084,34 +4085,39 @@ function WorldSeriesView() {
           }
         }
 
-        if (pairs.length === 0) {
-          // Seed-line pairing using ESPN's national seed (curatedRank.current).
-          const bySeed = new Map();
-          for (const e of sitesAll) {
-            const teams = extractSiteTeams(e[1]);
-            const seed  = teams[0]?.seed;
-            if (seed && seed >= 1 && seed <= 16 && !bySeed.has(seed)) bySeed.set(seed, e);
-          }
-          if (bySeed.size >= 2) {
-            for (let n = 1; n <= 8; n++) {
-              const top = bySeed.get(n);
-              const bot = bySeed.get(17 - n);
-              const tKey = top && norm(top[0]);
-              const bKey = bot && norm(bot[0]);
-              if (top && !used.has(tKey)) {
-                const useBot = bot && !used.has(bKey);
-                pairs.push({ s0: top, s1: useBot ? bot : null });
-                used.add(tKey);
-                if (useBot) used.add(bKey);
-              } else if (bot && !used.has(bKey)) {
-                pairs.push({ s0: bot, s1: null });
-                used.add(bKey);
+        // Stage 2: seed-line pairing (#N ↔ #17-N) for any UNMATCHED sites.
+        // Runs even after a partial NCAA match so we never silently fall
+        // through to alphabetical for sites NCAA didn't cover.
+        {
+          const remainingAfterStage1 = sitesAll.filter(([c]) => !used.has(norm(c)));
+          if (remainingAfterStage1.length) {
+            const bySeed = new Map();
+            for (const e of remainingAfterStage1) {
+              const teams = extractSiteTeams(e[1]);
+              const seed  = teams[0]?.seed;
+              if (seed && seed >= 1 && seed <= 16 && !bySeed.has(seed)) bySeed.set(seed, e);
+            }
+            if (bySeed.size >= 2) {
+              for (let n = 1; n <= 8; n++) {
+                const top = bySeed.get(n);
+                const bot = bySeed.get(17 - n);
+                const tKey = top && norm(top[0]);
+                const bKey = bot && norm(bot[0]);
+                if (top && !used.has(tKey)) {
+                  const useBot = bot && !used.has(bKey);
+                  pairs.push({ s0: top, s1: useBot ? bot : null });
+                  used.add(tKey);
+                  if (useBot) used.add(bKey);
+                } else if (bot && !used.has(bKey)) {
+                  pairs.push({ s0: bot, s1: null });
+                  used.add(bKey);
+                }
               }
             }
           }
         }
 
-        // Append any remaining sites in adjacent (alphabetical) order.
+        // Stage 3: anything still unpaired — last resort, adjacent order.
         const remaining = sitesAll.filter(([c]) => !used.has(norm(c)));
         for (let i = 0; i < remaining.length; i += 2)
           pairs.push({ s0: remaining[i], s1: remaining[i + 1] || null });
@@ -4257,25 +4263,37 @@ function WorldSeriesView() {
                     const s1name   = pairs[i].s1?.[0];
 
                     // Derive each SR participant from the winner of its regional's
-                    // championship game — never from a stale ESPN Super Regional
-                    // game entry, which can still list both regional finalists.
+                    // championship game. Walk games newest-first and pick the
+                    // first DECISIVE completed game — skip any "if necessary"
+                    // Game 7 that was scheduled but unplayed (state=post with
+                    // 0–0 scores), which would otherwise cause us to pick the
+                    // loser of the actual championship via arbitrary tiebreak.
                     const regionalWinner = (city) => {
                       if (!city) return null;
                       const games = siteMapAll.get(city) || [];
                       if (games.length === 0) return null;
-                      const sorted = [...games].sort((a, b) => new Date(a.date) - new Date(b.date));
-                      const champ  = sorted[sorted.length - 1];
-                      if (champ?.status?.type?.state !== 'post') return null;
-                      const competitors = champ.competitions?.[0]?.competitors || [];
-                      if (competitors.length < 2) return null;
-                      const win = competitors.find((c) => c.winner === true)
-                        || (Number(competitors[0].score) > Number(competitors[1].score) ? competitors[0] : competitors[1]);
-                      if (!win?.team) return null;
-                      return {
-                        name: win.team.shortDisplayName || win.team.displayName,
-                        logo: win.team.logos?.[0]?.href || win.team.logo,
-                        seed: win.curatedRank?.current < 99 ? win.curatedRank.current : null,
-                      };
+                      const sorted = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
+                      for (const g of sorted) {
+                        if (g?.status?.type?.state !== 'post') continue;
+                        const competitors = g.competitions?.[0]?.competitors || [];
+                        if (competitors.length < 2) continue;
+                        const s0 = Number(competitors[0].score);
+                        const s1 = Number(competitors[1].score);
+                        // Skip games with no decisive result (unplayed if-necessary,
+                        // ties, missing scores). Score is the source of truth here —
+                        // ESPN's `winner` flag can lag or be wrong while scores are
+                        // posted accurately.
+                        if (!Number.isFinite(s0) || !Number.isFinite(s1)) continue;
+                        if (s0 === s1) continue;
+                        const win = s0 > s1 ? competitors[0] : competitors[1];
+                        if (!win?.team) continue;
+                        return {
+                          name: win.team.shortDisplayName || win.team.displayName,
+                          logo: win.team.logos?.[0]?.href || win.team.logo,
+                          seed: win.curatedRank?.current < 99 ? win.curatedRank.current : null,
+                        };
+                      }
+                      return null;
                     };
 
                     const t1 = regionalWinner(s0name);
