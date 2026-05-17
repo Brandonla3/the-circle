@@ -4262,38 +4262,66 @@ function WorldSeriesView() {
                     const [s0name] = pairs[i].s0;
                     const s1name   = pairs[i].s1?.[0];
 
-                    // Derive each SR participant from the winner of its regional's
-                    // championship game. Walk games newest-first and pick the
-                    // first DECISIVE completed game — skip any "if necessary"
-                    // Game 7 that was scheduled but unplayed (state=post with
-                    // 0–0 scores), which would otherwise cause us to pick the
-                    // loser of the actual championship via arbitrary tiebreak.
+                    // Determine the regional winner via double-elimination W-L
+                    // bookkeeping: tally wins and losses for every team that
+                    // played a decisive game, then return the lone team with
+                    // fewer than two losses. If multiple teams are still alive
+                    // (championship round unfinished, e.g. Texas A&M still
+                    // playing in College Station), the regional is in progress
+                    // and we return null so the card shows "Winner of {city}".
+                    //
+                    // This avoids two earlier failure modes:
+                    //  • Picking the loser of the championship because an
+                    //    unplayed "if necessary" Game 7 was state=post 0–0
+                    //    and tripped the score tiebreak.
+                    //  • Surfacing an eliminated team (e.g. Baylor) because
+                    //    they happened to win an earlier elimination-bracket
+                    //    game before being knocked out.
                     const regionalWinner = (city) => {
                       if (!city) return null;
                       const games = siteMapAll.get(city) || [];
                       if (games.length === 0) return null;
-                      const sorted = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
-                      for (const g of sorted) {
-                        if (g?.status?.type?.state !== 'post') continue;
+                      const stats = new Map(); // teamId -> { team, competitor, wins, losses }
+                      const touch = (c) => {
+                        const id = c?.team?.id;
+                        if (!id) return null;
+                        let s = stats.get(id);
+                        if (!s) {
+                          s = { team: c.team, competitor: c, wins: 0, losses: 0 };
+                          stats.set(id, s);
+                        } else {
+                          s.competitor = c;
+                        }
+                        return s;
+                      };
+                      for (const g of games) {
                         const competitors = g.competitions?.[0]?.competitors || [];
+                        // Register every team that's appeared at the site so
+                        // we can detect "regional not started yet" reliably.
+                        for (const c of competitors) touch(c);
+                        if (g?.status?.type?.state !== 'post') continue;
                         if (competitors.length < 2) continue;
                         const s0 = Number(competitors[0].score);
                         const s1 = Number(competitors[1].score);
-                        // Skip games with no decisive result (unplayed if-necessary,
-                        // ties, missing scores). Score is the source of truth here —
-                        // ESPN's `winner` flag can lag or be wrong while scores are
-                        // posted accurately.
+                        // Skip games with no decisive result (unplayed
+                        // if-necessary, ties, missing scores). Score is the
+                        // source of truth; ESPN's `winner` flag can lag.
                         if (!Number.isFinite(s0) || !Number.isFinite(s1)) continue;
                         if (s0 === s1) continue;
-                        const win = s0 > s1 ? competitors[0] : competitors[1];
-                        if (!win?.team) continue;
-                        return {
-                          name: win.team.shortDisplayName || win.team.displayName,
-                          logo: win.team.logos?.[0]?.href || win.team.logo,
-                          seed: win.curatedRank?.current < 99 ? win.curatedRank.current : null,
-                        };
+                        const winC = s0 > s1 ? competitors[0] : competitors[1];
+                        const losC = s0 > s1 ? competitors[1] : competitors[0];
+                        const w = touch(winC); if (w) w.wins++;
+                        const l = touch(losC); if (l) l.losses++;
                       }
-                      return null;
+                      const surviving = [...stats.values()].filter((s) => s.losses < 2);
+                      if (surviving.length !== 1) return null;
+                      const w = surviving[0];
+                      if (w.wins < 1) return null;
+                      return {
+                        name: w.team.shortDisplayName || w.team.displayName,
+                        logo: w.team.logos?.[0]?.href || w.team.logo,
+                        seed: w.competitor.curatedRank?.current < 99 ? w.competitor.curatedRank.current : null,
+                      };
                     };
 
                     const t1 = regionalWinner(s0name);
