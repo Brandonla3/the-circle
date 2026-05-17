@@ -4068,12 +4068,12 @@ function WorldSeriesView() {
       // ── Pod bracket view — all regional sites in a horizontal scrollable bracket ──
       {
         // Pair regionals into Super Regional matchups:
-        //   1. Honor explicit pairings scraped from ncaa.com (/api/ncaa-bracket)
-        //      when their host city names match our sites.
+        //   1. Honor explicit pairings from NCAA's GraphQL bracket API
+        //      (/api/ncaa-bracket) when their host city names match our sites.
         //   2. Otherwise pair by NCAA seed line: #1↔#16, #2↔#15, …, #8↔#9,
         //      using each regional host's national seed from ESPN.
         //   3. Fall back to adjacent (alphabetical) pairing.
-        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+        const norm = (s) => (s || '').toLowerCase().replace(/\bregional\b/g, '').replace(/[^a-z0-9]+/g, '');
         const byKey = new Map(sitesAll.map((e) => [norm(e[0]), e]));
         const pairs = [];
         const used  = new Set();
@@ -4270,33 +4270,40 @@ function WorldSeriesView() {
                     const [s0name] = pairs[i].s0;
                     const s1name   = pairs[i].s1?.[0];
 
-                    // Prefer NCAA's scraped winner for this regional host.
-                    // ncaa.com renders the actual advancing team, so we trust
-                    // it over any ESPN-derived inference.
+                    // Prefer NCAA's authoritative winner (from its GraphQL
+                    // bracket API). NCAA exposes `eliminated` and `isWinner`
+                    // flags per team, so the SR participant is unambiguous
+                    // when the regional is decided — no inference required.
                     const ncaaWinnerFor = (city) => {
                       if (!city || !ncaaWinners) return null;
-                      const key = String(city).toLowerCase();
-                      for (const [host, team] of Object.entries(ncaaWinners)) {
-                        if (host.toLowerCase() === key) {
-                          // Try to find ESPN logo/seed for this team name by
-                          // scanning the regional's games for a matching team.
-                          const games = siteMapAll.get(city) || [];
-                          for (const g of games) {
-                            for (const c of (g.competitions?.[0]?.competitors || [])) {
-                              const n = c.team?.shortDisplayName || c.team?.displayName || '';
-                              if (n.toLowerCase() === String(team).toLowerCase()) {
-                                return {
-                                  name: n,
-                                  logo: c.team.logos?.[0]?.href || c.team.logo,
-                                  seed: c.curatedRank?.current < 99 ? c.curatedRank.current : null,
-                                };
-                              }
-                            }
+                      const cityKey = norm(city);
+                      let t = ncaaWinners[cityKey];
+                      if (!t) {
+                        // Substring match for minor title/city wording
+                        // differences between NCAA and ESPN.
+                        for (const [k, v] of Object.entries(ncaaWinners)) {
+                          if (!k) continue;
+                          if (k === cityKey || k.includes(cityKey) || cityKey.includes(k)) {
+                            t = v;
+                            break;
                           }
-                          return { name: team, logo: null, seed: null };
                         }
                       }
-                      return null;
+                      if (!t || !t.name) return null;
+                      // Try to backfill the ESPN logo for visual consistency
+                      // with the rest of the bracket; fall back to NCAA's.
+                      let logo = t.logoUrl || null;
+                      const games = siteMapAll.get(city) || [];
+                      for (const g of games) {
+                        for (const c of (g.competitions?.[0]?.competitors || [])) {
+                          const n = c.team?.shortDisplayName || c.team?.displayName || '';
+                          if (n.toLowerCase() === t.name.toLowerCase()) {
+                            logo = c.team.logos?.[0]?.href || c.team.logo || logo;
+                            break;
+                          }
+                        }
+                      }
+                      return { name: t.name, logo, seed: t.seed ?? null };
                     };
 
                     // Otherwise determine the regional winner via
