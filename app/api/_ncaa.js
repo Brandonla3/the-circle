@@ -84,15 +84,40 @@ export function sectionToRound(sid) {
 const STATE_MAP = { F: 'post', I: 'in', P: 'pre' };
 
 const absLogo = (p) => {
-  if (!p) return null;
-  return /^https?:/i.test(p) ? p : `https://www.ncaa.com${p}`;
+  if (!p || typeof p !== 'string') return null;
+  const s = p.trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('//')) return `https:${s}`;
+  if (s.startsWith('/'))  return `https://www.ncaa.com${s}`;
+  return `https://www.ncaa.com/${s}`;
 };
+
+// NCAA's response field for the team logo isn't always `logoUrl`. Try every
+// plausible variant the API has used.
+function pickLogo(t) {
+  if (!t || typeof t !== 'object') return null;
+  const direct = [
+    t.logoUrl, t.logoURL, t.logo_url, t.logo,
+    t.image, t.imageUrl, t.imageURL, t.image_url,
+    t.images?.logo, t.images?.url, t.images?.[0]?.url, t.images?.[0]?.href,
+    t.logos?.[0]?.href, t.logos?.[0]?.url,
+  ];
+  for (const c of direct) {
+    const abs = absLogo(c);
+    if (abs) return abs;
+  }
+  // Some NCAA payloads nest the logo on a school object.
+  const nested = t.team || t.school;
+  if (nested && typeof nested === 'object') return pickLogo(nested);
+  return null;
+}
 
 function competitorFor(t, homeAway) {
   if (!t) return null;
   const full  = t.nameFull  || t.nameShort || 'TBD';
   const short = t.nameShort || t.nameFull  || 'TBD';
-  const logo  = absLogo(t.logoUrl);
+  const logo  = pickLogo(t);
   return {
     homeAway,
     team: {
@@ -245,7 +270,7 @@ export function buildWinnersAndMatchups(champ) {
         sectionRecord: t.sectionRecord || '',
         isWinner:      Boolean(t.isWinner),
         eliminated:    Boolean(t.eliminated),
-        logoUrl:       absLogo(t.logoUrl),
+        logoUrl:       pickLogo(t),
         color:         t.color || '',
       };
       if (!prior) {

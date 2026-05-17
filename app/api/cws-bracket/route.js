@@ -19,8 +19,30 @@ async function getSchedule() {
   return data;
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
+    // ?raw=1  -> the raw NCAA championship blob (lets us inspect team field
+    //          names so logos / records / colors line up).
+    // ?sample=1 -> just one team object so we can see exactly what NCAA
+    //          provides for a single competitor.
+    const url = new URL(request.url);
+    if (url.searchParams.has('raw') || url.searchParams.has('sample')) {
+      const { getNcaaBracket } = await import('../_ncaa.js');
+      const champ = await getNcaaBracket();
+      if (url.searchParams.has('sample')) {
+        const firstGame = champ?.games?.[0];
+        return Response.json(
+          {
+            sampleGame: firstGame || null,
+            sampleTeam: firstGame?.teams?.[0] || null,
+            sectionsSample: champ?.sections?.slice(0, 3) || [],
+          },
+          { headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+      return Response.json(champ, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
     const data = await getSchedule();
     const hasLive = data.rounds.some((r) =>
       r.groups.some((g) =>
