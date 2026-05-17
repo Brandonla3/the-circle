@@ -109,17 +109,28 @@ function slugify(name) {
 }
 
 function constructLogoUrl(t) {
-  // Prefer an explicit slug field if NCAA sent one; otherwise derive from the
-  // team's full / short name. Tennessee, LSU, Alabama, etc. all resolve to
-  // their lowercased name at this path on ncaa.com.
+  // NCAA hosts school logos at:
+  //   /sites/default/files/images/logos/schools/{first-letter}/{seoname}-wsb.70.png
+  // (sport-specific suffix `wsb` = women's softball, 70 = pixel size).
+  // Prefer the explicit seoname from the GraphQL response, else derive a slug.
   const slug =
     (typeof t?.seoname === 'string' && t.seoname.trim()) ||
-    (typeof t?.slug    === 'string' && t.slug.trim())    ||
-    (typeof t?.urlAlias === 'string' && t.urlAlias.trim()) ||
+    (typeof t?.slug === 'string' && t.slug.trim()) ||
     slugify(t?.nameFull) ||
     slugify(t?.nameShort);
   if (!slug) return null;
-  return `https://www.ncaa.com/sites/default/files/images/logos/schools/${slug}.svg`;
+  const letter = slug[0];
+  return `https://www.ncaa.com/sites/default/files/images/logos/schools/${letter}/${slug}-wsb.70.png`;
+}
+
+// ncaa.com refuses image requests whose Referer isn't itself, so route every
+// NCAA-hosted logo through our /api/logo proxy. Anything else passes through.
+function proxyLogo(url) {
+  if (!url || typeof url !== 'string') return null;
+  if (/^https:\/\/(?:www\.)?ncaa\.com\//i.test(url)) {
+    return `/api/logo?u=${encodeURIComponent(url)}`;
+  }
+  return url;
 }
 
 function pickLogo(t) {
@@ -149,7 +160,7 @@ function competitorFor(t, homeAway) {
   if (!t) return null;
   const full  = t.nameFull  || t.nameShort || 'TBD';
   const short = t.nameShort || t.nameFull  || 'TBD';
-  const logo  = pickLogo(t);
+  const logo  = proxyLogo(pickLogo(t));
   return {
     homeAway,
     team: {
@@ -302,7 +313,7 @@ export function buildWinnersAndMatchups(champ) {
         sectionRecord: t.sectionRecord || '',
         isWinner:      Boolean(t.isWinner),
         eliminated:    Boolean(t.eliminated),
-        logoUrl:       pickLogo(t),
+        logoUrl:       proxyLogo(pickLogo(t)),
         color:         t.color || '',
       };
       if (!prior) {
