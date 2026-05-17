@@ -3824,6 +3824,11 @@ function WorldSeriesView() {
   // Canonical Super Regional pairings scraped from ncaa.com (best-effort).
   // Falls back to seed-line pairing if this is empty.
   const [ncaaPairings, setNcaaPairings] = useState([]);
+  // Canonical regional winners by host city, also scraped from ncaa.com.
+  // When present these override the W-L tally over ESPN data, because ESPN
+  // can lag (eliminated teams still show as alive, championship games not
+  // yet marked final, etc.).
+  const [ncaaWinners, setNcaaWinners] = useState({});
   const pollRef = useRef(null);
 
   const load = useCallback(async (silent = false) => {
@@ -3844,8 +3849,11 @@ function WorldSeriesView() {
   useEffect(() => {
     fetch('/api/ncaa-bracket')
       .then((r) => r.json())
-      .then((j) => setNcaaPairings(Array.isArray(j?.pairings) ? j.pairings : []))
-      .catch(() => setNcaaPairings([]));
+      .then((j) => {
+        setNcaaPairings(Array.isArray(j?.pairings) ? j.pairings : []);
+        setNcaaWinners(j?.winners && typeof j.winners === 'object' ? j.winners : {});
+      })
+      .catch(() => { setNcaaPairings([]); setNcaaWinners({}); });
   }, []);
 
   useEffect(() => {
@@ -4262,22 +4270,45 @@ function WorldSeriesView() {
                     const [s0name] = pairs[i].s0;
                     const s1name   = pairs[i].s1?.[0];
 
-                    // Determine the regional winner via double-elimination W-L
-                    // bookkeeping: tally wins and losses for every team that
-                    // played a decisive game, then return the lone team with
-                    // fewer than two losses. If multiple teams are still alive
-                    // (championship round unfinished, e.g. Texas A&M still
-                    // playing in College Station), the regional is in progress
-                    // and we return null so the card shows "Winner of {city}".
-                    //
-                    // This avoids two earlier failure modes:
-                    //  • Picking the loser of the championship because an
-                    //    unplayed "if necessary" Game 7 was state=post 0–0
-                    //    and tripped the score tiebreak.
-                    //  • Surfacing an eliminated team (e.g. Baylor) because
-                    //    they happened to win an earlier elimination-bracket
-                    //    game before being knocked out.
+                    // Prefer NCAA's scraped winner for this regional host.
+                    // ncaa.com renders the actual advancing team, so we trust
+                    // it over any ESPN-derived inference.
+                    const ncaaWinnerFor = (city) => {
+                      if (!city || !ncaaWinners) return null;
+                      const key = String(city).toLowerCase();
+                      for (const [host, team] of Object.entries(ncaaWinners)) {
+                        if (host.toLowerCase() === key) {
+                          // Try to find ESPN logo/seed for this team name by
+                          // scanning the regional's games for a matching team.
+                          const games = siteMapAll.get(city) || [];
+                          for (const g of games) {
+                            for (const c of (g.competitions?.[0]?.competitors || [])) {
+                              const n = c.team?.shortDisplayName || c.team?.displayName || '';
+                              if (n.toLowerCase() === String(team).toLowerCase()) {
+                                return {
+                                  name: n,
+                                  logo: c.team.logos?.[0]?.href || c.team.logo,
+                                  seed: c.curatedRank?.current < 99 ? c.curatedRank.current : null,
+                                };
+                              }
+                            }
+                          }
+                          return { name: team, logo: null, seed: null };
+                        }
+                      }
+                      return null;
+                    };
+
+                    // Otherwise determine the regional winner via
+                    // double-elimination W-L bookkeeping: tally wins and
+                    // losses for every team that played a decisive game and
+                    // return the lone team with fewer than two losses. If
+                    // multiple teams are still alive (e.g. championship game
+                    // still to play), return null so the card shows
+                    // "Winner of {city}".
                     const regionalWinner = (city) => {
+                      const fromNcaa = ncaaWinnerFor(city);
+                      if (fromNcaa) return fromNcaa;
                       if (!city) return null;
                       const games = siteMapAll.get(city) || [];
                       if (games.length === 0) return null;
