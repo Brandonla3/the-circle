@@ -15,6 +15,7 @@ import {
   discoverCategoryIds,
   fetchLeaderboard,
   fetchProfile,
+  listCachedSlugs,
 } from '../_ncaa-player.js';
 
 export const dynamic = 'force-dynamic';
@@ -82,17 +83,46 @@ export async function GET(request) {
 
     const slug = searchParams.get('category');
     if (!slug) {
-      // Index of categories the UI can show.
-      const map = await discoverCategoryIds();
+      // Index of categories the UI can show. Source order:
+      //   1. The nightly NCAA scrape — anything with rows shows up first.
+      //   2. Categories not in the scrape today (BA / ERA / WHIP) fall
+      //      through to live discovery so they're still listed and the
+      //      wrapper will be tried on selection.
+      // If both are empty, we still return the curated list so the
+      // dropdown isn't empty.
+      const cached = await listCachedSlugs();
+      const cachedSet = new Set(cached.slugs.map((c) => c.slug));
+
+      // Prefer cached-only when the nightly scrape ran successfully —
+      // otherwise the dropdown would include stats that take ~10s to
+      // resolve through the broken wrapper before "Leaders unavailable".
+      // Fall back to discovery only if we have no cache at all.
+      let availableSet;
+      if (cachedSet.size > 0) {
+        availableSet = cachedSet;
+      } else {
+        try {
+          const map = await discoverCategoryIds();
+          availableSet = new Set([...map.keys()]);
+        } catch {
+          availableSet = new Set(ALL_CATEGORIES.map((c) => c.slug));
+        }
+      }
+
       const categories = ALL_CATEGORIES
-        .filter((c) => map.has(c.slug))
+        .filter((c) => availableSet.has(c.slug))
         .map((c) => ({
           slug: c.slug,
-          label: map.get(c.slug).label,
+          label: c.labels[0],
           short: c.short,
           side: c.side,
+          cached: cachedSet.has(c.slug),
         }));
-      return new Response(JSON.stringify({ categories }), {
+
+      return new Response(JSON.stringify({
+        categories,
+        scraped: cached.scraped,
+      }), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',

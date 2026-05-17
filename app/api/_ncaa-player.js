@@ -3,20 +3,20 @@
 // (via aggregateNcaaPlayerStats, which walks every leaderboard to
 // collect a single team's players).
 //
-// Data comes from the same ncaa-api.henrygd.me wrapper that standings,
-// rpi, and team-stats all use:
+// PRIMARY source: data/ncaa/stats.json, a nightly snapshot scraped from
+// www.ncaa.com/stats/softball/d1/current by scripts/scrape_ncaa_stats.py.
+// The scraping runs from a residential IP (GitHub Actions ubuntu runner
+// works; Vercel server IPs get a JS-shell page with no <table>) and the
+// JSON is committed back to the repo so Vercel just reads the file.
 //
-//   https://ncaa-api.henrygd.me/stats/softball/d1/current/individual/{statId}
-//
-// NCAA uses opaque numeric stat IDs (e.g. 271 for batting average) that
-// drift between seasons. Unlike the TEAM sidebar (which is client-side
-// rendered and impossible to scrape — see team-stats/route.js), the
-// individual stat index on /stats/softball/d1 embeds a full <option>
-// dropdown listing every category, so pattern-based discovery works here.
-// We still keep the two-pass label matcher from the original implementation
-// in case NCAA's label wording shifts.
+// FALLBACK: live discovery + the ncaa-api.henrygd.me JSON wrapper, kept
+// for stats the nightly scrape doesn't get (Batting Avg / ERA / WHIP have
+// historically returned an empty page to non-browser fetchers).
 //
 // Caches live at module scope for the lifetime of a warm Vercel instance.
+
+import { promises as fs } from 'fs';
+import path from 'path';
 
 const HEADERS = {
   'User-Agent':
@@ -426,89 +426,152 @@ function parseNcaaTotalPages(html, statId) {
   return max;
 }
 
-// Direct NCAA.com fallback for when the henrygd.me JSON wrapper is failing
-// or has stopped parsing a specific stat. Same data, just from the source
-// HTML. Returns null when the page is unreachable or doesn't contain a
-// parseable stats table.
+// Direct NCAA.com fallback for stats the nightly scrape didn't capture and
+// the henrygd.me wrapper isn't serving. From Vercel this almost always
+// returns no table (NCAA's stat pages are JS-rendered to non-residential
+// IPs), but it's cheap to try and works occasionally.
 async function fetchLeaderboardFromNcaaCom(statId, page = 1) {
   const suffix = page > 1 ? `/p${page}` : '';
   const url = `https://www.ncaa.com/stats/softball/d1/current/individual/${statId}${suffix}`;
   try {
     const r = await fetchWithTimeout(url, 12000);
-    if (!r.ok) {
-      console.log(`[ncaa-player] fallback HTTP ${r.status} for ${url}`);
-      return null;
-    }
+    if (!r.ok) return null;
     const html = await r.text();
     const table = parseNcaaStatsHtml(html);
-    if (!table || table.rows.length === 0) {
-      // Log diagnostics so we can iterate the parser without flying blind.
-      const tables = (html.match(/<table/gi) || []).length;
-      const tbodies = (html.match(/<tbody/gi) || []).length;
-      const trCount = (html.match(/<tr/gi) || []).length;
-      const optCount = (html.match(/<option/gi) || []).length;
-      console.log(
-        `[ncaa-player] fallback HTML had no parseable table for statId=${statId} (page=${page}) ` +
-        `bytes=${html.length} <table>=${tables} <tbody>=${tbodies} <tr>=${trCount} <option>=${optCount}`,
-      );
-      // First chunk of the first table (if any) — helps see what shape NCAA
-      // is now serving.
-      const firstTable = html.match(/<table[^>]*>[\s\S]{0,1200}/i);
-      if (firstTable) {
-        console.log(`[ncaa-player] first <table> excerpt: ${firstTable[0].slice(0, 1200)}`);
-      }
-      return null;
-    }
+    if (!table || table.rows.length === 0) return null;
     return {
       rows: table.rows,
       totalPages: parseNcaaTotalPages(html, statId),
     };
-  } catch (e) {
-    console.log(`[ncaa-player] fallback threw for ${url}: ${e?.message || e}`);
+  } catch {
     return null;
   }
 }
 
-// Fetch a single page of one individual leaderboard. Cached per-(slug, page)
-// so repeated calls across teams only hit the wrapper once per TTL window.
+// ── Cached NCAA scrape (primary source) ───────────────────────────────────
 //
-// Two-stage fetch: try the henrygd.me JSON wrapper first (fast, structured),
-// and on null fall through to scraping NCAA.com's server-rendered HTML
-// directly. The wrapper has periodic outages and individual stat IDs that
-// it can't parse (see WHIP note above), and when both stats-section APIs
-// went down on 2026-05-16 the front-end showed "Failed to fetch
-// leaderboard batting-avg" with no recourse — the direct fallback exists
-// so a wrapper outage no longer takes the Players tab down.
+// data/ncaa/stats.json is a nightly snapshot keyed by NCAA's display name
+// (e.g. "Home Runs", "Strikeouts Per Seven Innings"). We look up by the
+// first entry in each category's `labels` array, which is the canonical
+// NCAA name and matches the cache key 1:1.
+
+const NCAA_CACHE_PATH = path.join(process.cwd(), 'data', 'ncaa', 'stats.json');
+let ncaaCache = null;
+let ncaaCacheMtime = 0;
+
+async function loadNcaaCache() {
+  try {
+    const stat = await fs.stat(NCAA_CACHE_PATH);
+    if (ncaaCache && stat.mtimeMs === ncaaCacheMtime) return ncaaCache;
+    const raw = await fs.readFile(NCAA_CACHE_PATH, 'utf8');
+    ncaaCache = JSON.parse(raw);
+    ncaaCacheMtime = stat.mtimeMs;
+    return ncaaCache;
+  } catch {
+    return null;
+  }
+}
+
+function getCacheEntry(cat, ncaa) {
+  if (!ncaa?.individual) return null;
+  for (const name of cat.labels || []) {
+    const entry = ncaa.individual[name];
+    if (entry?.status === 'ok' && Array.isArray(entry.rows) && entry.rows.length) {
+      return { entry, matchedName: name };
+    }
+  }
+  return null;
+}
+
+// Return slugs that have rows in the cache. Used by the categories endpoint
+// so the dropdown reflects what's actually available today.
+export async function listCachedSlugs() {
+  const ncaa = await loadNcaaCache();
+  if (!ncaa?.individual) return { slugs: [], scraped: '' };
+  const slugs = [];
+  for (const cat of ALL_CATEGORIES) {
+    if (getCacheEntry(cat, ncaa)) slugs.push(cat);
+  }
+  return { slugs, scraped: ncaa.metadata?.scraped || '' };
+}
+
+// Fetch a single page of one individual leaderboard.
+//
+// Order of attempts:
+//   1. The nightly NCAA.com scrape committed at data/ncaa/stats.json.
+//      This is the canonical source — it has the full top-50+ for every
+//      published category and refreshes every night via GitHub Actions.
+//   2. henrygd.me JSON wrapper. Only reached for categories the scrape
+//      didn't populate (e.g. Batting Average, ERA, WHIP — NCAA renders
+//      those pages with no server-side <table> on the runs we've seen).
+//   3. Direct www.ncaa.com HTML parse. Last-resort fallback in case the
+//      wrapper is down too. From Vercel this typically returns no table,
+//      but it costs nothing to try.
 export async function fetchLeaderboardPage(slug, page = 1) {
   const key = `${slug}:p${page}`;
   const cached = leaderboardCache.get(key);
   if (cached && Date.now() - cached.ts < LEADERBOARD_TTL_MS) return cached.data;
 
-  const map = await discoverCategoryIds();
-  const cat = map.get(slug);
+  const cat = ALL_CATEGORIES.find((c) => c.slug === slug);
   if (!cat) throw new Error(`Unknown category: ${slug}`);
 
+  // 1. Cached nightly scrape.
+  // Pagination doesn't apply to the cache (we store the full list flat),
+  // so only page 1 reads from it; later pages fall through to the live
+  // wrapper which does paginate. In practice the UI only shows top-50 so
+  // page 1 is what users see.
+  if (page === 1) {
+    const ncaa = await loadNcaaCache();
+    const hit = getCacheEntry(cat, ncaa);
+    if (hit) {
+      const rows = hit.entry.rows.map((row) => normalizeRow(row, cat));
+      const data = {
+        slug,
+        label: cat.labels[0],
+        short: cat.short,
+        side: cat.side,
+        statId: null,
+        title: cat.labels[0],
+        updated: ncaa.metadata?.scraped || '',
+        page: 1,
+        totalPages: 1,
+        rows,
+        source: 'ncaa.com (cached)',
+      };
+      leaderboardCache.set(key, { ts: Date.now(), data });
+      return data;
+    }
+  }
+
+  // 2. + 3. Live discovery + wrapper, then NCAA.com HTML fallback. Required
+  // for stats the nightly scrape couldn't capture, and for pagination.
+  let catWithId;
+  try {
+    const map = await discoverCategoryIds();
+    catWithId = map.get(slug);
+  } catch {
+    catWithId = null;
+  }
+  if (!catWithId) return null;
+
   const suffix = page > 1 ? `/p${page}` : '';
-  const wrapperUrl = `https://ncaa-api.henrygd.me/stats/softball/d1/current/individual/${cat.id}${suffix}`;
+  const wrapperUrl = `https://ncaa-api.henrygd.me/stats/softball/d1/current/individual/${catWithId.id}${suffix}`;
   const json = await fetchWithRetry(wrapperUrl);
 
   let rows;
   let totalPages;
   let updated = '';
-  let title = cat.label;
+  let title = cat.labels[0];
   let source = 'henrygd';
 
   if (json) {
     rows = (json.data || []).map((row) => normalizeRow(row, cat));
     totalPages = json.pages || 1;
     updated = json.updated || '';
-    title = json.title || cat.label;
+    title = json.title || cat.labels[0];
   } else {
-    const fallback = await fetchLeaderboardFromNcaaCom(cat.id, page);
-    if (!fallback) {
-      // Don't cache failures — let the next request retry both paths.
-      return null;
-    }
+    const fallback = await fetchLeaderboardFromNcaaCom(catWithId.id, page);
+    if (!fallback) return null;
     rows = fallback.rows.map((row) => normalizeRow(row, cat));
     totalPages = fallback.totalPages;
     source = 'ncaa.com';
@@ -516,10 +579,10 @@ export async function fetchLeaderboardPage(slug, page = 1) {
 
   const data = {
     slug,
-    label: cat.label,
+    label: cat.labels[0],
     short: cat.short,
     side: cat.side,
-    statId: cat.id,
+    statId: catWithId.id,
     title,
     updated,
     page,

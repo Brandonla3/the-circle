@@ -1,0 +1,62 @@
+name: Nightly NCAA Softball Scrape
+
+# Runs the NCAA.com scraper every night and commits the refreshed
+# data/ncaa/stats.json straight to main so /api/player-stats serves
+# tomorrow's leaders without any manual step.
+#
+# Why no PR (unlike the weekly Boost-API fetch): NCAA stats are
+# append-only-ish, the JSON shape is stable, and the user wants this to
+# just work overnight. Anything weird is one revert away.
+
+on:
+  schedule:
+    # 03:00 UTC = ~22:00 ET, ~21:00 CT. NCAA publishes stats overnight,
+    # by 03:00 UTC the prior day's games are usually settled.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: nightly-ncaa-scrape
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 lxml
+
+      - name: Run scraper
+        run: python scripts/scrape_ncaa_stats.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ncaa/stats.json
+
+          if git diff --cached --quiet; then
+            echo "No stat changes today."
+            exit 0
+          fi
+
+          DATE="$(date -u +%Y-%m-%d)"
+          git commit -m "stats: nightly NCAA scrape ${DATE}"
+          git push origin HEAD:main

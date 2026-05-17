@@ -2803,6 +2803,18 @@ function LeadersView({ onSelectPlayer }) {
     return () => { cancelled = true; };
   }, []);
 
+  // If the hardcoded default slug isn't in today's published categories
+  // (NCAA sometimes hides BA / ERA / WHIP from the scraper), jump to the
+  // first available one on the same side so the first paint shows real
+  // data instead of "Leaders unavailable".
+  useEffect(() => {
+    if (!categories || categories.length === 0) return;
+    if (categories.some((c) => c.slug === slug)) return;
+    const first = categories.find((c) => c.side === side) || categories[0];
+    if (first) setSlug(first.slug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories]);
+
   // Fetch the active leaderboard whenever the category changes.
   useEffect(() => {
     let cancelled = false;
