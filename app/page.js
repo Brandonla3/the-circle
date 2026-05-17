@@ -3821,6 +3821,9 @@ function WorldSeriesView() {
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'live' | 'upcoming' | 'final'
   const [bracketZoom, setBracketZoom] = useState(1);
   const [selectedSite, setSelectedSite] = useState(null); // city string or null
+  // Canonical Super Regional pairings scraped from ncaa.com (best-effort).
+  // Falls back to seed-line pairing if this is empty.
+  const [ncaaPairings, setNcaaPairings] = useState([]);
   const pollRef = useRef(null);
 
   const load = useCallback(async (silent = false) => {
@@ -3837,6 +3840,13 @@ function WorldSeriesView() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetch('/api/ncaa-bracket')
+      .then((r) => r.json())
+      .then((j) => setNcaaPairings(Array.isArray(j?.pairings) ? j.pairings : []))
+      .catch(() => setNcaaPairings([]));
+  }, []);
 
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -4049,10 +4059,62 @@ function WorldSeriesView() {
 
       // ── Pod bracket view — all regional sites in a horizontal scrollable bracket ──
       {
-        // Pair adjacent sites alphabetically: pair 0 = sites[0]+sites[1], etc.
+        // Pair regionals into Super Regional matchups:
+        //   1. Honor explicit pairings scraped from ncaa.com (/api/ncaa-bracket)
+        //      when their host city names match our sites.
+        //   2. Otherwise pair by NCAA seed line: #1↔#16, #2↔#15, …, #8↔#9,
+        //      using each regional host's national seed from ESPN.
+        //   3. Fall back to adjacent (alphabetical) pairing.
+        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+        const byKey = new Map(sitesAll.map((e) => [norm(e[0]), e]));
         const pairs = [];
-        for (let i = 0; i < sitesAll.length; i += 2)
-          pairs.push({ s0: sitesAll[i], s1: sitesAll[i + 1] || null });
+        const used  = new Set();
+
+        if (Array.isArray(ncaaPairings) && ncaaPairings.length) {
+          for (const [c1, c2] of ncaaPairings) {
+            const k1 = norm(c1);
+            const k2 = norm(c2);
+            const e1 = byKey.get(k1);
+            const e2 = byKey.get(k2);
+            if (!e1 || used.has(k1)) continue;
+            const useE2 = e2 && !used.has(k2);
+            pairs.push({ s0: e1, s1: useE2 ? e2 : null });
+            used.add(k1);
+            if (useE2) used.add(k2);
+          }
+        }
+
+        if (pairs.length === 0) {
+          // Seed-line pairing using ESPN's national seed (curatedRank.current).
+          const bySeed = new Map();
+          for (const e of sitesAll) {
+            const teams = extractSiteTeams(e[1]);
+            const seed  = teams[0]?.seed;
+            if (seed && seed >= 1 && seed <= 16 && !bySeed.has(seed)) bySeed.set(seed, e);
+          }
+          if (bySeed.size >= 2) {
+            for (let n = 1; n <= 8; n++) {
+              const top = bySeed.get(n);
+              const bot = bySeed.get(17 - n);
+              const tKey = top && norm(top[0]);
+              const bKey = bot && norm(bot[0]);
+              if (top && !used.has(tKey)) {
+                const useBot = bot && !used.has(bKey);
+                pairs.push({ s0: top, s1: useBot ? bot : null });
+                used.add(tKey);
+                if (useBot) used.add(bKey);
+              } else if (bot && !used.has(bKey)) {
+                pairs.push({ s0: bot, s1: null });
+                used.add(bKey);
+              }
+            }
+          }
+        }
+
+        // Append any remaining sites in adjacent (alphabetical) order.
+        const remaining = sitesAll.filter(([c]) => !used.has(norm(c)));
+        for (let i = 0; i < remaining.length; i += 2)
+          pairs.push({ s0: remaining[i], s1: remaining[i + 1] || null });
 
         const N = pairs.length;
         const TOTAL_H = N * BR_PAIR_H + (N - 1) * BR_GRP_GAP;
