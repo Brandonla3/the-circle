@@ -4049,9 +4049,6 @@ function WorldSeriesView() {
 
       // ── Pod bracket view — all regional sites in a horizontal scrollable bracket ──
       {
-        const srRound  = rounds.find((r) => r.round === 'Super Regionals');
-        const srGames  = srRound ? srRound.groups.flatMap((g) => g.games) : [];
-
         // Pair adjacent sites alphabetically: pair 0 = sites[0]+sites[1], etc.
         const pairs = [];
         for (let i = 0; i < sitesAll.length; i += 2)
@@ -4196,20 +4193,40 @@ function WorldSeriesView() {
                   {pairPos.map(({ srTop, srCy }, i) => {
                     const [s0name] = pairs[i].s0;
                     const s1name   = pairs[i].s1?.[0];
-                    const srGame   = srGames.find((g) => {
-                      const city  = g.competitions?.[0]?.venue?.address?.city;
-                      return city === s0name || city === s1name;
-                    }) || null;
-                    const t1 = srGame ? extractBracketTeam(srGame, 'away') : null;
-                    const t2 = srGame ? extractBracketTeam(srGame, 'home') : null;
+
+                    // Derive each SR participant from the winner of its regional's
+                    // championship game — never from a stale ESPN Super Regional
+                    // game entry, which can still list both regional finalists.
+                    const regionalWinner = (city) => {
+                      if (!city) return null;
+                      const games = siteMapAll.get(city) || [];
+                      if (games.length === 0) return null;
+                      const sorted = [...games].sort((a, b) => new Date(a.date) - new Date(b.date));
+                      const champ  = sorted[sorted.length - 1];
+                      if (champ?.status?.type?.state !== 'post') return null;
+                      const competitors = champ.competitions?.[0]?.competitors || [];
+                      if (competitors.length < 2) return null;
+                      const win = competitors.find((c) => c.winner === true)
+                        || (Number(competitors[0].score) > Number(competitors[1].score) ? competitors[0] : competitors[1]);
+                      if (!win?.team) return null;
+                      return {
+                        name: win.team.shortDisplayName || win.team.displayName,
+                        logo: win.team.logos?.[0]?.href || win.team.logo,
+                        seed: win.curatedRank?.current < 99 ? win.curatedRank.current : null,
+                      };
+                    };
+
+                    const t1 = regionalWinner(s0name);
+                    const t2 = regionalWinner(s1name);
+                    const matchupSet = Boolean(t1 && t2);
                     return (
                       <div
                         key={i}
                         className="absolute rounded-lg overflow-hidden"
-                        style={{ top: srTop, left: BR_SR_X, width: `${BR_SR_W}px`, height: `${BR_SR_H}px`, background: srGame ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.008)', border: srGame ? '1px solid rgba(255,255,255,0.12)' : '1px dashed rgba(255,255,255,0.1)' }}
+                        style={{ top: srTop, left: BR_SR_X, width: `${BR_SR_W}px`, height: `${BR_SR_H}px`, background: matchupSet ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.008)', border: matchupSet ? '1px solid rgba(255,255,255,0.12)' : '1px dashed rgba(255,255,255,0.1)' }}
                       >
                         <div className="px-2.5 flex items-center border-b border-white/[0.07]" style={{ height: `${RB_HEADER_H}px` }}>
-                          <span className="text-[8px] mono uppercase tracking-wide text-white/25 truncate">Super Regional{srGame ? '' : ' · TBD'}</span>
+                          <span className="text-[8px] mono uppercase tracking-wide text-white/25 truncate">Super Regional{matchupSet ? '' : ' · TBD'}</span>
                         </div>
                         <div className="px-2.5 flex items-center gap-1.5" style={{ height: `${RB_SLOT_H}px` }}>
                           {t1?.logo && <img src={t1.logo} alt="" className="h-3.5 w-3.5 object-contain flex-shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
