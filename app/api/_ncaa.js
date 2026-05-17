@@ -108,59 +108,40 @@ function slugify(name) {
   return s || null;
 }
 
-function constructLogoUrl(t) {
-  // NCAA hosts school logos at:
-  //   /sites/default/files/images/logos/schools/{first-letter}/{seoname}-wsb.70.png
-  // (sport-specific suffix `wsb` = women's softball, 70 = pixel size).
-  // Prefer the explicit seoname from the GraphQL response, else derive a slug.
-  const slug =
+// Route every NCAA-hosted logo through our /api/logo proxy, which fetches
+// server-side with the right Referer (ncaa.com refuses hotlinks). Prefer
+// `?team=<seoname>` mode — the proxy tries multiple known URL patterns per
+// team, so we don't depend on NCAA always shipping the exact same path.
+function proxyLogoForTeam(t) {
+  const seoname =
     (typeof t?.seoname === 'string' && t.seoname.trim()) ||
-    (typeof t?.slug === 'string' && t.slug.trim()) ||
     slugify(t?.nameFull) ||
     slugify(t?.nameShort);
-  if (!slug) return null;
-  const letter = slug[0];
-  return `https://www.ncaa.com/sites/default/files/images/logos/schools/${letter}/${slug}-wsb.70.png`;
+  if (seoname) return `/api/logo?team=${encodeURIComponent(seoname)}`;
+  const direct = pickDirectLogo(t);
+  return direct ? `/api/logo?u=${encodeURIComponent(direct)}` : null;
 }
 
-// ncaa.com refuses image requests whose Referer isn't itself, so route every
-// NCAA-hosted logo through our /api/logo proxy. Anything else passes through.
-function proxyLogo(url) {
-  if (!url || typeof url !== 'string') return null;
-  if (/^https:\/\/(?:www\.)?ncaa\.com\//i.test(url)) {
-    return `/api/logo?u=${encodeURIComponent(url)}`;
-  }
-  return url;
-}
-
-function pickLogo(t) {
+function pickDirectLogo(t) {
   if (!t || typeof t !== 'object') return null;
-  const direct = [
+  const candidates = [
     t.logoUrl, t.logoURL, t.logo_url, t.logo,
     t.image, t.imageUrl, t.imageURL, t.image_url,
     t.images?.logo, t.images?.url, t.images?.[0]?.url, t.images?.[0]?.href,
     t.logos?.[0]?.href, t.logos?.[0]?.url,
-    t.bgl, t.logoBgl, t.logoSvg, t.shieldUrl,
   ];
-  for (const c of direct) {
+  for (const c of candidates) {
     const abs = absLogo(c);
     if (abs) return abs;
   }
-  const nested = t.team || t.school;
-  if (nested && typeof nested === 'object') {
-    const fromNested = pickLogo(nested);
-    if (fromNested) return fromNested;
-  }
-  // Last resort: construct from the team's slug/name. If it 404s the img's
-  // onError handler hides it, so the worst case is no worse than today.
-  return constructLogoUrl(t);
+  return null;
 }
 
 function competitorFor(t, homeAway) {
   if (!t) return null;
   const full  = t.nameFull  || t.nameShort || 'TBD';
   const short = t.nameShort || t.nameFull  || 'TBD';
-  const logo  = proxyLogo(pickLogo(t));
+  const logo  = proxyLogoForTeam(t);
   return {
     homeAway,
     team: {
@@ -313,7 +294,7 @@ export function buildWinnersAndMatchups(champ) {
         sectionRecord: t.sectionRecord || '',
         isWinner:      Boolean(t.isWinner),
         eliminated:    Boolean(t.eliminated),
-        logoUrl:       proxyLogo(pickLogo(t)),
+        logoUrl:       proxyLogoForTeam(t),
         color:         t.color || '',
       };
       if (!prior) {
