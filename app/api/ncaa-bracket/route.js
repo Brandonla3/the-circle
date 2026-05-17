@@ -84,9 +84,13 @@ function processBracket(raw) {
   // Roll every game's team state forward so eliminated/isWinner reflect the
   // team's CURRENT status across all games at that site.
   const sectionTeams = new Map();
+  // sectionId -> array of raw games (kept so we can check liveness below)
+  const sectionGames = new Map();
   for (const g of (champ.games || [])) {
     const sid = g.sectionId;
     if (!sectionTeams.has(sid)) sectionTeams.set(sid, new Map());
+    if (!sectionGames.has(sid)) sectionGames.set(sid, []);
+    sectionGames.get(sid).push(g);
     const bucket = sectionTeams.get(sid);
     for (const t of (g.teams || [])) {
       const o = teamObj(t);
@@ -106,21 +110,31 @@ function processBracket(raw) {
     }
   }
 
-  // Per-regional winner: the single non-eliminated team in a regional section.
-  // If 0 or 2+ teams remain, the regional is still in progress; return null.
+  // Per-regional winner: the single non-eliminated team in a regional section,
+  // provided the regional has actually finished. "Finished" means no required
+  // game (gameState 'I' live, or 'P' scheduled and not marked
+  // isIfNecessary) is still pending. An if-necessary Game 7 can be scheduled
+  // but unneeded — we only care about it if more than one team is still
+  // alive, which the eliminated-count check below already handles.
   const regionals = {};
   const winners   = {};
   for (const [sid, info] of sectionInfo.entries()) {
     if (sid < 101 || sid >= 200) continue;
     const teams = [...(sectionTeams.get(sid) || new Map()).values()];
+    const games = sectionGames.get(sid) || [];
+    const requiredPending = games.some(
+      (g) => (g.gameState === 'I' || g.gameState === 'P') && !g.isIfNecessary,
+    );
     const surviving = teams.filter((t) => !t.eliminated);
-    const winner = surviving.length === 1 ? surviving[0] : null;
+    const winner =
+      !requiredPending && surviving.length === 1 ? surviving[0] : null;
     regionals[sid] = {
       sectionId: sid,
       title:     info.title,
       cityKey:   info.cityKey,
       teams,
       winner,
+      inProgress: requiredPending,
     };
     if (winner) winners[info.cityKey] = winner;
   }
