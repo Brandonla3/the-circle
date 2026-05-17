@@ -93,8 +93,35 @@ const absLogo = (p) => {
   return `https://www.ncaa.com/${s}`;
 };
 
-// NCAA's response field for the team logo isn't always `logoUrl`. Try every
-// plausible variant the API has used.
+// NCAA's GraphQL ships `logoUrl` reliably only for certain teams (hosts /
+// advancing seeds). For everyone else we construct the URL ourselves using
+// NCAA's own school-logo asset path, which is keyed off the school's
+// `seoname` slug (lowercase, hyphens, no punctuation).
+function slugify(name) {
+  if (!name || typeof name !== 'string') return null;
+  const s = name
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/['.]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return s || null;
+}
+
+function constructLogoUrl(t) {
+  // Prefer an explicit slug field if NCAA sent one; otherwise derive from the
+  // team's full / short name. Tennessee, LSU, Alabama, etc. all resolve to
+  // their lowercased name at this path on ncaa.com.
+  const slug =
+    (typeof t?.seoname === 'string' && t.seoname.trim()) ||
+    (typeof t?.slug    === 'string' && t.slug.trim())    ||
+    (typeof t?.urlAlias === 'string' && t.urlAlias.trim()) ||
+    slugify(t?.nameFull) ||
+    slugify(t?.nameShort);
+  if (!slug) return null;
+  return `https://www.ncaa.com/sites/default/files/images/logos/schools/${slug}.svg`;
+}
+
 function pickLogo(t) {
   if (!t || typeof t !== 'object') return null;
   const direct = [
@@ -102,15 +129,20 @@ function pickLogo(t) {
     t.image, t.imageUrl, t.imageURL, t.image_url,
     t.images?.logo, t.images?.url, t.images?.[0]?.url, t.images?.[0]?.href,
     t.logos?.[0]?.href, t.logos?.[0]?.url,
+    t.bgl, t.logoBgl, t.logoSvg, t.shieldUrl,
   ];
   for (const c of direct) {
     const abs = absLogo(c);
     if (abs) return abs;
   }
-  // Some NCAA payloads nest the logo on a school object.
   const nested = t.team || t.school;
-  if (nested && typeof nested === 'object') return pickLogo(nested);
-  return null;
+  if (nested && typeof nested === 'object') {
+    const fromNested = pickLogo(nested);
+    if (fromNested) return fromNested;
+  }
+  // Last resort: construct from the team's slug/name. If it 404s the img's
+  // onError handler hides it, so the worst case is no worse than today.
+  return constructLogoUrl(t);
 }
 
 function competitorFor(t, homeAway) {

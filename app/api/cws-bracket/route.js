@@ -30,11 +30,25 @@ export async function GET(request) {
       const { getNcaaBracket } = await import('../_ncaa.js');
       const champ = await getNcaaBracket();
       if (url.searchParams.has('sample')) {
-        const firstGame = champ?.games?.[0];
+        const games = champ?.games || [];
+        // Collect a unique sample of teams across the first few games so we
+        // can see exactly what fields NCAA ships per team.
+        const seen = new Set();
+        const teamSamples = [];
+        for (const g of games) {
+          for (const t of (g.teams || [])) {
+            const name = t.nameFull || t.nameShort;
+            if (!name || seen.has(name)) continue;
+            seen.add(name);
+            teamSamples.push(t);
+            if (teamSamples.length >= 12) break;
+          }
+          if (teamSamples.length >= 12) break;
+        }
         return Response.json(
           {
-            sampleGame: firstGame || null,
-            sampleTeam: firstGame?.teams?.[0] || null,
+            teamSamples,
+            sampleGame: games[0] || null,
             sectionsSample: champ?.sections?.slice(0, 3) || [],
           },
           { headers: { 'Cache-Control': 'no-store' } },
