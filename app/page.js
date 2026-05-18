@@ -3833,6 +3833,14 @@ function WorldSeriesView() {
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'live' | 'upcoming' | 'final'
   const [bracketZoom, setBracketZoom] = useState(1);
   const [selectedSite, setSelectedSite] = useState(null); // city string or null
+  // Canonical Super Regional pairings scraped from ncaa.com (best-effort).
+  // Falls back to seed-line pairing if this is empty.
+  const [ncaaPairings, setNcaaPairings] = useState([]);
+  // Canonical regional winners by host city, also scraped from ncaa.com.
+  // When present these override the W-L tally over ESPN data, because ESPN
+  // can lag (eliminated teams still show as alive, championship games not
+  // yet marked final, etc.).
+  const [ncaaWinners, setNcaaWinners] = useState({});
   const pollRef = useRef(null);
 
   const load = useCallback(async (silent = false) => {
@@ -3849,6 +3857,16 @@ function WorldSeriesView() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetch('/api/ncaa-bracket')
+      .then((r) => r.json())
+      .then((j) => {
+        setNcaaPairings(Array.isArray(j?.pairings) ? j.pairings : []);
+        setNcaaWinners(j?.winners && typeof j.winners === 'object' ? j.winners : {});
+      })
+      .catch(() => { setNcaaPairings([]); setNcaaWinners({}); });
+  }, []);
 
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -4061,10 +4079,68 @@ function WorldSeriesView() {
 
       // ── Pod bracket view — all regional sites in a horizontal scrollable bracket ──
       {
-        // Pair adjacent sites alphabetically: pair 0 = sites[0]+sites[1], etc.
+        // Pair regionals into Super Regional matchups:
+        //   1. Honor explicit pairings from NCAA's GraphQL bracket API
+        //      (/api/ncaa-bracket) when their host city names match our sites.
+        //   2. Otherwise pair by NCAA seed line: #1↔#16, #2↔#15, …, #8↔#9,
+        //      using each regional host's national seed from ESPN.
+        //   3. Fall back to adjacent (alphabetical) pairing.
+        const norm = (s) => (s || '').toLowerCase().replace(/\bregional\b/g, '').replace(/[^a-z0-9]+/g, '');
+        const byKey = new Map(sitesAll.map((e) => [norm(e[0]), e]));
         const pairs = [];
-        for (let i = 0; i < sitesAll.length; i += 2)
-          pairs.push({ s0: sitesAll[i], s1: sitesAll[i + 1] || null });
+        const used  = new Set();
+
+        // Stage 1: honor explicit NCAA pairings for sites that match by name.
+        if (Array.isArray(ncaaPairings) && ncaaPairings.length) {
+          for (const [c1, c2] of ncaaPairings) {
+            const k1 = norm(c1);
+            const k2 = norm(c2);
+            const e1 = byKey.get(k1);
+            const e2 = byKey.get(k2);
+            if (!e1 || used.has(k1)) continue;
+            const useE2 = e2 && !used.has(k2);
+            pairs.push({ s0: e1, s1: useE2 ? e2 : null });
+            used.add(k1);
+            if (useE2) used.add(k2);
+          }
+        }
+
+        // Stage 2: seed-line pairing (#N ↔ #17-N) for any UNMATCHED sites.
+        // Runs even after a partial NCAA match so we never silently fall
+        // through to alphabetical for sites NCAA didn't cover.
+        {
+          const remainingAfterStage1 = sitesAll.filter(([c]) => !used.has(norm(c)));
+          if (remainingAfterStage1.length) {
+            const bySeed = new Map();
+            for (const e of remainingAfterStage1) {
+              const teams = extractSiteTeams(e[1]);
+              const seed  = teams[0]?.seed;
+              if (seed && seed >= 1 && seed <= 16 && !bySeed.has(seed)) bySeed.set(seed, e);
+            }
+            if (bySeed.size >= 2) {
+              for (let n = 1; n <= 8; n++) {
+                const top = bySeed.get(n);
+                const bot = bySeed.get(17 - n);
+                const tKey = top && norm(top[0]);
+                const bKey = bot && norm(bot[0]);
+                if (top && !used.has(tKey)) {
+                  const useBot = bot && !used.has(bKey);
+                  pairs.push({ s0: top, s1: useBot ? bot : null });
+                  used.add(tKey);
+                  if (useBot) used.add(bKey);
+                } else if (bot && !used.has(bKey)) {
+                  pairs.push({ s0: bot, s1: null });
+                  used.add(bKey);
+                }
+              }
+            }
+          }
+        }
+
+        // Stage 3: anything still unpaired — last resort, adjacent order.
+        const remaining = sitesAll.filter(([c]) => !used.has(norm(c)));
+        for (let i = 0; i < remaining.length; i += 2)
+          pairs.push({ s0: remaining[i], s1: remaining[i + 1] || null });
 
         const N = pairs.length;
         const TOTAL_H = N * BR_PAIR_H + (N - 1) * BR_GRP_GAP;
@@ -4206,25 +4282,95 @@ function WorldSeriesView() {
                     const [s0name] = pairs[i].s0;
                     const s1name   = pairs[i].s1?.[0];
 
-                    // Derive each SR participant from the winner of its regional's
-                    // championship game — never from a stale ESPN Super Regional
-                    // game entry, which can still list both regional finalists.
+                    // Prefer NCAA's authoritative winner (from its GraphQL
+                    // bracket API). NCAA exposes `eliminated` and `isWinner`
+                    // flags per team, so the SR participant is unambiguous
+                    // when the regional is decided — no inference required.
+                    const ncaaWinnerFor = (city) => {
+                      if (!city || !ncaaWinners) return null;
+                      const cityKey = norm(city);
+                      let t = ncaaWinners[cityKey];
+                      if (!t) {
+                        // Substring match for minor title/city wording
+                        // differences between NCAA and ESPN.
+                        for (const [k, v] of Object.entries(ncaaWinners)) {
+                          if (!k) continue;
+                          if (k === cityKey || k.includes(cityKey) || cityKey.includes(k)) {
+                            t = v;
+                            break;
+                          }
+                        }
+                      }
+                      if (!t || !t.name) return null;
+                      // Try to backfill the ESPN logo for visual consistency
+                      // with the rest of the bracket; fall back to NCAA's.
+                      let logo = t.logoUrl || null;
+                      const games = siteMapAll.get(city) || [];
+                      for (const g of games) {
+                        for (const c of (g.competitions?.[0]?.competitors || [])) {
+                          const n = c.team?.shortDisplayName || c.team?.displayName || '';
+                          if (n.toLowerCase() === t.name.toLowerCase()) {
+                            logo = c.team.logos?.[0]?.href || c.team.logo || logo;
+                            break;
+                          }
+                        }
+                      }
+                      return { name: t.name, logo, seed: t.seed ?? null };
+                    };
+
+                    // Otherwise determine the regional winner via
+                    // double-elimination W-L bookkeeping: tally wins and
+                    // losses for every team that played a decisive game and
+                    // return the lone team with fewer than two losses. If
+                    // multiple teams are still alive (e.g. championship game
+                    // still to play), return null so the card shows
+                    // "Winner of {city}".
                     const regionalWinner = (city) => {
+                      const fromNcaa = ncaaWinnerFor(city);
+                      if (fromNcaa) return fromNcaa;
                       if (!city) return null;
                       const games = siteMapAll.get(city) || [];
                       if (games.length === 0) return null;
-                      const sorted = [...games].sort((a, b) => new Date(a.date) - new Date(b.date));
-                      const champ  = sorted[sorted.length - 1];
-                      if (champ?.status?.type?.state !== 'post') return null;
-                      const competitors = champ.competitions?.[0]?.competitors || [];
-                      if (competitors.length < 2) return null;
-                      const win = competitors.find((c) => c.winner === true)
-                        || (Number(competitors[0].score) > Number(competitors[1].score) ? competitors[0] : competitors[1]);
-                      if (!win?.team) return null;
+                      const stats = new Map(); // teamId -> { team, competitor, wins, losses }
+                      const touch = (c) => {
+                        const id = c?.team?.id;
+                        if (!id) return null;
+                        let s = stats.get(id);
+                        if (!s) {
+                          s = { team: c.team, competitor: c, wins: 0, losses: 0 };
+                          stats.set(id, s);
+                        } else {
+                          s.competitor = c;
+                        }
+                        return s;
+                      };
+                      for (const g of games) {
+                        const competitors = g.competitions?.[0]?.competitors || [];
+                        // Register every team that's appeared at the site so
+                        // we can detect "regional not started yet" reliably.
+                        for (const c of competitors) touch(c);
+                        if (g?.status?.type?.state !== 'post') continue;
+                        if (competitors.length < 2) continue;
+                        const s0 = Number(competitors[0].score);
+                        const s1 = Number(competitors[1].score);
+                        // Skip games with no decisive result (unplayed
+                        // if-necessary, ties, missing scores). Score is the
+                        // source of truth; ESPN's `winner` flag can lag.
+                        if (!Number.isFinite(s0) || !Number.isFinite(s1)) continue;
+                        if (s0 === s1) continue;
+                        const winC = s0 > s1 ? competitors[0] : competitors[1];
+                        const losC = s0 > s1 ? competitors[1] : competitors[0];
+                        const w = touch(winC); if (w) w.wins++;
+                        const l = touch(losC); if (l) l.losses++;
+                      }
+                      const surviving = [...stats.values()].filter((s) => s.losses < 2);
+                      if (surviving.length !== 1) return null;
+                      const w = surviving[0];
+                      if (w.wins < 1) return null;
                       return {
-                        name: win.team.shortDisplayName || win.team.displayName,
-                        logo: win.team.logos?.[0]?.href || win.team.logo,
-                        seed: win.curatedRank?.current < 99 ? win.curatedRank.current : null,
+                        name: w.team.shortDisplayName || w.team.displayName,
+                        logo: w.team.logos?.[0]?.href || w.team.logo,
+                        seed: w.competitor.curatedRank?.current < 99 ? w.competitor.curatedRank.current : null,
                       };
                     };
 
@@ -4444,7 +4590,12 @@ function WorldSeriesView() {
     );
   };
 
-  const availableRounds = ['Regionals', 'Super Regionals', 'WCWS', 'Tournament']
+  // 'Super Regionals' is intentionally omitted: ESPN's round classification
+  // of SR games is unreliable (it leaks regional-final matchups), and the
+  // Super Regional matchups are already shown in the Regionals bracket pod
+  // view (sourced from NCAA's GraphQL bracket). Bringing it back means
+  // wiring this section to NCAA's data, not ESPN's.
+  const availableRounds = ['Regionals', 'WCWS', 'Tournament']
     .filter((r) => rounds.find((rd) => rd.round === r));
 
   // Which rounds to show after round filter
@@ -4558,7 +4709,7 @@ function WorldSeriesView() {
       )}
 
       <div className="pt-4 border-t border-white/5 text-[9px] mono uppercase tracking-widest text-white/30">
-        Data via ESPN · Auto-refreshes every minute
+        Auto-refreshes every minute
       </div>
     </div>
   );
