@@ -108,22 +108,21 @@ function slugify(name) {
   return s || null;
 }
 
-// Direct NCAA logo URL. Our root layout sets `referrer: no-referrer`, so the
-// browser's image fetches reach ncaa.com without a hot-link-tripping Referer
-// header. (Server-side proxying via /api/logo fails — NCAA's Cloudflare
-// returns 503 for non-browser fetches regardless of headers.)
+// Direct NCAA logo URL via i.turner.ncaa.com — NCAA's Turner Sports CDN,
+// the same one /api/standings and the player routes already use. Unlike
+// www.ncaa.com (which is behind Cloudflare bot protection that 503s
+// non-browser fetches and Referer-blocks hotlinks), the Turner CDN serves
+// logos directly. Path is keyed by the team's SEO slug (`seoname` from
+// NCAA's GraphQL).
 function ncaaLogoUrl(t) {
   const seoname =
     (typeof t?.seoname === 'string' && t.seoname.trim()) ||
     slugify(t?.nameFull) ||
     slugify(t?.nameShort);
   if (!seoname) {
-    // No slug we can build from — use whatever the team carried.
     return pickDirectLogo(t);
   }
-  // NCAA's GraphQL ships logos at this exact path for softball.
-  const letter = seoname[0];
-  return `https://www.ncaa.com/sites/default/files/images/logos/schools/${letter}/${seoname}-wsb.70.png`;
+  return `https://i.turner.ncaa.com/sites/default/files/images/logos/schools/bgl/${seoname}.svg`;
 }
 
 function pickDirectLogo(t) {
