@@ -2,7 +2,7 @@
   "metadata": {
     "sport": "NCAA Division I Softball",
     "season": "Current (2025-26)",
-    "scraped": "2026-05-20T06:53:51.093946+00:00",
+    "scraped": "2026-05-21T06:58:03.222697+00:00",
     "source": "https://www.ncaa.com/stats/softball/d1/current"
   },
   "individual": {
@@ -30909,7 +30909,7 @@
           "Rank": "-",
           "Name": "Taylor Hess",
           "Team": "Indiana",
-          "Cl": "Sr.",
+          "Cl": "Jr.",
           "Position": "SP",
           "App": "31"
         },
@@ -59805,8 +59805,8 @@
           "Rank": "123",
           "Team": "Long Beach St.",
           "G": "54",
-          "RBI": "258",
-          "PG": "4.78"
+          "RBI": "257",
+          "PG": "4.76"
         },
         {
           "Rank": "124",
