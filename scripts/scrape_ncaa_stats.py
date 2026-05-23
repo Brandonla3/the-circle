@@ -377,11 +377,15 @@ def run():
         log.info(f"Carried forward {carried} stale categories from previous snapshot")
 
     total_cats = len(INDIVIDUAL_STATS) + len(TEAM_STATS)
+    # Count this run's live-fetch failures, including ones the merge rewrote to
+    # "stale" (their original status is preserved in `fetch_status`). Counting
+    # only the current `fetch_error` status would let a throttled run that had
+    # prior data to carry forward report ~0 errors and stay green.
     fetch_errors = sum(
         1
         for d in (result["individual"], result["team"])
         for v in d.values()
-        if v.get("status") == "fetch_error"
+        if v.get("status") == "fetch_error" or v.get("fetch_status") == "fetch_error"
     )
     stale = sum(
         1
