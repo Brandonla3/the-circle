@@ -21,7 +21,7 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     concurrency:
       group: nightly-ncaa-scrape
       cancel-in-progress: false
@@ -43,10 +43,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 lxml
 
+      # The scraper exits non-zero when too many categories fail to fetch
+      # (NCAA throttling), which turns the job red as an alert. It still
+      # writes a merged stats.json first — carrying forward last-known-good
+      # rows — so the commit step below runs regardless via `if: always()`.
       - name: Run scraper
         run: python scripts/scrape_ncaa_stats.py
 
       - name: Commit and push if changed
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
