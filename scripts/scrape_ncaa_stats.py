@@ -14,6 +14,8 @@ import csv
 import json
 import logging
 import os
+import random
+import sys
 import time
 from datetime import datetime, timezone
 
@@ -28,11 +30,22 @@ OUTPUT_DIR = os.environ.get("NCAA_OUT_DIR", "data/ncaa")
 OUTPUT_JSON = os.environ.get("NCAA_OUT_JSON", "stats.json")
 WRITE_CSV = os.environ.get("NCAA_WRITE_CSV", "").lower() in ("1", "true", "yes")
 
-DELAY_BETWEEN_REQUESTS = 0.5
-MAX_RETRIES = 3
+# Politeness / anti-throttle tuning. NCAA.com rate-limits a burst of requests
+# from a single IP (the GitHub Actions runner) and starts returning HTTP 403
+# partway through the run, so we space requests out and jitter the timing
+# instead of hammering the site at a fixed cadence.
+DELAY_BETWEEN_REQUESTS = float(os.environ.get("NCAA_REQUEST_DELAY", "2.0"))
+REQUEST_JITTER = float(os.environ.get("NCAA_REQUEST_JITTER", "1.0"))
+MAX_RETRIES = int(os.environ.get("NCAA_MAX_RETRIES", "4"))
+RETRY_BASE_DELAY = float(os.environ.get("NCAA_RETRY_BASE", "3.0"))
+RETRY_MAX_DELAY = float(os.environ.get("NCAA_RETRY_MAX", "30.0"))
+# Fraction of categories allowed to fail before the run is flagged "degraded"
+# and exits non-zero so the workflow goes red instead of failing silently.
+DEGRADED_THRESHOLD = float(os.environ.get("NCAA_DEGRADED_THRESHOLD", "0.15"))
 LOG_FILE = os.environ.get("NCAA_LOG_FILE", "ncaa_scraper.log")
 
 BASE_URL = "https://www.ncaa.com"
+STATS_LANDING = f"{BASE_URL}/stats/softball/d1/current"
 
 HEADERS = {
     "User-Agent": (
@@ -42,6 +55,14 @@ HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
+    # A Referer that looks like in-site navigation matters: NCAA.com gates
+    # content on Referer (the team-logo proxy work hit the same hotlink block).
+    "Referer": STATS_LANDING,
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
 }
 
 # ── All stat categories (discovered from ncaa.com dropdowns) ─────────────────
@@ -138,17 +159,36 @@ log = logging.getLogger(__name__)
 
 
 # ── Core scraping functions ───────────────────────────────────────────────────
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
+
+
+def polite_sleep():
+    """Pause between requests with jitter so we don't hammer NCAA.com at a
+    fixed, easily-throttled cadence."""
+    time.sleep(DELAY_BETWEEN_REQUESTS + random.uniform(0, REQUEST_JITTER))
+
+
 def fetch_page(url: str):
-    """Fetch a URL and return a BeautifulSoup object, with retries."""
+    """Fetch a URL and return a BeautifulSoup object, with retries.
+
+    HTTP 403/429 are treated as retryable: NCAA.com hands those out when it
+    rate-limits the runner IP mid-run, and a jittered exponential backoff
+    gives the throttle time to relax before the next category."""
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            resp = requests.get(url, headers=HEADERS, timeout=30)
+            resp = SESSION.get(url, timeout=30)
             resp.raise_for_status()
             return BeautifulSoup(resp.text, "lxml")
         except requests.RequestException as e:
-            log.warning(f"Attempt {attempt}/{MAX_RETRIES} failed for {url}: {e}")
+            status = getattr(e.response, "status_code", None)
+            log.warning(
+                f"Attempt {attempt}/{MAX_RETRIES} failed for {url}"
+                f"{f' (HTTP {status})' if status else ''}: {e}"
+            )
             if attempt < MAX_RETRIES:
-                time.sleep(2 ** attempt)
+                backoff = min(RETRY_BASE_DELAY * (2 ** (attempt - 1)), RETRY_MAX_DELAY)
+                time.sleep(backoff + random.uniform(0, REQUEST_JITTER))
     log.error(f"All retries exhausted for {url}")
     return None
 
@@ -203,7 +243,7 @@ def scrape_stat_category(name: str, path: str) -> dict:
     log.info(f"    → {len(rows)} rows on page 1 of {max_page}")
 
     for page in range(2, max_page + 1):
-        time.sleep(DELAY_BETWEEN_REQUESTS)
+        polite_sleep()
         page_soup = fetch_page(f"{url}/p{page}")
         if page_soup:
             _, page_rows = parse_table(page_soup)
@@ -235,6 +275,50 @@ def save_json(data: dict, filepath: str):
     log.info(f"JSON saved → {filepath}")
 
 
+def load_previous(filepath: str) -> dict:
+    """Load the existing snapshot so we can carry forward last-known-good
+    rows for any category that fails to fetch on this run."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def merge_with_previous(new: dict, prev: dict) -> int:
+    """Carry forward rows from `prev` for any category in `new` that failed to
+    fetch (fetch_error / no_data) but previously had real data. Such entries
+    are marked status='stale' so consumers can tell the data wasn't refreshed
+    today. Mutates `new` in place; returns the number of carried-forward
+    categories."""
+    carried = 0
+    prev_scraped = (prev.get("metadata") or {}).get("scraped", "")
+
+    for stat_type in ("individual", "team"):
+        prev_cats = prev.get(stat_type) or {}
+        for name, fresh in new.get(stat_type, {}).items():
+            if fresh.get("status") == "ok":
+                continue
+            old = prev_cats.get(name)
+            if not old:
+                continue
+            old_rows = old.get("rows") or []
+            if old.get("status") in ("ok", "stale") and old_rows:
+                new[stat_type][name] = {
+                    "category": name,
+                    "status": "stale",
+                    "headers": old.get("headers", []),
+                    "total_rows": old.get("total_rows", len(old_rows)),
+                    "pages": old.get("pages", 1),
+                    "rows": old_rows,
+                    # What this run actually saw, and when the data was last good.
+                    "fetch_status": fresh.get("status"),
+                    "last_ok_scraped": old.get("last_ok_scraped") or prev_scraped,
+                }
+                carried += 1
+    return carried
+
+
 def save_csv(data: dict, filepath: str):
     """Write all categories to a single CSV (optional)."""
     os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
@@ -260,6 +344,8 @@ def run():
     log.info("=" * 60)
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    json_path = os.path.join(OUTPUT_DIR, OUTPUT_JSON)
+    previous = load_previous(json_path)
     now_iso = datetime.now(timezone.utc).isoformat()
 
     result = {
@@ -276,28 +362,98 @@ def run():
     log.info(f"Scraping {len(INDIVIDUAL_STATS)} individual stat categories...")
     for name, path in INDIVIDUAL_STATS:
         result["individual"][name] = scrape_stat_category(name, path)
-        time.sleep(DELAY_BETWEEN_REQUESTS)
+        polite_sleep()
 
     log.info(f"Scraping {len(TEAM_STATS)} team stat categories...")
     for name, path in TEAM_STATS:
         result["team"][name] = scrape_stat_category(name, path)
-        time.sleep(DELAY_BETWEEN_REQUESTS)
+        polite_sleep()
 
-    json_path = os.path.join(OUTPUT_DIR, OUTPUT_JSON)
+    # Don't let a throttled run blank out categories that were good yesterday:
+    # carry forward last-known-good rows (marked stale) so the site degrades
+    # gracefully instead of going empty.
+    carried = merge_with_previous(result, previous)
+    if carried:
+        log.info(f"Carried forward {carried} stale categories from previous snapshot")
+
+    total_cats = len(INDIVIDUAL_STATS) + len(TEAM_STATS)
+    # Count this run's live-fetch failures, including ones the merge rewrote to
+    # "stale" (their original status is preserved in `fetch_status`). Counting
+    # only the current `fetch_error` status would let a throttled run that had
+    # prior data to carry forward report ~0 errors and stay green.
+    fetch_errors = sum(
+        1
+        for d in (result["individual"], result["team"])
+        for v in d.values()
+        if v.get("status") == "fetch_error" or v.get("fetch_status") == "fetch_error"
+    )
+    stale = sum(
+        1
+        for d in (result["individual"], result["team"])
+        for v in d.values()
+        if v.get("status") == "stale"
+    )
+    ok_ind = sum(1 for v in result["individual"].values() if v["status"] == "ok")
+    ok_team = sum(1 for v in result["team"].values() if v["status"] == "ok")
+    total_rows = sum(
+        v.get("total_rows", 0) or 0
+        for d in (result["individual"], result["team"])
+        for v in d.values()
+    )
+
+    error_ratio = fetch_errors / total_cats if total_cats else 0.0
+    degraded = error_ratio > DEGRADED_THRESHOLD
+
+    result["metadata"].update(
+        {
+            "categories_total": total_cats,
+            "categories_ok": ok_ind + ok_team,
+            "categories_stale": stale,
+            "categories_fetch_error": fetch_errors,
+            "degraded": degraded,
+        }
+    )
+
     save_json(result, json_path)
 
     if WRITE_CSV:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         save_csv(result, os.path.join(OUTPUT_DIR, f"ncaa_softball_stats_{timestamp}.csv"))
 
-    ok_ind  = sum(1 for v in result["individual"].values() if v["status"] == "ok")
-    ok_team = sum(1 for v in result["team"].values()       if v["status"] == "ok")
-    total_rows = sum(v.get("total_rows", 0) or 0
-                     for d in (result["individual"], result["team"])
-                     for v in d.values())
     log.info(f"Done — {ok_ind}/{len(INDIVIDUAL_STATS)} individual, {ok_team}/{len(TEAM_STATS)} team categories")
     log.info(f"Total data rows: {total_rows}")
+    log.info(f"fetch_error: {fetch_errors}/{total_cats} ({error_ratio:.0%}), carried-forward stale: {stale}")
     log.info("=" * 60)
+
+    write_step_summary(ok_ind + ok_team, stale, fetch_errors, total_cats, total_rows, degraded)
+
+    if degraded:
+        log.error(
+            f"DEGRADED: {fetch_errors}/{total_cats} categories failed to fetch "
+            f"(>{DEGRADED_THRESHOLD:.0%} threshold). NCAA.com is likely throttling. "
+            f"Carried-forward data was committed, but exiting non-zero to flag the run."
+        )
+        sys.exit(1)
+
+
+def write_step_summary(ok, stale, errors, total, rows, degraded):
+    """Surface a run summary in the GitHub Actions UI when available."""
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    state = "⚠️ DEGRADED" if degraded else "✅ OK"
+    try:
+        with open(summary_path, "a", encoding="utf-8") as f:
+            f.write(
+                f"### NCAA Softball Scrape — {state}\n\n"
+                f"| Metric | Value |\n| --- | --- |\n"
+                f"| Categories OK | {ok}/{total} |\n"
+                f"| Carried forward (stale) | {stale} |\n"
+                f"| Fetch errors | {errors}/{total} |\n"
+                f"| Total rows | {rows} |\n"
+            )
+    except OSError as e:
+        log.warning(f"Could not write step summary: {e}")
 
 
 if __name__ == "__main__":

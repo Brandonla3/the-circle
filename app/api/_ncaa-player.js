@@ -483,6 +483,21 @@ function getCacheEntry(cat, ncaa) {
   return null;
 }
 
+// Last-known-good rows the nightly scraper carried forward (status 'stale')
+// because NCAA.com throttled that category's fetch. Used only as a final
+// fallback when every live source fails, so the leaderboard shows older data
+// instead of going blank.
+function getStaleCacheEntry(cat, ncaa) {
+  if (!ncaa?.individual) return null;
+  for (const name of cat.labels || []) {
+    const entry = ncaa.individual[name];
+    if (entry?.status === 'stale' && Array.isArray(entry.rows) && entry.rows.length) {
+      return { entry, matchedName: name };
+    }
+  }
+  return null;
+}
+
 // Return slugs that have rows in the cache. Used by the categories endpoint
 // so the dropdown reflects what's actually available today.
 export async function listCachedSlugs() {
@@ -520,6 +535,9 @@ export async function fetchLeaderboardPage(slug, page = 1) {
   // so only page 1 reads from it; later pages fall through to the live
   // wrapper which does paginate. In practice the UI only shows top-50 so
   // page 1 is what users see.
+  // Last-known-good rows to fall back on if every live source fails below.
+  // Only computed for page 1 (the cache stores a single flat top-50 list).
+  let staleFallback = null;
   if (page === 1) {
     const ncaa = await loadNcaaCache();
     const hit = getCacheEntry(cat, ncaa);
@@ -541,6 +559,22 @@ export async function fetchLeaderboardPage(slug, page = 1) {
       leaderboardCache.set(key, { ts: Date.now(), data });
       return data;
     }
+    const stale = getStaleCacheEntry(cat, ncaa);
+    if (stale) {
+      staleFallback = {
+        slug,
+        label: cat.labels[0],
+        short: cat.short,
+        side: cat.side,
+        statId: null,
+        title: cat.labels[0],
+        updated: stale.entry.last_ok_scraped || ncaa.metadata?.scraped || '',
+        page: 1,
+        totalPages: 1,
+        rows: stale.entry.rows.map((row) => normalizeRow(row, cat)),
+        source: 'ncaa.com (cached, stale)',
+      };
+    }
   }
 
   // 2. + 3. Live discovery + wrapper, then NCAA.com HTML fallback. Required
@@ -552,7 +586,7 @@ export async function fetchLeaderboardPage(slug, page = 1) {
   } catch {
     catWithId = null;
   }
-  if (!catWithId) return null;
+  if (!catWithId) return staleFallback;
 
   const suffix = page > 1 ? `/p${page}` : '';
   const wrapperUrl = `https://ncaa-api.henrygd.me/stats/softball/d1/current/individual/${catWithId.id}${suffix}`;
@@ -571,7 +605,7 @@ export async function fetchLeaderboardPage(slug, page = 1) {
     title = json.title || cat.labels[0];
   } else {
     const fallback = await fetchLeaderboardFromNcaaCom(catWithId.id, page);
-    if (!fallback) return null;
+    if (!fallback) return staleFallback;
     rows = fallback.rows.map((row) => normalizeRow(row, cat));
     totalPages = fallback.totalPages;
     source = 'ncaa.com';

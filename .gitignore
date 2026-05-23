@@ -16,5 +16,12 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# python
+__pycache__/
+*.pyc
+
+# scraper run log
+ncaa_scraper.log
+
 # lockfile (not tracked in this repo)
 package-lock.json
