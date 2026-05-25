@@ -2,7 +2,7 @@
   "metadata": {
     "sport": "NCAA Division I Softball",
     "season": "Current (2025-26)",
-    "scraped": "2026-05-24T06:41:51.924902+00:00",
+    "scraped": "2026-05-25T07:20:35.791561+00:00",
     "source": "https://www.ncaa.com/stats/softball/d1/current",
     "categories_total": 74,
     "categories_ok": 31,
@@ -13135,18 +13135,6 @@
         },
         {
           "Rank": "51",
-          "Name": "Emily Delgado",
-          "Team": "Southern Ill.",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "30",
-          "IP": "93.1",
-          "R": "39",
-          "ER": "32",
-          "ERA": "2.40"
-        },
-        {
-          "Rank": "52",
           "Name": "Miranda De Nava",
           "Team": "California Baptist",
           "Cl": "So.",
@@ -13158,7 +13146,7 @@
           "ERA": "2.41"
         },
         {
-          "Rank": "53",
+          "Rank": "52",
           "Name": "Ryley Harrison",
           "Team": "South Alabama",
           "Cl": "Jr.",
@@ -13170,7 +13158,7 @@
           "ERA": "2.41"
         },
         {
-          "Rank": "54",
+          "Rank": "53",
           "Name": "Marina Mason",
           "Team": "Northwestern",
           "Cl": "Fr.",
@@ -13182,7 +13170,7 @@
           "ERA": "2.42"
         },
         {
-          "Rank": "55",
+          "Rank": "54",
           "Name": "Sara Pinedo",
           "Team": "LMU (CA)",
           "Cl": "Fr.",
@@ -13194,7 +13182,7 @@
           "ERA": "2.44"
         },
         {
-          "Rank": "56",
+          "Rank": "55",
           "Name": "Mads Lawson",
           "Team": "Columbia",
           "Cl": "Fr.",
@@ -13206,7 +13194,7 @@
           "ERA": "2.44"
         },
         {
-          "Rank": "57",
+          "Rank": "56",
           "Name": "Alexis Jensen",
           "Team": "Nebraska",
           "Cl": "Fr.",
@@ -13218,7 +13206,7 @@
           "ERA": "2.45"
         },
         {
-          "Rank": "58",
+          "Rank": "57",
           "Name": "Alyssa Faircloth",
           "Team": "Mississippi St.",
           "Cl": "Jr.",
@@ -13230,7 +13218,7 @@
           "ERA": "2.45"
         },
         {
-          "Rank": "59",
+          "Rank": "58",
           "Name": "Jacy Harrelson",
           "Team": "Jacksonville",
           "Cl": "So.",
@@ -13242,7 +13230,7 @@
           "ERA": "2.46"
         },
         {
-          "Rank": "60",
+          "Rank": "59",
           "Name": "Ainsley Lambert",
           "Team": "Fla. Atlantic",
           "Cl": "Sr.",
@@ -13266,7 +13254,7 @@
           "ERA": "2.52"
         },
         {
-          "Rank": "62",
+          "Rank": "61",
           "Name": "Teagan Kavan",
           "Team": "Texas",
           "Cl": "Jr.",
@@ -13278,7 +13266,7 @@
           "ERA": "2.52"
         },
         {
-          "Rank": "63",
+          "Rank": "62",
           "Name": "Salem Ward",
           "Team": "UNC Greensboro",
           "Cl": "Sr.",
@@ -13290,7 +13278,7 @@
           "ERA": "2.52"
         },
         {
-          "Rank": "64",
+          "Rank": "63",
           "Name": "Sydney Scapin",
           "Team": "South Alabama",
           "Cl": "So.",
@@ -13302,7 +13290,7 @@
           "ERA": "2.52"
         },
         {
-          "Rank": "65",
+          "Rank": "64",
           "Name": "Kayla Giardina",
           "Team": "Southern Miss.",
           "Cl": "So.",
@@ -13314,7 +13302,7 @@
           "ERA": "2.53"
         },
         {
-          "Rank": "66",
+          "Rank": "65",
           "Name": "Hailey Maestretti",
           "Team": "Utah",
           "Cl": "So.",
@@ -13326,7 +13314,7 @@
           "ERA": "2.53"
         },
         {
-          "Rank": "67",
+          "Rank": "66",
           "Name": "Hailey Lucas",
           "Team": "Southern Ill.",
           "Cl": "Fr.",
@@ -13338,7 +13326,7 @@
           "ERA": "2.53"
         },
         {
-          "Rank": "68",
+          "Rank": "67",
           "Name": "Amanda Eaglin",
           "Team": "Army West Point",
           "Cl": "Sr.",
@@ -13350,7 +13338,7 @@
           "ERA": "2.54"
         },
         {
-          "Rank": "69",
+          "Rank": "68",
           "Name": "Jessie Gilbert",
           "Team": "LMU (CA)",
           "Cl": "Fr.",
@@ -13362,7 +13350,7 @@
           "ERA": "2.54"
         },
         {
-          "Rank": "70",
+          "Rank": "69",
           "Name": "Taryn Irimata",
           "Team": "Hawaii",
           "Cl": "So.",
@@ -13374,7 +13362,7 @@
           "ERA": "2.54"
         },
         {
-          "Rank": "71",
+          "Rank": "70",
           "Name": "Abby Lovell",
           "Team": "Troy",
           "Cl": "Fr.",
@@ -13386,7 +13374,7 @@
           "ERA": "2.55"
         },
         {
-          "Rank": "72",
+          "Rank": "71",
           "Name": "Shelbee Jones",
           "Team": "Utah",
           "Cl": "Jr.",
@@ -13398,7 +13386,7 @@
           "ERA": "2.55"
         },
         {
-          "Rank": "73",
+          "Rank": "72",
           "Name": "Ella Cook",
           "Team": "St. Thomas (MN)",
           "Cl": "Sr.",
@@ -13410,7 +13398,7 @@
           "ERA": "2.56"
         },
         {
-          "Rank": "74",
+          "Rank": "73",
           "Name": "Addisen Fisher",
           "Team": "Georgia",
           "Cl": "So.",
@@ -13422,7 +13410,7 @@
           "ERA": "2.56"
         },
         {
-          "Rank": "75",
+          "Rank": "74",
           "Name": "Taryn Batterton",
           "Team": "Grand Canyon",
           "Cl": "Sr.",
@@ -13434,7 +13422,7 @@
           "ERA": "2.57"
         },
         {
-          "Rank": "76",
+          "Rank": "75",
           "Name": "Kate Barnett",
           "Team": "Long Beach St.",
           "Cl": "Jr.",
@@ -13446,7 +13434,7 @@
           "ERA": "2.59"
         },
         {
-          "Rank": "77",
+          "Rank": "76",
           "Name": "Amanda Fulton",
           "Team": "Western Caro.",
           "Cl": "So.",
@@ -13458,7 +13446,7 @@
           "ERA": "2.60"
         },
         {
-          "Rank": "78",
+          "Rank": "77",
           "Name": "Makayla Stephens",
           "Team": "Georgia St.",
           "Cl": "Jr.",
@@ -13470,7 +13458,7 @@
           "ERA": "2.61"
         },
         {
-          "Rank": "79",
+          "Rank": "78",
           "Name": "Natalie Kreuziger",
           "Team": "UT Martin",
           "Cl": "So.",
@@ -13482,7 +13470,7 @@
           "ERA": "2.61"
         },
         {
-          "Rank": "80",
+          "Rank": "79",
           "Name": "Presley Hosick",
           "Team": "Miami (OH)",
           "Cl": "Sr.",
@@ -13494,7 +13482,7 @@
           "ERA": "2.62"
         },
         {
-          "Rank": "81",
+          "Rank": "80",
           "Name": "Sydney Berzon",
           "Team": "Oklahoma",
           "Cl": "Sr.",
@@ -13506,7 +13494,7 @@
           "ERA": "2.62"
         },
         {
-          "Rank": "82",
+          "Rank": "81",
           "Name": "Ella Cunningham",
           "Team": "Troy",
           "Cl": "So.",
@@ -13518,7 +13506,7 @@
           "ERA": "2.63"
         },
         {
-          "Rank": "83",
+          "Rank": "82",
           "Name": "Rhyann Jones",
           "Team": "UNC Greensboro",
           "Cl": "Sr.",
@@ -13530,7 +13518,7 @@
           "ERA": "2.64"
         },
         {
-          "Rank": "84",
+          "Rank": "83",
           "Name": "Ella Troutt",
           "Team": "Indiana",
           "Cl": "So.",
@@ -13542,7 +13530,7 @@
           "ERA": "2.65"
         },
         {
-          "Rank": "85",
+          "Rank": "84",
           "Name": "Makenna Moore",
           "Team": "Jacksonville St.",
           "Cl": "Fr.",
@@ -13554,7 +13542,7 @@
           "ERA": "2.65"
         },
         {
-          "Rank": "86",
+          "Rank": "85",
           "Name": "Paige McLeod",
           "Team": "Illinois St.",
           "Cl": "Jr.",
@@ -13566,7 +13554,7 @@
           "ERA": "2.65"
         },
         {
-          "Rank": "87",
+          "Rank": "86",
           "Name": "Eden Muncy",
           "Team": "ETSU",
           "Cl": "So.",
@@ -13578,7 +13566,7 @@
           "ERA": "2.65"
         },
         {
-          "Rank": "88",
+          "Rank": "87",
           "Name": "Ellison Schroeder",
           "Team": "Santa Clara",
           "Cl": "Fr.",
@@ -13590,7 +13578,7 @@
           "ERA": "2.66"
         },
         {
-          "Rank": "89",
+          "Rank": "88",
           "Name": "Taylor Trowbridge",
           "Team": "Saint Joseph's",
           "Cl": "Sr.",
@@ -13602,7 +13590,7 @@
           "ERA": "2.67"
         },
         {
-          "Rank": "90",
+          "Rank": "89",
           "Name": "Ava Risum",
           "Team": "Lindenwood",
           "Cl": "Fr.",
@@ -13614,7 +13602,7 @@
           "ERA": "2.68"
         },
         {
-          "Rank": "91",
+          "Rank": "90",
           "Name": "Faith Aragon",
           "Team": "New Mexico St.",
           "Cl": "Jr.",
@@ -13626,7 +13614,7 @@
           "ERA": "2.69"
         },
         {
-          "Rank": "92",
+          "Rank": "91",
           "Name": "Ava Metzger",
           "Team": "Marist",
           "Cl": "Sr.",
@@ -13638,7 +13626,7 @@
           "ERA": "2.69"
         },
         {
-          "Rank": "93",
+          "Rank": "92",
           "Name": "Tegan Livesay",
           "Team": "North Dakota",
           "Cl": "Jr.",
@@ -13650,7 +13638,7 @@
           "ERA": "2.69"
         },
         {
-          "Rank": "94",
+          "Rank": "93",
           "Name": "Autumn Courtney",
           "Team": "Fla. Atlantic",
           "Cl": "Sr.",
@@ -13662,7 +13650,7 @@
           "ERA": "2.69"
         },
         {
-          "Rank": "95",
+          "Rank": "94",
           "Name": "Taylor Smith",
           "Team": "Virginia",
           "Cl": "Fr.",
@@ -13674,7 +13662,7 @@
           "ERA": "2.69"
         },
         {
-          "Rank": "96",
+          "Rank": "95",
           "Name": "Leanna Garcia",
           "Team": "Cal St. Fullerton",
           "Cl": "Jr.",
@@ -13686,7 +13674,7 @@
           "ERA": "2.71"
         },
         {
-          "Rank": "97",
+          "Rank": "96",
           "Name": "Cari Ferguson",
           "Team": "Santa Clara",
           "Cl": "So.",
@@ -13698,7 +13686,7 @@
           "ERA": "2.72"
         },
         {
-          "Rank": "98",
+          "Rank": "97",
           "Name": "Marley Goluskin",
           "Team": "Idaho St.",
           "Cl": "Jr.",
@@ -13710,7 +13698,7 @@
           "ERA": "2.72"
         },
         {
-          "Rank": "99",
+          "Rank": "98",
           "Name": "Lyndsey Grein",
           "Team": "Oregon",
           "Cl": "Sr.",
@@ -13722,7 +13710,7 @@
           "ERA": "2.73"
         },
         {
-          "Rank": "100",
+          "Rank": "99",
           "Name": "Courtney Layne",
           "Team": "Virginia",
           "Cl": "Sr.",
@@ -13731,6 +13719,18 @@
           "IP": "107.2",
           "R": "47",
           "ER": "42",
+          "ERA": "2.73"
+        },
+        {
+          "Rank": "100",
+          "Name": "Morgan Reimer",
+          "Team": "Washington",
+          "Cl": "So.",
+          "Position": "SP/RP",
+          "App": "37",
+          "IP": "179.1",
+          "R": "97",
+          "ER": "70",
           "ERA": "2.73"
         },
         {
@@ -52210,9 +52210,9 @@
           "Rank": "2",
           "Team": "Alabama",
           "G": "60",
-          "IP": "378.0",
-          "HA": "230",
-          "PG": "4.26"
+          "IP": "385.0",
+          "HA": "231",
+          "PG": "4.20"
         },
         {
           "Rank": "3",
@@ -52320,19 +52320,19 @@
         },
         {
           "Rank": "16",
-          "Team": "LSU",
-          "G": "58",
-          "IP": "375.2",
-          "HA": "325",
-          "PG": "6.06"
-        },
-        {
-          "Rank": "17",
           "Team": "Texas",
           "G": "56",
           "IP": "356.0",
           "HA": "310",
           "PG": "6.10"
+        },
+        {
+          "Rank": "17",
+          "Team": "LSU",
+          "G": "58",
+          "IP": "381.2",
+          "HA": "335",
+          "PG": "6.14"
         },
         {
           "Rank": "18",
