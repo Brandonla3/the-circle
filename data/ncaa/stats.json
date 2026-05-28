@@ -2,7 +2,7 @@
   "metadata": {
     "sport": "NCAA Division I Softball",
     "season": "Current (2025-26)",
-    "scraped": "2026-05-27T07:10:15.166548+00:00",
+    "scraped": "2026-05-28T06:59:49.848359+00:00",
     "source": "https://www.ncaa.com/stats/softball/d1/current",
     "categories_total": 74,
     "categories_ok": 31,
@@ -9485,6 +9485,15 @@
         },
         {
           "Rank": "-",
+          "Name": "Izzy Mertes",
+          "Team": "UCF",
+          "Cl": "So.",
+          "Position": "UT",
+          "G": "61",
+          "2B": "18"
+        },
+        {
+          "Rank": "-",
           "Name": "Kai Minor",
           "Team": "Oklahoma",
           "Cl": "Fr.",
@@ -9520,7 +9529,7 @@
           "2B": "18"
         },
         {
-          "Rank": "48",
+          "Rank": "49",
           "Name": "Haley Ahr",
           "Team": "Marist",
           "Cl": "Sr.",
@@ -9652,15 +9661,6 @@
           "Cl": "Jr.",
           "Position": "OF",
           "G": "58",
-          "2B": "17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Izzy Mertes",
-          "Team": "UCF",
-          "Cl": "So.",
-          "Position": "UT",
-          "G": "61",
           "2B": "17"
         },
         {
@@ -12084,6 +12084,16 @@
         },
         {
           "Rank": "107",
+          "Name": "Izzy Mertes",
+          "Team": "UCF",
+          "Cl": "So.",
+          "Position": "UT",
+          "G": "61",
+          "2B": "18",
+          "PG": ".30"
+        },
+        {
+          "Rank": "108",
           "Name": "Shelby Barbee",
           "Team": "North Carolina",
           "Cl": "Sr.",
@@ -12113,7 +12123,7 @@
           "PG": ".29"
         },
         {
-          "Rank": "110",
+          "Rank": "111",
           "Name": "Haley Ahr",
           "Team": "Marist",
           "Cl": "Sr.",
@@ -12143,7 +12153,7 @@
           "PG": ".29"
         },
         {
-          "Rank": "113",
+          "Rank": "114",
           "Name": "Zara Wasserman",
           "Team": "UC San Diego",
           "Cl": "Jr.",
@@ -12163,7 +12173,7 @@
           "PG": ".29"
         },
         {
-          "Rank": "115",
+          "Rank": "116",
           "Name": "Reagan Bartholomew",
           "Team": "Iowa St.",
           "Cl": "Sr.",
@@ -12173,7 +12183,7 @@
           "PG": ".29"
         },
         {
-          "Rank": "116",
+          "Rank": "117",
           "Name": "Paige Hayward",
           "Team": "George Washington",
           "Cl": "Jr.",
@@ -12183,7 +12193,7 @@
           "PG": ".29"
         },
         {
-          "Rank": "117",
+          "Rank": "118",
           "Name": "Kiara Sipe",
           "Team": "Iowa",
           "Cl": "So.",
@@ -12203,7 +12213,7 @@
           "PG": ".29"
         },
         {
-          "Rank": "119",
+          "Rank": "120",
           "Name": "Brianna Delaney",
           "Team": "Buffalo",
           "Cl": "Jr.",
@@ -12303,7 +12313,7 @@
           "PG": ".29"
         },
         {
-          "Rank": "129",
+          "Rank": "130",
           "Name": "Jordan Woolery",
           "Team": "UCLA",
           "Cl": "Sr.",
@@ -12313,7 +12323,7 @@
           "PG": ".28"
         },
         {
-          "Rank": "130",
+          "Rank": "131",
           "Name": "Katelyn Callahan",
           "Team": "UNI",
           "Cl": "So.",
@@ -12343,7 +12353,7 @@
           "PG": ".28"
         },
         {
-          "Rank": "133",
+          "Rank": "134",
           "Name": "Mary Brant",
           "Team": "Robert Morris",
           "Cl": "So.",
@@ -12373,7 +12383,7 @@
           "PG": ".28"
         },
         {
-          "Rank": "136",
+          "Rank": "137",
           "Name": "Meah Almaraz",
           "Team": "Jackson St.",
           "Cl": "Sr.",
@@ -12383,7 +12393,7 @@
           "PG": ".28"
         },
         {
-          "Rank": "137",
+          "Rank": "138",
           "Name": "Hannah Camenzind",
           "Team": "Nebraska",
           "Cl": "Sr.",
@@ -12413,7 +12423,7 @@
           "PG": ".28"
         },
         {
-          "Rank": "140",
+          "Rank": "141",
           "Name": "Laila Clark",
           "Team": "Southern U.",
           "Cl": "So.",
@@ -12423,7 +12433,7 @@
           "PG": ".28"
         },
         {
-          "Rank": "141",
+          "Rank": "142",
           "Name": "Charlize Cai",
           "Team": "Cornell",
           "Cl": "So.",
@@ -12443,21 +12453,11 @@
           "PG": ".28"
         },
         {
-          "Rank": "143",
+          "Rank": "144",
           "Name": "Sarah Gordon",
           "Team": "Georgia",
           "Cl": "Sr.",
           "Position": "C",
-          "G": "61",
-          "2B": "17",
-          "PG": ".28"
-        },
-        {
-          "Rank": "-",
-          "Name": "Izzy Mertes",
-          "Team": "UCF",
-          "Cl": "So.",
-          "Position": "UT",
           "G": "61",
           "2B": "17",
           "PG": ".28"
@@ -39741,20 +39741,27 @@
         },
         {
           "Rank": "126",
+          "Team": "UCF",
+          "G": "61",
+          "2B": "84",
+          "PG": "1.38"
+        },
+        {
+          "Rank": "127",
           "Team": "Utah",
           "G": "56",
           "2B": "77",
           "PG": "1.38"
         },
         {
-          "Rank": "127",
+          "Rank": "128",
           "Team": "Stetson",
           "G": "59",
           "2B": "81",
           "PG": "1.37"
         },
         {
-          "Rank": "128",
+          "Rank": "129",
           "Team": "George Mason",
           "G": "51",
           "2B": "70",
@@ -39775,31 +39782,24 @@
           "PG": "1.37"
         },
         {
-          "Rank": "131",
+          "Rank": "132",
           "Team": "South Carolina",
           "G": "60",
           "2B": "82",
           "PG": "1.37"
         },
         {
-          "Rank": "132",
+          "Rank": "133",
           "Team": "Oregon",
           "G": "55",
           "2B": "75",
           "PG": "1.36"
         },
         {
-          "Rank": "133",
+          "Rank": "134",
           "Team": "Coppin St.",
           "G": "36",
           "2B": "49",
-          "PG": "1.36"
-        },
-        {
-          "Rank": "134",
-          "Team": "UCF",
-          "G": "61",
-          "2B": "83",
           "PG": "1.36"
         },
         {
@@ -44178,6 +44178,15 @@
         },
         {
           "Rank": "47",
+          "Team": "UCLA",
+          "G": "60",
+          "PO": "1084",
+          "A": "417",
+          "E": "43",
+          "PCT": ".972"
+        },
+        {
+          "Rank": "48",
           "Team": "Southeastern La.",
           "G": "62",
           "PO": "1185",
@@ -44186,7 +44195,7 @@
           "PCT": ".972"
         },
         {
-          "Rank": "48",
+          "Rank": "49",
           "Team": "Central Ark.",
           "G": "57",
           "PO": "1076",
@@ -44195,20 +44204,11 @@
           "PCT": ".972"
         },
         {
-          "Rank": "49",
+          "Rank": "50",
           "Team": "Virginia Tech",
           "G": "60",
           "PO": "1135",
           "A": "368",
-          "E": "44",
-          "PCT": ".972"
-        },
-        {
-          "Rank": "50",
-          "Team": "UCLA",
-          "G": "60",
-          "PO": "1084",
-          "A": "417",
           "E": "44",
           "PCT": ".972"
         },
