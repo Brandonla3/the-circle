@@ -2,18 +2,18 @@
   "metadata": {
     "sport": "NCAA Division I Softball",
     "season": "Current (2025-26)",
-    "scraped": "2026-05-29T06:59:48.310473+00:00",
+    "scraped": "2026-05-30T06:27:58.416206+00:00",
     "source": "https://www.ncaa.com/stats/softball/d1/current",
     "categories_total": 74,
-    "categories_ok": 31,
-    "categories_stale": 0,
+    "categories_ok": 23,
+    "categories_stale": 8,
     "categories_fetch_error": 30,
     "degraded": true
   },
   "individual": {
     "Assists": {
       "category": "Assists",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -1412,11 +1412,13 @@
           "G": "56",
           "A": "105"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-05-29T06:59:48.310473+00:00"
     },
     "Assists Per Game": {
       "category": "Assists Per Game",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -2930,7 +2932,9 @@
           "A": "111",
           "PG": "1.98"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-05-29T06:59:48.310473+00:00"
     },
     "Batting Average": {
       "category": "Batting Average",
@@ -2946,7 +2950,7 @@
         "H",
         "BA"
       ],
-      "total_rows": 150,
+      "total_rows": 100,
       "pages": 3,
       "rows": [
         {
@@ -2988,10 +2992,10 @@
           "Team": "UCLA",
           "Cl": "Sr.",
           "Position": "INF",
-          "G": "60",
-          "AB": "186",
-          "H": "93",
-          "BA": ".500"
+          "G": "61",
+          "AB": "189",
+          "H": "94",
+          "BA": ".497"
         },
         {
           "Rank": "5",
@@ -3006,17 +3010,6 @@
         },
         {
           "Rank": "6",
-          "Name": "Megan Grant",
-          "Team": "UCLA",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "60",
-          "AB": "147",
-          "H": "69",
-          "BA": ".469"
-        },
-        {
-          "Rank": "7",
           "Name": "Rachel Carey",
           "Team": "Binghamton",
           "Cl": "So.",
@@ -3027,7 +3020,7 @@
           "BA": ".468"
         },
         {
-          "Rank": "8",
+          "Rank": "7",
           "Name": "Emily LeGette",
           "Team": "North Carolina",
           "Cl": "Jr.",
@@ -3035,6 +3028,17 @@
           "G": "51",
           "AB": "137",
           "H": "64",
+          "BA": ".467"
+        },
+        {
+          "Rank": "8",
+          "Name": "Megan Grant",
+          "Team": "UCLA",
+          "Cl": "Sr.",
+          "Position": "UT",
+          "G": "61",
+          "AB": "150",
+          "H": "70",
           "BA": ".467"
         },
         {
@@ -3126,18 +3130,7 @@
           "BA": ".457"
         },
         {
-          "Rank": "-",
-          "Name": "Kaitlyn Terry",
-          "Team": "Texas Tech",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "G": "63",
-          "AB": "175",
-          "H": "80",
-          "BA": ".457"
-        },
-        {
-          "Rank": "18",
+          "Rank": "17",
           "Name": "Maggie Murphy",
           "Team": "Oakland",
           "Cl": "Sr.",
@@ -3145,6 +3138,17 @@
           "G": "38",
           "AB": "101",
           "H": "46",
+          "BA": ".455"
+        },
+        {
+          "Rank": "18",
+          "Name": "Kaitlyn Terry",
+          "Team": "Texas Tech",
+          "Cl": "Jr.",
+          "Position": "SP",
+          "G": "64",
+          "AB": "178",
+          "H": "81",
           "BA": ".455"
         },
         {
@@ -3215,6 +3219,17 @@
         },
         {
           "Rank": "25",
+          "Name": "Jackie Lis",
+          "Team": "Texas Tech",
+          "Cl": "Sr.",
+          "Position": "INF",
+          "G": "63",
+          "AB": "159",
+          "H": "71",
+          "BA": ".447"
+        },
+        {
+          "Rank": "26",
           "Name": "Taylor Shumaker",
           "Team": "Florida",
           "Cl": "So.",
@@ -3225,7 +3240,7 @@
           "BA": ".445"
         },
         {
-          "Rank": "26",
+          "Rank": "27",
           "Name": "Kai Minor",
           "Team": "Oklahoma",
           "Cl": "Fr.",
@@ -3236,7 +3251,7 @@
           "BA": ".444"
         },
         {
-          "Rank": "27",
+          "Rank": "28",
           "Name": "Sofia Zielinski",
           "Team": "Saint Francis",
           "Cl": "So.",
@@ -3247,7 +3262,7 @@
           "BA": ".444"
         },
         {
-          "Rank": "28",
+          "Rank": "29",
           "Name": "Jessica Oakland",
           "Team": "Duke",
           "Cl": "Jr.",
@@ -3256,17 +3271,6 @@
           "AB": "176",
           "H": "78",
           "BA": ".443"
-        },
-        {
-          "Rank": "29",
-          "Name": "Jackie Lis",
-          "Team": "Texas Tech",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "62",
-          "AB": "156",
-          "H": "69",
-          "BA": ".442"
         },
         {
           "Rank": "30",
@@ -3325,6 +3329,17 @@
         },
         {
           "Rank": "35",
+          "Name": "Mia Williams",
+          "Team": "Texas Tech",
+          "Cl": "Jr.",
+          "Position": "2B",
+          "G": "65",
+          "AB": "192",
+          "H": "84",
+          "BA": ".438"
+        },
+        {
+          "Rank": "36",
           "Name": "Rylee Spindler",
           "Team": "Belmont",
           "Cl": "So.",
@@ -3335,7 +3350,7 @@
           "BA": ".437"
         },
         {
-          "Rank": "36",
+          "Rank": "37",
           "Name": "Kassidy Chance",
           "Team": "McNeese",
           "Cl": "So.",
@@ -3346,7 +3361,7 @@
           "BA": ".437"
         },
         {
-          "Rank": "37",
+          "Rank": "38",
           "Name": "D'Auna Jennings",
           "Team": "Duke",
           "Cl": "Sr.",
@@ -3357,7 +3372,7 @@
           "BA": ".437"
         },
         {
-          "Rank": "38",
+          "Rank": "39",
           "Name": "Courtney Poulich",
           "Team": "Robert Morris",
           "Cl": "Sr.",
@@ -3365,17 +3380,6 @@
           "G": "49",
           "AB": "165",
           "H": "72",
-          "BA": ".436"
-        },
-        {
-          "Rank": "39",
-          "Name": "Katie Stewart",
-          "Team": "Texas",
-          "Cl": "Jr.",
-          "Position": "UT",
-          "G": "58",
-          "AB": "163",
-          "H": "71",
           "BA": ".436"
         },
         {
@@ -3391,13 +3395,13 @@
         },
         {
           "Rank": "41",
-          "Name": "Mia Williams",
+          "Name": "Mihyia Davis",
           "Team": "Texas Tech",
-          "Cl": "Jr.",
-          "Position": "2B",
-          "G": "64",
-          "AB": "191",
-          "H": "83",
+          "Cl": "Sr.",
+          "Position": "OF",
+          "G": "65",
+          "AB": "214",
+          "H": "93",
           "BA": ".435"
         },
         {
@@ -3446,17 +3450,6 @@
         },
         {
           "Rank": "46",
-          "Name": "Mihyia Davis",
-          "Team": "Texas Tech",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "64",
-          "AB": "211",
-          "H": "91",
-          "BA": ".431"
-        },
-        {
-          "Rank": "47",
           "Name": "Ellie Vance",
           "Team": "SFA",
           "Cl": "Sr.",
@@ -3467,7 +3460,7 @@
           "BA": ".430"
         },
         {
-          "Rank": "48",
+          "Rank": "47",
           "Name": "Makena Alexander",
           "Team": "Butler",
           "Cl": "Jr.",
@@ -3478,7 +3471,7 @@
           "BA": ".430"
         },
         {
-          "Rank": "49",
+          "Rank": "48",
           "Name": "Macyn Kirby",
           "Team": "Lipscomb",
           "Cl": "Jr.",
@@ -3500,557 +3493,18 @@
           "BA": ".429"
         },
         {
-          "Rank": "51",
-          "Name": "Rylee Slimp",
-          "Team": "UCLA",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "60",
-          "AB": "194",
-          "H": "83",
-          "BA": ".428"
-        },
-        {
-          "Rank": "52",
-          "Name": "Laila Clark",
-          "Team": "Southern U.",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "50",
-          "AB": "152",
-          "H": "65",
-          "BA": ".428"
-        },
-        {
-          "Rank": "53",
-          "Name": "Bailey Manos",
-          "Team": "Miami (OH)",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "53",
-          "AB": "171",
-          "H": "73",
-          "BA": ".427"
-        },
-        {
-          "Rank": "54",
-          "Name": "Graciela Dominguez",
-          "Team": "Princeton",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "49",
-          "AB": "164",
-          "H": "70",
-          "BA": ".427"
-        },
-        {
-          "Rank": "55",
-          "Name": "Tatum Hall",
-          "Team": "Utah Valley",
-          "Cl": "So.",
-          "Position": "UT",
-          "G": "53",
-          "AB": "150",
-          "H": "64",
-          "BA": ".427"
-        },
-        {
-          "Rank": "56",
-          "Name": "Britney Moreno",
-          "Team": "Utah Valley",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "54",
-          "AB": "186",
-          "H": "79",
-          "BA": ".425"
-        },
-        {
-          "Rank": "57",
-          "Name": "Amailee Morales",
-          "Team": "Northern Colo.",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "51",
-          "AB": "158",
-          "H": "67",
-          "BA": ".424"
-        },
-        {
-          "Rank": "58",
-          "Name": "Hannah Di Genova",
-          "Team": "Nevada",
-          "Cl": "Sr.",
-          "Position": "1B",
-          "G": "59",
-          "AB": "184",
-          "H": "78",
-          "BA": ".424"
-        },
-        {
-          "Rank": "59",
-          "Name": "Ellie Facher",
-          "Team": "Robert Morris",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "48",
-          "AB": "177",
-          "H": "75",
-          "BA": ".424"
-        },
-        {
-          "Rank": "60",
-          "Name": "Jenna Blanton",
-          "Team": "Western Ky.",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "53",
-          "AB": "175",
-          "H": "74",
-          "BA": ".423"
-        },
-        {
-          "Rank": "61",
-          "Name": "Sofia Vega",
-          "Team": "Quinnipiac",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "45",
-          "AB": "142",
-          "H": "60",
-          "BA": ".423"
-        },
-        {
-          "Rank": "62",
-          "Name": "Hannah Ferguson",
-          "Team": "Saint Mary's (CA)",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "56",
-          "AB": "187",
-          "H": "79",
-          "BA": ".422"
-        },
-        {
-          "Rank": "63",
-          "Name": "Nicole Allen",
-          "Team": "Buffalo",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "56",
-          "AB": "190",
-          "H": "80",
-          "BA": ".421"
-        },
-        {
-          "Rank": "-",
-          "Name": "Keyannah Chavez",
-          "Team": "UNLV",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "53",
-          "AB": "152",
-          "H": "64",
-          "BA": ".421"
-        },
-        {
-          "Rank": "65",
-          "Name": "Camryn McDonald",
-          "Team": "Idaho St.",
-          "Cl": "Jr.",
-          "Position": "ph",
-          "G": "54",
-          "AB": "136",
-          "H": "57",
-          "BA": ".419"
-        },
-        {
-          "Rank": "66",
-          "Name": "Jenna Lord",
-          "Team": "Charlotte",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "58",
-          "AB": "172",
-          "H": "72",
-          "BA": ".419"
-        },
-        {
-          "Rank": "-",
-          "Name": "Taylor Nicholson",
-          "Team": "UMBC",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "15",
-          "AB": "43",
-          "H": "18",
-          "BA": ".419"
-        },
-        {
-          "Rank": "68",
-          "Name": "Avari Morris",
-          "Team": "Seattle U",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "G": "51",
-          "AB": "175",
-          "H": "73",
-          "BA": ".417"
-        },
-        {
-          "Rank": "69",
-          "Name": "Kayden Henry",
+          "Rank": "50",
+          "Name": "Katie Stewart",
           "Team": "Texas",
           "Cl": "Jr.",
-          "Position": "OF",
-          "G": "58",
-          "AB": "187",
-          "H": "78",
-          "BA": ".417"
-        },
-        {
-          "Rank": "70",
-          "Name": "Jordyn Frahm",
-          "Team": "Nebraska",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "G": "56",
-          "AB": "185",
-          "H": "77",
-          "BA": ".416"
-        },
-        {
-          "Rank": "71",
-          "Name": "Macee Eaton",
-          "Team": "Virginia",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "55",
-          "AB": "173",
-          "H": "72",
-          "BA": ".416"
-        },
-        {
-          "Rank": "72",
-          "Name": "Morgan Smith",
-          "Team": "Prairie View",
-          "Cl": "Fr.",
           "Position": "UT",
-          "G": "35",
-          "AB": "77",
-          "H": "32",
-          "BA": ".416"
-        },
-        {
-          "Rank": "73",
-          "Name": "Reagan Bartholomew",
-          "Team": "Iowa St.",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "55",
-          "AB": "171",
+          "G": "59",
+          "AB": "166",
           "H": "71",
-          "BA": ".415"
-        },
-        {
-          "Rank": "74",
-          "Name": "Michelle Diaz",
-          "Team": "Mississippi Val.",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "38",
-          "AB": "106",
-          "H": "44",
-          "BA": ".415"
-        },
-        {
-          "Rank": "75",
-          "Name": "Bailey Sample",
-          "Team": "Omaha",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "49",
-          "AB": "147",
-          "H": "61",
-          "BA": ".415"
-        },
-        {
-          "Rank": "76",
-          "Name": "Jade Montgomery",
-          "Team": "Penn",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "44",
-          "AB": "135",
-          "H": "56",
-          "BA": ".415"
-        },
-        {
-          "Rank": "77",
-          "Name": "Jace Jackson",
-          "Team": "Jackson St.",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "48",
-          "AB": "140",
-          "H": "58",
-          "BA": ".414"
+          "BA": ".428"
         },
         {
           "Rank": "-",
-          "Name": "Mya Perez",
-          "Team": "Texas A&M",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "57",
-          "AB": "140",
-          "H": "58",
-          "BA": ".414"
-        },
-        {
-          "Rank": "79",
-          "Name": "Meagan Lee",
-          "Team": "Akron",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "60",
-          "AB": "198",
-          "H": "82",
-          "BA": ".414"
-        },
-        {
-          "Rank": "80",
-          "Name": "Odyssey Torres",
-          "Team": "Massachusetts",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "46",
-          "AB": "128",
-          "H": "53",
-          "BA": ".414"
-        },
-        {
-          "Rank": "81",
-          "Name": "Jordan Lynch",
-          "Team": "Virginia Tech",
-          "Cl": "So.",
-          "Position": "UT",
-          "G": "60",
-          "AB": "203",
-          "H": "84",
-          "BA": ".414"
-        },
-        {
-          "Rank": "82",
-          "Name": "Charlie Montgomery",
-          "Team": "Campbell",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "57",
-          "AB": "191",
-          "H": "79",
-          "BA": ".414"
-        },
-        {
-          "Rank": "83",
-          "Name": "Ka'Liyah Gipson",
-          "Team": "Jackson St.",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "40",
-          "AB": "121",
-          "H": "50",
-          "BA": ".413"
-        },
-        {
-          "Rank": "84",
-          "Name": "Brianna Stanley",
-          "Team": "Wofford",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "54",
-          "AB": "165",
-          "H": "68",
-          "BA": ".412"
-        },
-        {
-          "Rank": "85",
-          "Name": "Lily Yepez",
-          "Team": "Hofstra",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "46",
-          "AB": "124",
-          "H": "51",
-          "BA": ".411"
-        },
-        {
-          "Rank": "86",
-          "Name": "Hailey Conger",
-          "Team": "Butler",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "46",
-          "AB": "139",
-          "H": "57",
-          "BA": ".410"
-        },
-        {
-          "Rank": "87",
-          "Name": "Sophia Knight",
-          "Team": "Tennessee",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "50",
-          "AB": "161",
-          "H": "66",
-          "BA": ".410"
-        },
-        {
-          "Rank": "88",
-          "Name": "Mia Liscano",
-          "Team": "Louisiana",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "55",
-          "AB": "144",
-          "H": "59",
-          "BA": ".410"
-        },
-        {
-          "Rank": "89",
-          "Name": "Danitza Hernandez",
-          "Team": "Miami (OH)",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "56",
-          "AB": "166",
-          "H": "68",
-          "BA": ".410"
-        },
-        {
-          "Rank": "90",
-          "Name": "Addison Foster",
-          "Team": "Virginia Tech",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "60",
-          "AB": "188",
-          "H": "77",
-          "BA": ".410"
-        },
-        {
-          "Rank": "91",
-          "Name": "Carmynn Bonner",
-          "Team": "Hampton",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "G": "43",
-          "AB": "127",
-          "H": "52",
-          "BA": ".409"
-        },
-        {
-          "Rank": "92",
-          "Name": "Sereniti Trice",
-          "Team": "Arizona",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "55",
-          "AB": "181",
-          "H": "74",
-          "BA": ".409"
-        },
-        {
-          "Rank": "93",
-          "Name": "Kate Lappe",
-          "Team": "UNI",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "53",
-          "AB": "159",
-          "H": "65",
-          "BA": ".409"
-        },
-        {
-          "Rank": "94",
-          "Name": "Kendra Lewis",
-          "Team": "James Madison",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "49",
-          "AB": "120",
-          "H": "49",
-          "BA": ".408"
-        },
-        {
-          "Rank": "95",
-          "Name": "Taliyah Thomas",
-          "Team": "USC Upstate",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "59",
-          "AB": "196",
-          "H": "80",
-          "BA": ".408"
-        },
-        {
-          "Rank": "96",
-          "Name": "Jace Jackson",
-          "Team": "Tennessee St.",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "40",
-          "AB": "125",
-          "H": "51",
-          "BA": ".408"
-        },
-        {
-          "Rank": "97",
-          "Name": "Emily Jones",
-          "Team": "Stanford",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "53",
-          "AB": "157",
-          "H": "64",
-          "BA": ".408"
-        },
-        {
-          "Rank": "98",
-          "Name": "Kennedy Powell",
-          "Team": "Texas A&M",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "57",
-          "AB": "199",
-          "H": "81",
-          "BA": ".407"
-        },
-        {
-          "Rank": "99",
-          "Name": "Sarah Gordon",
-          "Team": "Georgia",
-          "Cl": "Sr.",
-          "Position": "C",
-          "G": "61",
-          "AB": "177",
-          "H": "72",
-          "BA": ".407"
-        },
-        {
-          "Rank": "100",
-          "Name": "Kayla Zaid",
-          "Team": "Prairie View",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "42",
-          "AB": "123",
-          "H": "50",
-          "BA": ".407"
-        },
-        {
-          "Rank": "101",
           "Name": "Colby McClinton",
           "Team": "Cal St. Fullerton",
           "Cl": "Sr.",
@@ -4106,17 +3560,6 @@
         },
         {
           "Rank": "106",
-          "Name": "Alexis Ramirez",
-          "Team": "UCLA",
-          "Cl": "Jr.",
-          "Position": "C",
-          "G": "48",
-          "AB": "131",
-          "H": "53",
-          "BA": ".405"
-        },
-        {
-          "Rank": "107",
           "Name": "Isabela Emerling",
           "Team": "Oklahoma",
           "Cl": "Sr.",
@@ -4127,7 +3570,7 @@
           "BA": ".404"
         },
         {
-          "Rank": "108",
+          "Rank": "107",
           "Name": "Kylie Doherty",
           "Team": "Boston U.",
           "Cl": "Jr.",
@@ -4149,7 +3592,7 @@
           "BA": ".404"
         },
         {
-          "Rank": "110",
+          "Rank": "109",
           "Name": "Maya McPherson",
           "Team": "Western Caro.",
           "Cl": "Jr.",
@@ -4160,7 +3603,7 @@
           "BA": ".403"
         },
         {
-          "Rank": "111",
+          "Rank": "110",
           "Name": "Jolie Adams",
           "Team": "DePaul",
           "Cl": "So.",
@@ -4171,7 +3614,7 @@
           "BA": ".403"
         },
         {
-          "Rank": "112",
+          "Rank": "111",
           "Name": "Cameron Dunn",
           "Team": "Providence",
           "Cl": "Jr.",
@@ -4193,7 +3636,7 @@
           "BA": ".403"
         },
         {
-          "Rank": "114",
+          "Rank": "113",
           "Name": "Bri Despines",
           "Team": "Louisville",
           "Cl": "Sr.",
@@ -4204,7 +3647,7 @@
           "BA": ".402"
         },
         {
-          "Rank": "115",
+          "Rank": "114",
           "Name": "Addie Lucier",
           "Team": "Wofford",
           "Cl": "So.",
@@ -4215,7 +3658,7 @@
           "BA": ".402"
         },
         {
-          "Rank": "116",
+          "Rank": "115",
           "Name": "Dallas Hill",
           "Team": "South Carolina St.",
           "Cl": "---",
@@ -4226,7 +3669,7 @@
           "BA": ".402"
         },
         {
-          "Rank": "117",
+          "Rank": "116",
           "Name": "Lindsay Henson",
           "Team": "Queens (NC)",
           "Cl": "Sr.",
@@ -4237,7 +3680,7 @@
           "BA": ".401"
         },
         {
-          "Rank": "118",
+          "Rank": "117",
           "Name": "Lafulafu Malepeai",
           "Team": "Sacramento St.",
           "Cl": "Sr.",
@@ -4248,7 +3691,7 @@
           "BA": ".401"
         },
         {
-          "Rank": "119",
+          "Rank": "118",
           "Name": "Bella Atkinson",
           "Team": "Illinois St.",
           "Cl": "Sr.",
@@ -4259,18 +3702,7 @@
           "BA": ".401"
         },
         {
-          "Rank": "120",
-          "Name": "Alexis Pupillo",
-          "Team": "Alabama",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "61",
-          "AB": "177",
-          "H": "71",
-          "BA": ".401"
-        },
-        {
-          "Rank": "121",
+          "Rank": "119",
           "Name": "Anna Sanders",
           "Team": "Lindenwood",
           "Cl": "So.",
@@ -4281,7 +3713,7 @@
           "BA": ".401"
         },
         {
-          "Rank": "122",
+          "Rank": "120",
           "Name": "Jocelyn Erickson",
           "Team": "Florida",
           "Cl": "Sr.",
@@ -4347,7 +3779,7 @@
           "BA": ".400"
         },
         {
-          "Rank": "128",
+          "Rank": "126",
           "Name": "Nora Megenity",
           "Team": "Colgate",
           "Cl": "Fr.",
@@ -4358,7 +3790,7 @@
           "BA": ".399"
         },
         {
-          "Rank": "129",
+          "Rank": "127",
           "Name": "Angela Petrovitch",
           "Team": "Central Mich.",
           "Cl": "Sr.",
@@ -4369,7 +3801,7 @@
           "BA": ".399"
         },
         {
-          "Rank": "130",
+          "Rank": "128",
           "Name": "Elon Butler",
           "Team": "Oregon",
           "Cl": "Sr.",
@@ -4380,7 +3812,7 @@
           "BA": ".399"
         },
         {
-          "Rank": "131",
+          "Rank": "129",
           "Name": "Kyra Chan",
           "Team": "Stanford",
           "Cl": "Sr.",
@@ -4391,7 +3823,7 @@
           "BA": ".399"
         },
         {
-          "Rank": "132",
+          "Rank": "130",
           "Name": "Sarah Beth Brake",
           "Team": "Jacksonville",
           "Cl": "Sr.",
@@ -4402,7 +3834,7 @@
           "BA": ".399"
         },
         {
-          "Rank": "133",
+          "Rank": "131",
           "Name": "Kenzie-Lyn Farrier",
           "Team": "California Baptist",
           "Cl": "Fr.",
@@ -4413,7 +3845,18 @@
           "BA": ".398"
         },
         {
-          "Rank": "134",
+          "Rank": "132",
+          "Name": "Alexis Pupillo",
+          "Team": "Alabama",
+          "Cl": "Sr.",
+          "Position": "UT",
+          "G": "62",
+          "AB": "181",
+          "H": "72",
+          "BA": ".398"
+        },
+        {
+          "Rank": "133",
           "Name": "Claire SIsco",
           "Team": "Nicholls",
           "Cl": "Sr.",
@@ -4424,7 +3867,7 @@
           "BA": ".398"
         },
         {
-          "Rank": "135",
+          "Rank": "134",
           "Name": "Lexie Roberts",
           "Team": "North Carolina",
           "Cl": "Sr.",
@@ -4435,7 +3878,7 @@
           "BA": ".397"
         },
         {
-          "Rank": "136",
+          "Rank": "135",
           "Name": "Amai Hanta",
           "Team": "North Dakota St.",
           "Cl": "So.",
@@ -4468,7 +3911,7 @@
           "BA": ".397"
         },
         {
-          "Rank": "139",
+          "Rank": "138",
           "Name": "Laken Lienhard",
           "Team": "St. Thomas (MN)",
           "Cl": "Sr.",
@@ -4479,7 +3922,7 @@
           "BA": ".397"
         },
         {
-          "Rank": "140",
+          "Rank": "139",
           "Name": "Cassidy Kettleman",
           "Team": "Indiana",
           "Cl": "Sr.",
@@ -4490,7 +3933,7 @@
           "BA": ".397"
         },
         {
-          "Rank": "141",
+          "Rank": "140",
           "Name": "Shelby Morris",
           "Team": "Southeastern La.",
           "Cl": "So.",
@@ -4501,7 +3944,7 @@
           "BA": ".396"
         },
         {
-          "Rank": "142",
+          "Rank": "141",
           "Name": "Amari Harper",
           "Team": "Oregon",
           "Cl": "Sr.",
@@ -4512,7 +3955,7 @@
           "BA": ".396"
         },
         {
-          "Rank": "143",
+          "Rank": "142",
           "Name": "Aly VanBrandt",
           "Team": "Indiana",
           "Cl": "Jr.",
@@ -4523,7 +3966,7 @@
           "BA": ".396"
         },
         {
-          "Rank": "144",
+          "Rank": "143",
           "Name": "Jordyn Dimond",
           "Team": "Charleston So.",
           "Cl": "Jr.",
@@ -4534,12 +3977,23 @@
           "BA": ".396"
         },
         {
-          "Rank": "145",
+          "Rank": "144",
           "Name": "Payton Brown",
           "Team": "Western Ill.",
           "Cl": "Jr.",
           "Position": "UT",
           "G": "46",
+          "AB": "134",
+          "H": "53",
+          "BA": ".396"
+        },
+        {
+          "Rank": "-",
+          "Name": "Alexis Ramirez",
+          "Team": "UCLA",
+          "Cl": "Jr.",
+          "Position": "C",
+          "G": "49",
           "AB": "134",
           "H": "53",
           "BA": ".396"
@@ -4603,7 +4057,7 @@
     },
     "Caught Stealing By": {
       "category": "Caught Stealing By",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -6155,11 +5609,13 @@
           "G": "54",
           "CSB": "8"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-05-29T06:59:48.310473+00:00"
     },
     "Complete Games": {
       "category": "Complete Games",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -9079,11 +8535,13 @@
           "App": "30",
           "CG": "6"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-05-29T06:59:48.310473+00:00"
     },
     "Doubles": {
       "category": "Doubles",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -11004,7 +10462,9 @@
           "G": "61",
           "2B": "14"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-05-29T06:59:48.310473+00:00"
     },
     "Doubles Per Game": {
       "category": "Doubles Per Game",
@@ -11019,7 +10479,7 @@
         "2B",
         "PG"
       ],
-      "total_rows": 151,
+      "total_rows": 150,
       "pages": 4,
       "rows": [
         {
@@ -11244,6 +10704,16 @@
         },
         {
           "Rank": "23",
+          "Name": "Mia Williams",
+          "Team": "Texas Tech",
+          "Cl": "Jr.",
+          "Position": "2B",
+          "G": "65",
+          "2B": "23",
+          "PG": ".35"
+        },
+        {
+          "Rank": "24",
           "Name": "Grace Lopez",
           "Team": "Montana",
           "Cl": "So.",
@@ -11263,7 +10733,7 @@
           "PG": ".35"
         },
         {
-          "Rank": "25",
+          "Rank": "26",
           "Name": "Kelly Fricker",
           "Team": "Lehigh",
           "Cl": "So.",
@@ -11273,7 +10743,7 @@
           "PG": ".35"
         },
         {
-          "Rank": "26",
+          "Rank": "27",
           "Name": "Aminah Vega",
           "Team": "Duke",
           "Cl": "Sr.",
@@ -11283,7 +10753,7 @@
           "PG": ".35"
         },
         {
-          "Rank": "27",
+          "Rank": "28",
           "Name": "Danielle Stewart",
           "Team": "NIU",
           "Cl": "Sr.",
@@ -11303,7 +10773,7 @@
           "PG": ".35"
         },
         {
-          "Rank": "29",
+          "Rank": "30",
           "Name": "Gracie Ander",
           "Team": "Green Bay",
           "Cl": "Fr.",
@@ -11311,16 +10781,6 @@
           "G": "46",
           "2B": "16",
           "PG": ".35"
-        },
-        {
-          "Rank": "30",
-          "Name": "Mia Williams",
-          "Team": "Texas Tech",
-          "Cl": "Jr.",
-          "Position": "2B",
-          "G": "64",
-          "2B": "22",
-          "PG": ".34"
         },
         {
           "Rank": "31",
@@ -11494,16 +10954,6 @@
         },
         {
           "Rank": "48",
-          "Name": "Brinli Bain",
-          "Team": "Arkansas",
-          "Cl": "Fr.",
-          "Position": "UT",
-          "G": "58",
-          "2B": "19",
-          "PG": ".33"
-        },
-        {
-          "Rank": "-",
           "Name": "Belle Hummel",
           "Team": "Ohio",
           "Cl": "Sr.",
@@ -11533,7 +10983,7 @@
           "PG": ".33"
         },
         {
-          "Rank": "52",
+          "Rank": "51",
           "Name": "Elon Butler",
           "Team": "Oregon",
           "Cl": "Sr.",
@@ -11543,7 +10993,7 @@
           "PG": ".33"
         },
         {
-          "Rank": "53",
+          "Rank": "52",
           "Name": "Caroline Hall",
           "Team": "Lafayette",
           "Cl": "So.",
@@ -11563,7 +11013,7 @@
           "PG": ".33"
         },
         {
-          "Rank": "55",
+          "Rank": "54",
           "Name": "Riley Baber",
           "Team": "Missouri St.",
           "Cl": "So.",
@@ -11583,7 +11033,7 @@
           "PG": ".33"
         },
         {
-          "Rank": "57",
+          "Rank": "56",
           "Name": "Sara Ebner",
           "Team": "Green Bay",
           "Cl": "Jr.",
@@ -11603,7 +11053,7 @@
           "PG": ".33"
         },
         {
-          "Rank": "59",
+          "Rank": "58",
           "Name": "Kailey Bryant",
           "Team": "Norfolk St.",
           "Cl": "Jr.",
@@ -11623,7 +11073,7 @@
           "PG": ".33"
         },
         {
-          "Rank": "61",
+          "Rank": "60",
           "Name": "Sydney Farmer",
           "Team": "Morehead St.",
           "Cl": "Jr.",
@@ -11633,7 +11083,7 @@
           "PG": ".32"
         },
         {
-          "Rank": "62",
+          "Rank": "61",
           "Name": "Cydnee Schneider",
           "Team": "Southeastern La.",
           "Cl": "Sr.",
@@ -11643,7 +11093,17 @@
           "PG": ".32"
         },
         {
-          "Rank": "63",
+          "Rank": "62",
+          "Name": "Brinli Bain",
+          "Team": "Arkansas",
+          "Cl": "Fr.",
+          "Position": "UT",
+          "G": "59",
+          "2B": "19",
+          "PG": ".32"
+        },
+        {
+          "Rank": "-",
           "Name": "Alex Cooper",
           "Team": "Indiana",
           "Cl": "Jr.",
@@ -12134,20 +11594,20 @@
         },
         {
           "Rank": "-",
-          "Name": "Bri Despines",
-          "Team": "Louisville",
+          "Name": "Hannah Camenzind",
+          "Team": "Nebraska",
           "Cl": "Sr.",
-          "Position": "C",
+          "Position": "SP/RP",
           "G": "58",
           "2B": "17",
           "PG": ".29"
         },
         {
           "Rank": "-",
-          "Name": "Kayden Henry",
-          "Team": "Texas",
-          "Cl": "Jr.",
-          "Position": "OF",
+          "Name": "Bri Despines",
+          "Team": "Louisville",
+          "Cl": "Sr.",
+          "Position": "C",
           "G": "58",
           "2B": "17",
           "PG": ".29"
@@ -12214,6 +11674,16 @@
         },
         {
           "Rank": "120",
+          "Name": "Kayden Henry",
+          "Team": "Texas",
+          "Cl": "Jr.",
+          "Position": "OF",
+          "G": "59",
+          "2B": "17",
+          "PG": ".29"
+        },
+        {
+          "Rank": "121",
           "Name": "Brianna Delaney",
           "Team": "Buffalo",
           "Cl": "Jr.",
@@ -12313,16 +11783,6 @@
           "PG": ".29"
         },
         {
-          "Rank": "130",
-          "Name": "Jordan Woolery",
-          "Team": "UCLA",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "60",
-          "2B": "17",
-          "PG": ".28"
-        },
-        {
           "Rank": "131",
           "Name": "Katelyn Callahan",
           "Team": "UNI",
@@ -12394,16 +11854,6 @@
         },
         {
           "Rank": "138",
-          "Name": "Hannah Camenzind",
-          "Team": "Nebraska",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "G": "57",
-          "2B": "16",
-          "PG": ".28"
-        },
-        {
-          "Rank": "-",
           "Name": "Ariel Kowalewski",
           "Team": "Texas A&M",
           "Cl": "So.",
@@ -12423,7 +11873,7 @@
           "PG": ".28"
         },
         {
-          "Rank": "141",
+          "Rank": "140",
           "Name": "Laila Clark",
           "Team": "Southern U.",
           "Cl": "So.",
@@ -12433,7 +11883,7 @@
           "PG": ".28"
         },
         {
-          "Rank": "142",
+          "Rank": "141",
           "Name": "Charlize Cai",
           "Team": "Cornell",
           "Cl": "So.",
@@ -12453,7 +11903,7 @@
           "PG": ".28"
         },
         {
-          "Rank": "144",
+          "Rank": "143",
           "Name": "Sarah Gordon",
           "Team": "Georgia",
           "Cl": "Sr.",
@@ -12468,6 +11918,16 @@
           "Team": "Texas St.",
           "Cl": "Sr.",
           "Position": "OF",
+          "G": "61",
+          "2B": "17",
+          "PG": ".28"
+        },
+        {
+          "Rank": "-",
+          "Name": "Jordan Woolery",
+          "Team": "UCLA",
+          "Cl": "Sr.",
+          "Position": "INF",
           "G": "61",
           "2B": "17",
           "PG": ".28"
@@ -12518,16 +11978,6 @@
           "Team": "Green Bay",
           "Cl": "Fr.",
           "Position": "rf",
-          "G": "47",
-          "2B": "13",
-          "PG": ".28"
-        },
-        {
-          "Rank": "-",
-          "Name": "Laken Lienhard",
-          "Team": "St. Thomas (MN)",
-          "Cl": "Sr.",
-          "Position": "UT",
           "G": "47",
           "2B": "13",
           "PG": ".28"
@@ -12582,11 +12032,11 @@
           "Team": "Tennessee",
           "Cl": "Jr.",
           "Position": "SP/RP",
-          "App": "28",
-          "IP": "119.0",
+          "App": "29",
+          "IP": "123.0",
           "R": "26",
           "ER": "19",
-          "ERA": "1.12"
+          "ERA": "1.08"
         },
         {
           "Rank": "4",
@@ -12594,11 +12044,11 @@
           "Team": "Nebraska",
           "Cl": "Sr.",
           "Position": "SP/RP",
-          "App": "40",
-          "IP": "171.2",
-          "R": "32",
-          "ER": "28",
-          "ERA": "1.14"
+          "App": "41",
+          "IP": "181.2",
+          "R": "35",
+          "ER": "31",
+          "ERA": "1.19"
         },
         {
           "Rank": "5",
@@ -12618,11 +12068,11 @@
           "Team": "Alabama",
           "Cl": "Jr.",
           "Position": "SP",
-          "App": "33",
-          "IP": "156.2",
-          "R": "34",
-          "ER": "29",
-          "ERA": "1.30"
+          "App": "34",
+          "IP": "163.2",
+          "R": "37",
+          "ER": "32",
+          "ERA": "1.37"
         },
         {
           "Rank": "7",
@@ -12666,11 +12116,11 @@
           "Team": "Tennessee",
           "Cl": "Sr.",
           "Position": "SP",
-          "App": "31",
-          "IP": "132.1",
-          "R": "38",
-          "ER": "29",
-          "ERA": "1.53"
+          "App": "32",
+          "IP": "135.1",
+          "R": "41",
+          "ER": "31",
+          "ERA": "1.60"
         },
         {
           "Rank": "11",
@@ -12686,6 +12136,18 @@
         },
         {
           "Rank": "12",
+          "Name": "Kaitlyn Terry",
+          "Team": "Texas Tech",
+          "Cl": "Jr.",
+          "Position": "SP",
+          "App": "35",
+          "IP": "134.1",
+          "R": "47",
+          "ER": "32",
+          "ERA": "1.67"
+        },
+        {
+          "Rank": "13",
           "Name": "Hallie Burns",
           "Team": "Southeastern La.",
           "Cl": "So.",
@@ -12694,18 +12156,6 @@
           "IP": "112.2",
           "R": "33",
           "ER": "27",
-          "ERA": "1.68"
-        },
-        {
-          "Rank": "13",
-          "Name": "Kaitlyn Terry",
-          "Team": "Texas Tech",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "34",
-          "IP": "133.1",
-          "R": "47",
-          "ER": "32",
           "ERA": "1.68"
         },
         {
@@ -12722,6 +12172,18 @@
         },
         {
           "Rank": "15",
+          "Name": "NiJaree Canady",
+          "Team": "Texas Tech",
+          "Cl": "Sr.",
+          "Position": "SP/RP",
+          "App": "40",
+          "IP": "164.2",
+          "R": "53",
+          "ER": "41",
+          "ERA": "1.74"
+        },
+        {
+          "Rank": "16",
           "Name": "Aaliyah Zabala",
           "Team": "Southern U.",
           "Cl": "So.",
@@ -12731,18 +12193,6 @@
           "R": "49",
           "ER": "37",
           "ERA": "1.77"
-        },
-        {
-          "Rank": "16",
-          "Name": "NiJaree Canady",
-          "Team": "Texas Tech",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "39",
-          "IP": "160.2",
-          "R": "53",
-          "ER": "41",
-          "ERA": "1.79"
         },
         {
           "Rank": "17",
@@ -12786,10 +12236,10 @@
           "Team": "Arkansas",
           "Cl": "So.",
           "Position": "UT",
-          "App": "26",
-          "IP": "103.0",
-          "R": "28",
-          "ER": "28",
+          "App": "27",
+          "IP": "107.0",
+          "R": "29",
+          "ER": "29",
           "ERA": "1.90"
         },
         {
@@ -12878,18 +12328,6 @@
         },
         {
           "Rank": "28",
-          "Name": "Robyn Herron",
-          "Team": "Arkansas",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "29",
-          "IP": "113.2",
-          "R": "44",
-          "ER": "34",
-          "ERA": "2.09"
-        },
-        {
-          "Rank": "29",
           "Name": "Sam Kowalski",
           "Team": "Sacred Heart",
           "Cl": "Sr.",
@@ -12901,7 +12339,7 @@
           "ERA": "2.09"
         },
         {
-          "Rank": "30",
+          "Rank": "29",
           "Name": "Maddia Groff",
           "Team": "Omaha",
           "Cl": "Jr.",
@@ -12913,7 +12351,7 @@
           "ERA": "2.10"
         },
         {
-          "Rank": "31",
+          "Rank": "30",
           "Name": "Ashanti McDade",
           "Team": "ULM",
           "Cl": "Sr.",
@@ -12925,7 +12363,7 @@
           "ERA": "2.12"
         },
         {
-          "Rank": "32",
+          "Rank": "31",
           "Name": "Camille Hamilton",
           "Team": "UNCW",
           "Cl": "Fr.",
@@ -12937,7 +12375,7 @@
           "ERA": "2.16"
         },
         {
-          "Rank": "33",
+          "Rank": "32",
           "Name": "Izzy Kemp",
           "Team": "Dayton",
           "Cl": "Sr.",
@@ -12949,7 +12387,7 @@
           "ERA": "2.17"
         },
         {
-          "Rank": "34",
+          "Rank": "33",
           "Name": "Samantha Roulanaitis",
           "Team": "Lindenwood",
           "Cl": "So.",
@@ -12961,7 +12399,7 @@
           "ERA": "2.19"
         },
         {
-          "Rank": "35",
+          "Rank": "34",
           "Name": "Kate Peters",
           "Team": "North Florida",
           "Cl": "Sr.",
@@ -12973,7 +12411,7 @@
           "ERA": "2.20"
         },
         {
-          "Rank": "36",
+          "Rank": "35",
           "Name": "Skylar Waggoner",
           "Team": "ULM",
           "Cl": "Jr.",
@@ -12985,19 +12423,7 @@
           "ERA": "2.21"
         },
         {
-          "Rank": "-",
-          "Name": "Citlaly Gutierrez",
-          "Team": "Texas",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "22",
-          "IP": "69.2",
-          "R": "25",
-          "ER": "22",
-          "ERA": "2.21"
-        },
-        {
-          "Rank": "38",
+          "Rank": "36",
           "Name": "Jori Heard",
           "Team": "South Carolina",
           "Cl": "Sr.",
@@ -13009,7 +12435,19 @@
           "ERA": "2.21"
         },
         {
-          "Rank": "39",
+          "Rank": "37",
+          "Name": "Robyn Herron",
+          "Team": "Arkansas",
+          "Cl": "Sr.",
+          "Position": "SP/RP",
+          "App": "30",
+          "IP": "119.1",
+          "R": "48",
+          "ER": "38",
+          "ERA": "2.23"
+        },
+        {
+          "Rank": "38",
           "Name": "Katelyn Hubley",
           "Team": "Campbell",
           "Cl": "Fr.",
@@ -13021,7 +12459,7 @@
           "ERA": "2.28"
         },
         {
-          "Rank": "40",
+          "Rank": "39",
           "Name": "Odhi Vasquez",
           "Team": "Saint Mary's (CA)",
           "Cl": "Sr.",
@@ -13033,7 +12471,7 @@
           "ERA": "2.29"
         },
         {
-          "Rank": "41",
+          "Rank": "40",
           "Name": "Kenzie Brown",
           "Team": "Arizona St.",
           "Cl": "Sr.",
@@ -13045,7 +12483,7 @@
           "ERA": "2.29"
         },
         {
-          "Rank": "42",
+          "Rank": "41",
           "Name": "Maddy Morris",
           "Team": "Norfolk St.",
           "Cl": "Jr.",
@@ -13057,7 +12495,7 @@
           "ERA": "2.29"
         },
         {
-          "Rank": "43",
+          "Rank": "42",
           "Name": "Cece Smith",
           "Team": "George Washington",
           "Cl": "Jr.",
@@ -13069,7 +12507,7 @@
           "ERA": "2.32"
         },
         {
-          "Rank": "44",
+          "Rank": "43",
           "Name": "Natalie Fritz",
           "Team": "Grand Canyon",
           "Cl": "Fr.",
@@ -13081,7 +12519,7 @@
           "ERA": "2.32"
         },
         {
-          "Rank": "45",
+          "Rank": "44",
           "Name": "Emma Falen",
           "Team": "Hofstra",
           "Cl": "Sr.",
@@ -13093,19 +12531,19 @@
           "ERA": "2.33"
         },
         {
-          "Rank": "46",
-          "Name": "Peja Goold",
-          "Team": "Mississippi St.",
+          "Rank": "45",
+          "Name": "Citlaly Gutierrez",
+          "Team": "Texas",
           "Cl": "Sr.",
           "Position": "SP/RP",
-          "App": "37",
-          "IP": "151.1",
-          "R": "58",
-          "ER": "51",
-          "ERA": "2.36"
+          "App": "23",
+          "IP": "73.2",
+          "R": "28",
+          "ER": "25",
+          "ERA": "2.38"
         },
         {
-          "Rank": "47",
+          "Rank": "46",
           "Name": "Alexis Jensen",
           "Team": "Nebraska",
           "Cl": "Fr.",
@@ -13117,7 +12555,7 @@
           "ERA": "2.39"
         },
         {
-          "Rank": "48",
+          "Rank": "47",
           "Name": "Emily Delgado",
           "Team": "Southern Ill.",
           "Cl": "Jr.",
@@ -13129,7 +12567,7 @@
           "ERA": "2.40"
         },
         {
-          "Rank": "49",
+          "Rank": "48",
           "Name": "Miranda De Nava",
           "Team": "California Baptist",
           "Cl": "So.",
@@ -13141,7 +12579,7 @@
           "ERA": "2.41"
         },
         {
-          "Rank": "50",
+          "Rank": "49",
           "Name": "Ryley Harrison",
           "Team": "South Alabama",
           "Cl": "Jr.",
@@ -13153,7 +12591,7 @@
           "ERA": "2.41"
         },
         {
-          "Rank": "51",
+          "Rank": "50",
           "Name": "Marina Mason",
           "Team": "Northwestern",
           "Cl": "Fr.",
@@ -13165,7 +12603,7 @@
           "ERA": "2.42"
         },
         {
-          "Rank": "52",
+          "Rank": "51",
           "Name": "Ruby Meylan",
           "Team": "Oklahoma St.",
           "Cl": "Sr.",
@@ -13177,7 +12615,7 @@
           "ERA": "2.43"
         },
         {
-          "Rank": "53",
+          "Rank": "52",
           "Name": "Sara Pinedo",
           "Team": "LMU (CA)",
           "Cl": "Fr.",
@@ -13189,7 +12627,7 @@
           "ERA": "2.44"
         },
         {
-          "Rank": "54",
+          "Rank": "53",
           "Name": "Mads Lawson",
           "Team": "Columbia",
           "Cl": "Fr.",
@@ -13199,6 +12637,18 @@
           "R": "73",
           "ER": "59",
           "ERA": "2.44"
+        },
+        {
+          "Rank": "54",
+          "Name": "Peja Goold",
+          "Team": "Mississippi St.",
+          "Cl": "Sr.",
+          "Position": "SP/RP",
+          "App": "38",
+          "IP": "154.1",
+          "R": "62",
+          "ER": "54",
+          "ERA": "2.45"
         },
         {
           "Rank": "55",
@@ -13214,30 +12664,6 @@
         },
         {
           "Rank": "56",
-          "Name": "Alyssa Faircloth",
-          "Team": "Mississippi St.",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "40",
-          "IP": "175.2",
-          "R": "66",
-          "ER": "62",
-          "ERA": "2.47"
-        },
-        {
-          "Rank": "57",
-          "Name": "Teagan Kavan",
-          "Team": "Texas",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "39",
-          "IP": "195.1",
-          "R": "83",
-          "ER": "69",
-          "ERA": "2.47"
-        },
-        {
-          "Rank": "58",
           "Name": "Ainsley Lambert",
           "Team": "Fla. Atlantic",
           "Cl": "Sr.",
@@ -13261,7 +12687,7 @@
           "ERA": "2.52"
         },
         {
-          "Rank": "60",
+          "Rank": "58",
           "Name": "Salem Ward",
           "Team": "UNC Greensboro",
           "Cl": "Sr.",
@@ -13273,7 +12699,7 @@
           "ERA": "2.52"
         },
         {
-          "Rank": "61",
+          "Rank": "59",
           "Name": "Sydney Scapin",
           "Team": "South Alabama",
           "Cl": "So.",
@@ -13285,7 +12711,7 @@
           "ERA": "2.52"
         },
         {
-          "Rank": "62",
+          "Rank": "60",
           "Name": "Kayla Giardina",
           "Team": "Southern Miss.",
           "Cl": "So.",
@@ -13297,7 +12723,7 @@
           "ERA": "2.53"
         },
         {
-          "Rank": "63",
+          "Rank": "61",
           "Name": "Hailey Maestretti",
           "Team": "Utah",
           "Cl": "So.",
@@ -13309,7 +12735,7 @@
           "ERA": "2.53"
         },
         {
-          "Rank": "64",
+          "Rank": "62",
           "Name": "Hailey Lucas",
           "Team": "Southern Ill.",
           "Cl": "Fr.",
@@ -13321,7 +12747,7 @@
           "ERA": "2.53"
         },
         {
-          "Rank": "65",
+          "Rank": "63",
           "Name": "Amanda Eaglin",
           "Team": "Army West Point",
           "Cl": "Sr.",
@@ -13333,7 +12759,7 @@
           "ERA": "2.54"
         },
         {
-          "Rank": "66",
+          "Rank": "64",
           "Name": "Jessie Gilbert",
           "Team": "LMU (CA)",
           "Cl": "Fr.",
@@ -13345,7 +12771,19 @@
           "ERA": "2.54"
         },
         {
-          "Rank": "67",
+          "Rank": "65",
+          "Name": "Teagan Kavan",
+          "Team": "Texas",
+          "Cl": "Jr.",
+          "Position": "SP/RP",
+          "App": "40",
+          "IP": "198.1",
+          "R": "86",
+          "ER": "72",
+          "ERA": "2.54"
+        },
+        {
+          "Rank": "66",
           "Name": "Taryn Irimata",
           "Team": "Hawaii",
           "Cl": "So.",
@@ -13357,7 +12795,7 @@
           "ERA": "2.54"
         },
         {
-          "Rank": "68",
+          "Rank": "67",
           "Name": "Abby Lovell",
           "Team": "Troy",
           "Cl": "Fr.",
@@ -13369,7 +12807,7 @@
           "ERA": "2.55"
         },
         {
-          "Rank": "69",
+          "Rank": "68",
           "Name": "Shelbee Jones",
           "Team": "Utah",
           "Cl": "Jr.",
@@ -13381,7 +12819,7 @@
           "ERA": "2.55"
         },
         {
-          "Rank": "70",
+          "Rank": "69",
           "Name": "Ella Cook",
           "Team": "St. Thomas (MN)",
           "Cl": "Sr.",
@@ -13393,7 +12831,7 @@
           "ERA": "2.56"
         },
         {
-          "Rank": "71",
+          "Rank": "70",
           "Name": "Addisen Fisher",
           "Team": "Georgia",
           "Cl": "So.",
@@ -13405,7 +12843,7 @@
           "ERA": "2.56"
         },
         {
-          "Rank": "72",
+          "Rank": "71",
           "Name": "Taryn Batterton",
           "Team": "Grand Canyon",
           "Cl": "Sr.",
@@ -13417,7 +12855,7 @@
           "ERA": "2.57"
         },
         {
-          "Rank": "73",
+          "Rank": "72",
           "Name": "Keagan Rothrock",
           "Team": "Florida",
           "Cl": "Jr.",
@@ -13429,7 +12867,7 @@
           "ERA": "2.57"
         },
         {
-          "Rank": "74",
+          "Rank": "73",
           "Name": "Kate Barnett",
           "Team": "Long Beach St.",
           "Cl": "Jr.",
@@ -13441,7 +12879,7 @@
           "ERA": "2.59"
         },
         {
-          "Rank": "75",
+          "Rank": "74",
           "Name": "Amanda Fulton",
           "Team": "Western Caro.",
           "Cl": "So.",
@@ -13451,6 +12889,18 @@
           "R": "84",
           "ER": "67",
           "ERA": "2.60"
+        },
+        {
+          "Rank": "75",
+          "Name": "Alyssa Faircloth",
+          "Team": "Mississippi St.",
+          "Cl": "Jr.",
+          "Position": "SP/RP",
+          "App": "41",
+          "IP": "177.0",
+          "R": "70",
+          "ER": "66",
+          "ERA": "2.61"
         },
         {
           "Rank": "76",
@@ -14356,7 +13806,7 @@
     },
     "Games Started": {
       "category": "Games Started",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -17303,7 +16753,9 @@
           "App": "30",
           "GS": "18"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-05-29T06:59:48.310473+00:00"
     },
     "Hit Batters": {
       "category": "Hit Batters",
@@ -17773,16 +17225,6 @@
         },
         {
           "Rank": "-",
-          "Name": "Jocelyn Briski",
-          "Team": "Alabama",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "33",
-          "IP": "156.2",
-          "HB": "3"
-        },
-        {
-          "Rank": "-",
           "Name": "GiGi Clavel",
           "Team": "LIU",
           "Cl": "Sr.",
@@ -18082,7 +17524,7 @@
           "HB": "3"
         },
         {
-          "Rank": "77",
+          "Rank": "76",
           "Name": "Emery Bales",
           "Team": "Chattanooga",
           "Cl": "Fr.",
@@ -18119,6 +17561,16 @@
           "Position": "SP/RP",
           "App": "31",
           "IP": "77.0",
+          "HB": "4"
+        },
+        {
+          "Rank": "-",
+          "Name": "Jocelyn Briski",
+          "Team": "Alabama",
+          "Cl": "Jr.",
+          "Position": "SP",
+          "App": "34",
+          "IP": "163.2",
           "HB": "4"
         },
         {
@@ -18593,12 +18045,12 @@
         },
         {
           "Rank": "-",
-          "Name": "Robyn Herron",
-          "Team": "Arkansas",
+          "Name": "Citlaly Gutierrez",
+          "Team": "Texas",
           "Cl": "Sr.",
           "Position": "SP/RP",
-          "App": "29",
-          "IP": "113.2",
+          "App": "23",
+          "IP": "73.2",
           "HB": "5"
         },
         {
@@ -18925,7 +18377,7 @@
     },
     "Hit By Pitch": {
       "category": "Hit By Pitch",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -21692,7 +21144,9 @@
           "G": "",
           "HBP": ""
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-05-29T06:59:48.310473+00:00"
     },
     "Hit by Pitch per Game": {
       "category": "Hit by Pitch per Game",
@@ -21707,7 +21161,7 @@
         "HBP",
         "PG"
       ],
-      "total_rows": 155,
+      "total_rows": 100,
       "pages": 4,
       "rows": [
         {
@@ -22212,22 +21666,22 @@
         },
         {
           "Rank": "51",
-          "Name": "Rylee Slimp",
-          "Team": "UCLA",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "60",
-          "HBP": "14",
-          "PG": ".23"
-        },
-        {
-          "Rank": "52",
           "Name": "Alyssa Hopkins",
           "Team": "George Mason",
           "Cl": "Fr.",
           "Position": "C",
           "G": "43",
           "HBP": "10",
+          "PG": ".23"
+        },
+        {
+          "Rank": "52",
+          "Name": "Rylee Slimp",
+          "Team": "UCLA",
+          "Cl": "So.",
+          "Position": "OF",
+          "G": "61",
+          "HBP": "14",
           "PG": ".23"
         },
         {
@@ -22406,9 +21860,9 @@
           "Team": "UCLA",
           "Cl": "Sr.",
           "Position": "UT",
-          "G": "60",
+          "G": "61",
           "HBP": "13",
-          "PG": ".22"
+          "PG": ".21"
         },
         {
           "Rank": "71",
@@ -22572,6 +22026,16 @@
         },
         {
           "Rank": "87",
+          "Name": "Alannah Leach",
+          "Team": "Tennessee",
+          "Cl": "Jr.",
+          "Position": "OF",
+          "G": "56",
+          "HBP": "11",
+          "PG": ".20"
+        },
+        {
+          "Rank": "88",
           "Name": "Greta Hessenthaler",
           "Team": "Elon",
           "Cl": "Jr.",
@@ -22611,7 +22075,7 @@
           "PG": ".20"
         },
         {
-          "Rank": "91",
+          "Rank": "92",
           "Name": "Elisa Allen",
           "Team": "Binghamton",
           "Cl": "Jr.",
@@ -22651,7 +22115,7 @@
           "PG": ".20"
         },
         {
-          "Rank": "95",
+          "Rank": "96",
           "Name": "Halle Cannon",
           "Team": "Col. of Charleston",
           "Cl": "Sr.",
@@ -22671,7 +22135,7 @@
           "PG": ".19"
         },
         {
-          "Rank": "97",
+          "Rank": "98",
           "Name": "Taylor Baca",
           "Team": "New Mexico St.",
           "Cl": "Fr.",
@@ -22699,566 +22163,6 @@
           "G": "52",
           "HBP": "10",
           "PG": ".19"
-        },
-        {
-          "Rank": "100",
-          "Name": "Kenzie Gatti",
-          "Team": "Akron",
-          "Cl": "Fr.",
-          "Position": "UT",
-          "G": "47",
-          "HBP": "9",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Sophie Naivar",
-          "Team": "Boston U.",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "47",
-          "HBP": "9",
-          "PG": ".19"
-        },
-        {
-          "Rank": "102",
-          "Name": "Bri Despines",
-          "Team": "Louisville",
-          "Cl": "Sr.",
-          "Position": "C",
-          "G": "58",
-          "HBP": "11",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Madison Pickens",
-          "Team": "Louisville",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "58",
-          "HBP": "11",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Juztyne Torres",
-          "Team": "SIUE",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "58",
-          "HBP": "11",
-          "PG": ".19"
-        },
-        {
-          "Rank": "105",
-          "Name": "Madolyn Coupal",
-          "Team": "Boston U.",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "G": "53",
-          "HBP": "10",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Taylor Cruse",
-          "Team": "Ohio St.",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "53",
-          "HBP": "10",
-          "PG": ".19"
-        },
-        {
-          "Rank": "107",
-          "Name": "KK Esparza",
-          "Team": "Pittsburgh",
-          "Cl": "Sr.",
-          "Position": "C",
-          "G": "48",
-          "HBP": "9",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Victoria Flores",
-          "Team": "Northern Ky.",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "48",
-          "HBP": "9",
-          "PG": ".19"
-        },
-        {
-          "Rank": "109",
-          "Name": "Tatum Hubble",
-          "Team": "Columbia",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "43",
-          "HBP": "8",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Taylor Schoonmaker",
-          "Team": "Stonehill",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "43",
-          "HBP": "8",
-          "PG": ".19"
-        },
-        {
-          "Rank": "111",
-          "Name": "Anna Cockhill",
-          "Team": "Montana",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "54",
-          "HBP": "10",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Jayla Fuller",
-          "Team": "Rutgers",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "54",
-          "HBP": "10",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kylie Hammonds",
-          "Team": "Fla. Atlantic",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "54",
-          "HBP": "10",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Faith Kroening",
-          "Team": "Utah St.",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "54",
-          "HBP": "10",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Haley Painter",
-          "Team": "Purdue",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "54",
-          "HBP": "10",
-          "PG": ".19"
-        },
-        {
-          "Rank": "-",
-          "Name": "Addy Waits",
-          "Team": "Missouri",
-          "Cl": "Fr.",
-          "Position": "3B",
-          "G": "54",
-          "HBP": "10",
-          "PG": ".19"
-        },
-        {
-          "Rank": "117",
-          "Name": "Tru Medina",
-          "Team": "Northwestern",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "G": "49",
-          "HBP": "9",
-          "PG": ".18"
-        },
-        {
-          "Rank": "118",
-          "Name": "Gabrielle Briones",
-          "Team": "New Mexico",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "55",
-          "HBP": "10",
-          "PG": ".18"
-        },
-        {
-          "Rank": "-",
-          "Name": "Jenna Higgins",
-          "Team": "Detroit Mercy",
-          "Cl": "Fr.",
-          "Position": "OF",
-          "G": "44",
-          "HBP": "8",
-          "PG": ".18"
-        },
-        {
-          "Rank": "-",
-          "Name": "Alannah Leach",
-          "Team": "Tennessee",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "55",
-          "HBP": "10",
-          "PG": ".18"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kylie Waldrep",
-          "Team": "Memphis",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "44",
-          "HBP": "8",
-          "PG": ".18"
-        },
-        {
-          "Rank": "122",
-          "Name": "Erin Hoehn",
-          "Team": "Michigan",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "G": "50",
-          "HBP": "9",
-          "PG": ".18"
-        },
-        {
-          "Rank": "123",
-          "Name": "Mia Gomez",
-          "Team": "Utah",
-          "Cl": "Fr.",
-          "Position": "1B",
-          "G": "56",
-          "HBP": "10",
-          "PG": ".18"
-        },
-        {
-          "Rank": "124",
-          "Name": "Ashley Corpuz",
-          "Team": "George Washington",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "45",
-          "HBP": "8",
-          "PG": ".18"
-        },
-        {
-          "Rank": "-",
-          "Name": "Isabela Rodriguez",
-          "Team": "Prairie View",
-          "Cl": "Jr.",
-          "Position": "UT",
-          "G": "45",
-          "HBP": "8",
-          "PG": ".18"
-        },
-        {
-          "Rank": "126",
-          "Name": "Hannah Hawley",
-          "Team": "Michigan St.",
-          "Cl": "Sr.",
-          "Position": "C",
-          "G": "51",
-          "HBP": "9",
-          "PG": ".18"
-        },
-        {
-          "Rank": "-",
-          "Name": "Logan Pickford",
-          "Team": "George Mason",
-          "Cl": "Sr.",
-          "Position": "C",
-          "G": "51",
-          "HBP": "9",
-          "PG": ".18"
-        },
-        {
-          "Rank": "128",
-          "Name": "Kennedy Bunker",
-          "Team": "Ole Miss",
-          "Cl": "Sr.",
-          "Position": "C",
-          "G": "57",
-          "HBP": "10",
-          "PG": ".18"
-        },
-        {
-          "Rank": "-",
-          "Name": "Gabby Leach",
-          "Team": "Tennessee",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "57",
-          "HBP": "10",
-          "PG": ".18"
-        },
-        {
-          "Rank": "130",
-          "Name": "Sydney Hogue",
-          "Team": "George Washington",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "G": "40",
-          "HBP": "7",
-          "PG": ".18"
-        },
-        {
-          "Rank": "131",
-          "Name": "Jade Gainer",
-          "Team": "Chattanooga",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "46",
-          "HBP": "8",
-          "PG": ".17"
-        },
-        {
-          "Rank": "132",
-          "Name": "Ally Hetzel",
-          "Team": "Washington",
-          "Cl": "Fr.",
-          "Position": "C",
-          "G": "52",
-          "HBP": "9",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Alivia Lichtner",
-          "Team": "Iona",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "52",
-          "HBP": "9",
-          "PG": ".17"
-        },
-        {
-          "Rank": "134",
-          "Name": "Karlie Davison",
-          "Team": "Arkansas",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "58",
-          "HBP": "10",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Camryn Lookadoo",
-          "Team": "Louisville",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "58",
-          "HBP": "10",
-          "PG": ".17"
-        },
-        {
-          "Rank": "136",
-          "Name": "Isabella Chavez",
-          "Team": "N.C. Central",
-          "Cl": "So.",
-          "Position": "C",
-          "G": "41",
-          "HBP": "7",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kendall Grady",
-          "Team": "Holy Cross",
-          "Cl": "Fr.",
-          "Position": "C",
-          "G": "41",
-          "HBP": "7",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Mckenna Rinewalt",
-          "Team": "Northwestern St.",
-          "Cl": "Fr.",
-          "Position": "UT",
-          "G": "41",
-          "HBP": "7",
-          "PG": ".17"
-        },
-        {
-          "Rank": "139",
-          "Name": "Bella Douglas",
-          "Team": "Purdue",
-          "Cl": "Fr.",
-          "Position": "UT",
-          "G": "47",
-          "HBP": "8",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Marley Panziera",
-          "Team": "UC Davis",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "47",
-          "HBP": "8",
-          "PG": ".17"
-        },
-        {
-          "Rank": "141",
-          "Name": "Sophi Mazzola",
-          "Team": "Washington",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "53",
-          "HBP": "9",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Laylin Sturm",
-          "Team": "Nicholls",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "53",
-          "HBP": "9",
-          "PG": ".17"
-        },
-        {
-          "Rank": "143",
-          "Name": "Lauren Allred",
-          "Team": "Texas Tech",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "60",
-          "HBP": "10",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Abby Bettencourt",
-          "Team": "Brown",
-          "Cl": "So.",
-          "Position": "SP",
-          "G": "42",
-          "HBP": "7",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Gianna Costaro",
-          "Team": "Delaware",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "54",
-          "HBP": "9",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Maggie Frisvold",
-          "Team": "UMBC",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "G": "18",
-          "HBP": "3",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Aleena Garcia",
-          "Team": "UCLA",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "G": "60",
-          "HBP": "10",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Cameron Kaufman",
-          "Team": "Bowling Green",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "48",
-          "HBP": "8",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Eliza Maloney",
-          "Team": "Toledo",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "42",
-          "HBP": "7",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kinsey Pfieffer",
-          "Team": "IU Indy",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "36",
-          "HBP": "6",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Zayda Rocke",
-          "Team": "Maryland",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "G": "48",
-          "HBP": "8",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Sammie Shelander",
-          "Team": "Austin Peay",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "54",
-          "HBP": "9",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Devin Simon",
-          "Team": "Iowa",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "54",
-          "HBP": "9",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Olivia Thornton",
-          "Team": "Queens (NC)",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "48",
-          "HBP": "8",
-          "PG": ".17"
-        },
-        {
-          "Rank": "-",
-          "Name": "Lydia VanderWoude",
-          "Team": "Belmont",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "G": "54",
-          "HBP": "9",
-          "PG": ".17"
         }
       ]
     },
@@ -23281,7 +22185,7 @@
         "SH",
         "PG"
       ],
-      "total_rows": 153,
+      "total_rows": 100,
       "pages": 4,
       "rows": [
         {
@@ -23686,16 +22590,6 @@
         },
         {
           "Rank": "41",
-          "Name": "Bella Faw",
-          "Team": "Tennessee",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "57",
-          "SH": "11",
-          "PG": ".19"
-        },
-        {
-          "Rank": "42",
           "Name": "Brooklyn Jones",
           "Team": "Minnesota",
           "Cl": "Jr.",
@@ -23715,7 +22609,7 @@
           "PG": ".19"
         },
         {
-          "Rank": "44",
+          "Rank": "43",
           "Name": "Isabel Cintron",
           "Team": "Houston",
           "Cl": "So.",
@@ -23732,6 +22626,16 @@
           "Position": "UT",
           "G": "47",
           "SH": "9",
+          "PG": ".19"
+        },
+        {
+          "Rank": "45",
+          "Name": "Bella Faw",
+          "Team": "Tennessee",
+          "Cl": "Jr.",
+          "Position": "INF",
+          "G": "58",
+          "SH": "11",
           "PG": ".19"
         },
         {
@@ -24283,536 +23187,6 @@
           "G": "46",
           "SH": "7",
           "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Nichole Orozco",
-          "Team": "Portland St.",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "46",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Abigail Taylor",
-          "Team": "ETSU",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "46",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "103",
-          "Name": "Amie Johnson",
-          "Team": "USC Upstate",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "53",
-          "SH": "8",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Jordan Smith",
-          "Team": "Eastern Ky.",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "53",
-          "SH": "8",
-          "PG": ".15"
-        },
-        {
-          "Rank": "105",
-          "Name": "McKinnon Howard",
-          "Team": "Troy",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "47",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Anna Mauck",
-          "Team": "Western Ky.",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "47",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Betsy Woodward",
-          "Team": "SIUE",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "G": "47",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "108",
-          "Name": "Paislie Allen",
-          "Team": "Texas A&M",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "54",
-          "SH": "8",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Gracie Parker",
-          "Team": "Wofford",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "54",
-          "SH": "8",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kennedy Semien",
-          "Team": "Memphis",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "54",
-          "SH": "8",
-          "PG": ".15"
-        },
-        {
-          "Rank": "111",
-          "Name": "Olivia Elliott",
-          "Team": "South Fla.",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "61",
-          "SH": "9",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Alexa Galligani",
-          "Team": "South Fla.",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "61",
-          "SH": "9",
-          "PG": ".15"
-        },
-        {
-          "Rank": "113",
-          "Name": "Alexis Houge",
-          "Team": "DePaul",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "41",
-          "SH": "6",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Marianne Labelle",
-          "Team": "Saint Francis",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "41",
-          "SH": "6",
-          "PG": ".15"
-        },
-        {
-          "Rank": "115",
-          "Name": "Lili Gonzalez",
-          "Team": "Drake",
-          "Cl": "So.",
-          "Position": "UT",
-          "G": "48",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Cara Kochakian",
-          "Team": "Fairfield",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "48",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Hannah McGonigle",
-          "Team": "N.C. Central",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "48",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Bella Meyer",
-          "Team": "Youngstown St.",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "48",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "-",
-          "Name": "Mariah Penta",
-          "Team": "Maryland",
-          "Cl": "Jr.",
-          "Position": "UT",
-          "G": "48",
-          "SH": "7",
-          "PG": ".15"
-        },
-        {
-          "Rank": "120",
-          "Name": "Leighann Goode",
-          "Team": "Texas",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "55",
-          "SH": "8",
-          "PG": ".15"
-        },
-        {
-          "Rank": "121",
-          "Name": "Alana Cypress",
-          "Team": "Bethune-Cookman",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "49",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Gemma D'Orazio",
-          "Team": "Hofstra",
-          "Cl": "So.",
-          "Position": "UT",
-          "G": "49",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Sienna Erskine",
-          "Team": "Cal Poly",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "42",
-          "SH": "6",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Hannah Herman",
-          "Team": "Western Mich.",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "49",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Bree Kohler",
-          "Team": "Youngstown St.",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "49",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Emma Lotus",
-          "Team": "Central Mich.",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "49",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Mallory Ogle",
-          "Team": "Lipscomb",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "42",
-          "SH": "6",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Payton Shimansky",
-          "Team": "Columbia",
-          "Cl": "Jr.",
-          "Position": "C",
-          "G": "35",
-          "SH": "5",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Claire Turner",
-          "Team": "Georgetown",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "42",
-          "SH": "6",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Cecilia Vasquez",
-          "Team": "Louisiana",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "49",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Taylor Waitley",
-          "Team": "Western Caro.",
-          "Cl": "Sr.",
-          "Position": "C",
-          "G": "56",
-          "SH": "8",
-          "PG": ".14"
-        },
-        {
-          "Rank": "132",
-          "Name": "Raegan Holtorf",
-          "Team": "Grand Canyon",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "G": "64",
-          "SH": "9",
-          "PG": ".14"
-        },
-        {
-          "Rank": "133",
-          "Name": "Tehya Banks",
-          "Team": "UC Santa Barbara",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "57",
-          "SH": "8",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Breanna Coonfare",
-          "Team": "Army West Point",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "57",
-          "SH": "8",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Ariel Davis",
-          "Team": "Memphis",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "57",
-          "SH": "8",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Camille Lara",
-          "Team": "Saint Mary's (CA)",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "57",
-          "SH": "8",
-          "PG": ".14"
-        },
-        {
-          "Rank": "137",
-          "Name": "Kirnan Bailey",
-          "Team": "Dayton",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "50",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Hannah Harvey",
-          "Team": "Kennesaw St.",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "50",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Brynn Libler",
-          "Team": "Kent St.",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "50",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Tabitha Perry",
-          "Team": "Winthrop",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "50",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "141",
-          "Name": "Mia Morera",
-          "Team": "NIU",
-          "Cl": "So.",
-          "Position": "UT",
-          "G": "43",
-          "SH": "6",
-          "PG": ".14"
-        },
-        {
-          "Rank": "142",
-          "Name": "Emily Quintero",
-          "Team": "Coppin St.",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "36",
-          "SH": "5",
-          "PG": ".14"
-        },
-        {
-          "Rank": "143",
-          "Name": "Madison Clark",
-          "Team": "Nevada",
-          "Cl": "Jr.",
-          "Position": "UT",
-          "G": "58",
-          "SH": "8",
-          "PG": ".14"
-        },
-        {
-          "Rank": "144",
-          "Name": "Kylee Gleason",
-          "Team": "James Madison",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Sammy Horn",
-          "Team": "Boston College",
-          "Cl": "Jr.",
-          "Position": "UT",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Taylor Howe",
-          "Team": "Evansville",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Sa'Mya Jones",
-          "Team": "Baylor",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Morgan Lester",
-          "Team": "Saint Joseph's",
-          "Cl": "Jr.",
-          "Position": "UT",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Karisa Lopez",
-          "Team": "A&M-Corpus Christi",
-          "Cl": "Jr.",
-          "Position": "INF",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Emma Roberson",
-          "Team": "Winthrop",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Jac Smith",
-          "Team": "Colorado St.",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Hannah Werth",
-          "Team": "Iona",
-          "Cl": "Sr.",
-          "Position": "OF",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kaitlyn Wynia",
-          "Team": "San Diego",
-          "Cl": "Jr.",
-          "Position": "OF",
-          "G": "51",
-          "SH": "7",
-          "PG": ".14"
         }
       ]
     },
@@ -24828,7 +23202,7 @@
         "G",
         "HR"
       ],
-      "total_rows": 258,
+      "total_rows": 259,
       "pages": 6,
       "rows": [
         {
@@ -24837,8 +23211,8 @@
           "Team": "UCLA",
           "Cl": "Sr.",
           "Position": "UT",
-          "G": "60",
-          "HR": "40"
+          "G": "61",
+          "HR": "41"
         },
         {
           "Rank": "2",
@@ -24855,7 +23229,7 @@
           "Team": "UCLA",
           "Cl": "Sr.",
           "Position": "INF",
-          "G": "60",
+          "G": "61",
           "HR": "34"
         },
         {
@@ -24882,7 +23256,7 @@
           "Team": "Texas",
           "Cl": "Jr.",
           "Position": "UT",
-          "G": "58",
+          "G": "59",
           "HR": "27"
         },
         {
@@ -24909,7 +23283,7 @@
           "Team": "UCLA",
           "Cl": "Fr.",
           "Position": "INF",
-          "G": "60",
+          "G": "61",
           "HR": "24"
         },
         {
@@ -24932,6 +23306,15 @@
         },
         {
           "Rank": "-",
+          "Name": "Brooke Wells",
+          "Team": "Alabama",
+          "Cl": "So.",
+          "Position": "INF",
+          "G": "61",
+          "HR": "24"
+        },
+        {
+          "Rank": "-",
           "Name": "Abbie Wilhelm",
           "Team": "Ohio St.",
           "Cl": "So.",
@@ -24945,11 +23328,11 @@
           "Team": "Texas Tech",
           "Cl": "Jr.",
           "Position": "2B",
-          "G": "64",
+          "G": "65",
           "HR": "24"
         },
         {
-          "Rank": "14",
+          "Rank": "15",
           "Name": "Jaeya Butler",
           "Team": "Oregon St.",
           "Cl": "Jr.",
@@ -24991,15 +23374,6 @@
           "Cl": "So.",
           "Position": "INF",
           "G": "52",
-          "HR": "23"
-        },
-        {
-          "Rank": "-",
-          "Name": "Brooke Wells",
-          "Team": "Alabama",
-          "Cl": "So.",
-          "Position": "INF",
-          "G": "60",
           "HR": "23"
         },
         {
@@ -25080,7 +23454,7 @@
           "Team": "UCLA",
           "Cl": "Fr.",
           "Position": "INF",
-          "G": "60",
+          "G": "61",
           "HR": "21"
         },
         {
@@ -25103,6 +23477,15 @@
         },
         {
           "Rank": "-",
+          "Name": "Jackie Lis",
+          "Team": "Texas Tech",
+          "Cl": "Sr.",
+          "Position": "INF",
+          "G": "63",
+          "HR": "21"
+        },
+        {
+          "Rank": "-",
           "Name": "Cat Petteys",
           "Team": "UConn",
           "Cl": "So.",
@@ -25120,7 +23503,7 @@
           "HR": "21"
         },
         {
-          "Rank": "33",
+          "Rank": "34",
           "Name": "Katie Chester",
           "Team": "Arizona St.",
           "Cl": "Sr.",
@@ -25157,15 +23540,6 @@
         },
         {
           "Rank": "-",
-          "Name": "Jackie Lis",
-          "Team": "Texas Tech",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "62",
-          "HR": "20"
-        },
-        {
-          "Rank": "-",
           "Name": "Avery Parker",
           "Team": "Indiana",
           "Cl": "Sr.",
@@ -25184,6 +23558,15 @@
         },
         {
           "Rank": "-",
+          "Name": "Alexis Pupillo",
+          "Team": "Alabama",
+          "Cl": "Sr.",
+          "Position": "UT",
+          "G": "62",
+          "HR": "20"
+        },
+        {
+          "Rank": "-",
           "Name": "Sydney Stewart",
           "Team": "Arizona",
           "Cl": "Sr.",
@@ -25192,7 +23575,7 @@
           "HR": "20"
         },
         {
-          "Rank": "41",
+          "Rank": "42",
           "Name": "Brynn Acton",
           "Team": "UNI",
           "Cl": "Fr.",
@@ -25224,7 +23607,7 @@
           "Team": "Nebraska",
           "Cl": "Sr.",
           "Position": "SP/RP",
-          "G": "56",
+          "G": "57",
           "HR": "19"
         },
         {
@@ -25265,15 +23648,6 @@
         },
         {
           "Rank": "-",
-          "Name": "Alexis Pupillo",
-          "Team": "Alabama",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "G": "61",
-          "HR": "19"
-        },
-        {
-          "Rank": "-",
           "Name": "Aminah Vega",
           "Team": "Duke",
           "Cl": "Sr.",
@@ -25296,7 +23670,7 @@
           "Team": "Texas",
           "Cl": "Sr.",
           "Position": "UT",
-          "G": "58",
+          "G": "59",
           "HR": "18"
         },
         {
@@ -25305,7 +23679,7 @@
           "Team": "Arkansas",
           "Cl": "Sr.",
           "Position": "INF",
-          "G": "58",
+          "G": "59",
           "HR": "18"
         },
         {
@@ -25314,7 +23688,7 @@
           "Team": "UCLA",
           "Cl": "So.",
           "Position": "INF",
-          "G": "60",
+          "G": "61",
           "HR": "18"
         },
         {
@@ -25431,7 +23805,7 @@
           "Team": "Texas Tech",
           "Cl": "Jr.",
           "Position": "C",
-          "G": "55",
+          "G": "56",
           "HR": "17"
         },
         {
@@ -25458,7 +23832,7 @@
           "Team": "Nebraska",
           "Cl": "Jr.",
           "Position": "C",
-          "G": "51",
+          "G": "52",
           "HR": "17"
         },
         {
@@ -25526,6 +23900,15 @@
         },
         {
           "Rank": "-",
+          "Name": "Rylee Slimp",
+          "Team": "UCLA",
+          "Cl": "So.",
+          "Position": "OF",
+          "G": "61",
+          "HR": "17"
+        },
+        {
+          "Rank": "-",
           "Name": "Nya South",
           "Team": "UNC Greensboro",
           "Cl": "Jr.",
@@ -25543,7 +23926,7 @@
           "HR": "17"
         },
         {
-          "Rank": "80",
+          "Rank": "81",
           "Name": "Elisa Allen",
           "Team": "Binghamton",
           "Cl": "Jr.",
@@ -25647,7 +24030,7 @@
           "Team": "Arkansas",
           "Cl": "Sr.",
           "Position": "OF",
-          "G": "52",
+          "G": "53",
           "HR": "16"
         },
         {
@@ -25693,15 +24076,6 @@
           "Cl": "Sr.",
           "Position": "C",
           "G": "55",
-          "HR": "16"
-        },
-        {
-          "Rank": "-",
-          "Name": "Rylee Slimp",
-          "Team": "UCLA",
-          "Cl": "So.",
-          "Position": "OF",
-          "G": "60",
           "HR": "16"
         },
         {
@@ -25958,6 +24332,15 @@
         },
         {
           "Rank": "-",
+          "Name": "Ava Kuszak",
+          "Team": "Nebraska",
+          "Cl": "Sr.",
+          "Position": "INF",
+          "G": "58",
+          "HR": "15"
+        },
+        {
+          "Rank": "-",
           "Name": "Kendal Lunar",
           "Team": "New Mexico St.",
           "Cl": "Sr.",
@@ -26061,7 +24444,7 @@
           "Team": "Texas",
           "Cl": "Fr.",
           "Position": "SP/RP",
-          "G": "52",
+          "G": "53",
           "HR": "15"
         },
         {
@@ -26092,7 +24475,7 @@
           "HR": "15"
         },
         {
-          "Rank": "141",
+          "Rank": "142",
           "Name": "Makena Alexander",
           "Team": "Butler",
           "Cl": "Jr.",
@@ -26115,7 +24498,7 @@
           "Team": "Mississippi St.",
           "Cl": "Sr.",
           "Position": "INF",
-          "G": "62",
+          "G": "63",
           "HR": "14"
         },
         {
@@ -26201,15 +24584,6 @@
         },
         {
           "Rank": "-",
-          "Name": "Ava Kuszak",
-          "Team": "Nebraska",
-          "Cl": "Sr.",
-          "Position": "INF",
-          "G": "57",
-          "HR": "14"
-        },
-        {
-          "Rank": "-",
           "Name": "Macy Michael",
           "Team": "UNC Greensboro",
           "Cl": "So.",
@@ -26250,7 +24624,7 @@
           "Team": "UCLA",
           "Cl": "Jr.",
           "Position": "C",
-          "G": "48",
+          "G": "49",
           "HR": "14"
         },
         {
@@ -26412,7 +24786,7 @@
           "Team": "Tennessee",
           "Cl": "So.",
           "Position": "INF",
-          "G": "57",
+          "G": "58",
           "HR": "13"
         },
         {
@@ -26520,7 +24894,7 @@
           "Team": "UCLA",
           "Cl": "Fr.",
           "Position": "UT",
-          "G": "55",
+          "G": "56",
           "HR": "13"
         },
         {
@@ -26538,7 +24912,7 @@
           "Team": "Tennessee",
           "Cl": "Jr.",
           "Position": "OF",
-          "G": "55",
+          "G": "56",
           "HR": "13"
         },
         {
@@ -26727,7 +25101,7 @@
           "Team": "Arkansas",
           "Cl": "Sr.",
           "Position": "INF",
-          "G": "58",
+          "G": "59",
           "HR": "12"
         },
         {
@@ -26827,6 +25201,15 @@
           "Cl": "Jr.",
           "Position": "C",
           "G": "51",
+          "HR": "12"
+        },
+        {
+          "Rank": "-",
+          "Name": "Leighann Goode",
+          "Team": "Texas",
+          "Cl": "Sr.",
+          "Position": "UT",
+          "G": "56",
           "HR": "12"
         },
         {
@@ -27006,7 +25389,7 @@
           "Team": "Texas Tech",
           "Cl": "Jr.",
           "Position": "3B",
-          "G": "64",
+          "G": "65",
           "HR": "12"
         },
         {
@@ -27033,7 +25416,7 @@
           "Team": "Texas Tech",
           "Cl": "Jr.",
           "Position": "C",
-          "G": "36",
+          "G": "37",
           "HR": "12"
         },
         {
@@ -27051,7 +25434,7 @@
           "Team": "Alabama",
           "Cl": "Fr.",
           "Position": "OF",
-          "G": "61",
+          "G": "62",
           "HR": "12"
         },
         {
@@ -27207,25 +25590,25 @@
         },
         {
           "Rank": "4",
-          "Name": "Robyn Herron",
-          "Team": "Arkansas",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "29",
-          "IP": "113.2",
-          "SO": "173",
-          "K/7": "10.7"
-        },
-        {
-          "Rank": "5",
           "Name": "Alyssa Faircloth",
           "Team": "Mississippi St.",
           "Cl": "Jr.",
           "Position": "SP/RP",
-          "App": "40",
-          "IP": "175.2",
-          "SO": "264",
-          "K/7": "10.5"
+          "App": "41",
+          "IP": "177.0",
+          "SO": "267",
+          "K/7": "10.6"
+        },
+        {
+          "Rank": "5",
+          "Name": "Robyn Herron",
+          "Team": "Arkansas",
+          "Cl": "Sr.",
+          "Position": "SP/RP",
+          "App": "30",
+          "IP": "119.1",
+          "SO": "174",
+          "K/7": "10.2"
         },
         {
           "Rank": "6",
@@ -27255,10 +25638,10 @@
           "Team": "Texas Tech",
           "Cl": "Sr.",
           "Position": "SP/RP",
-          "App": "39",
-          "IP": "160.2",
-          "SO": "226",
-          "K/7": "9.8"
+          "App": "40",
+          "IP": "164.2",
+          "SO": "229",
+          "K/7": "9.7"
         },
         {
           "Rank": "9",
@@ -27266,35 +25649,24 @@
           "Team": "Tennessee",
           "Cl": "Jr.",
           "Position": "SP/RP",
-          "App": "28",
-          "IP": "119.0",
-          "SO": "165",
-          "K/7": "9.7"
+          "App": "29",
+          "IP": "123.0",
+          "SO": "166",
+          "K/7": "9.4"
         },
         {
           "Rank": "10",
-          "Name": "Jordyn Frahm",
-          "Team": "Nebraska",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "40",
-          "IP": "171.2",
-          "SO": "234",
-          "K/7": "9.5"
-        },
-        {
-          "Rank": "11",
           "Name": "Karlyn Pickens",
           "Team": "Tennessee",
           "Cl": "Sr.",
           "Position": "SP",
-          "App": "31",
-          "IP": "132.1",
-          "SO": "180",
-          "K/7": "9.5"
+          "App": "32",
+          "IP": "135.1",
+          "SO": "182",
+          "K/7": "9.4"
         },
         {
-          "Rank": "12",
+          "Rank": "11",
           "Name": "Zoe Prystajko",
           "Team": "Stanford",
           "Cl": "So.",
@@ -27302,6 +25674,17 @@
           "App": "43",
           "IP": "151.0",
           "SO": "202",
+          "K/7": "9.4"
+        },
+        {
+          "Rank": "12",
+          "Name": "Jordyn Frahm",
+          "Team": "Nebraska",
+          "Cl": "Sr.",
+          "Position": "SP/RP",
+          "App": "41",
+          "IP": "181.2",
+          "SO": "243",
           "K/7": "9.4"
         },
         {
@@ -27354,10 +25737,10 @@
           "Team": "Alabama",
           "Cl": "Jr.",
           "Position": "SP",
-          "App": "33",
-          "IP": "156.2",
-          "SO": "198",
-          "K/7": "8.8"
+          "App": "34",
+          "IP": "163.2",
+          "SO": "207",
+          "K/7": "8.9"
         },
         {
           "Rank": "18",
@@ -27438,17 +25821,6 @@
         },
         {
           "Rank": "25",
-          "Name": "Peja Goold",
-          "Team": "Mississippi St.",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "37",
-          "IP": "151.1",
-          "SO": "181",
-          "K/7": "8.4"
-        },
-        {
-          "Rank": "26",
           "Name": "Emma Friedel",
           "Team": "South Carolina",
           "Cl": "Jr.",
@@ -27459,29 +25831,7 @@
           "K/7": "8.4"
         },
         {
-          "Rank": "27",
-          "Name": "Kaitlyn Terry",
-          "Team": "Texas Tech",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "34",
-          "IP": "133.1",
-          "SO": "158",
-          "K/7": "8.3"
-        },
-        {
-          "Rank": "28",
-          "Name": "Teagan Kavan",
-          "Team": "Texas",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "39",
-          "IP": "195.1",
-          "SO": "230",
-          "K/7": "8.2"
-        },
-        {
-          "Rank": "29",
+          "Rank": "26",
           "Name": "Maddia Groff",
           "Team": "Omaha",
           "Cl": "Jr.",
@@ -27489,6 +25839,39 @@
           "App": "34",
           "IP": "170.0",
           "SO": "200",
+          "K/7": "8.2"
+        },
+        {
+          "Rank": "27",
+          "Name": "Kaitlyn Terry",
+          "Team": "Texas Tech",
+          "Cl": "Jr.",
+          "Position": "SP",
+          "App": "35",
+          "IP": "134.1",
+          "SO": "158",
+          "K/7": "8.2"
+        },
+        {
+          "Rank": "28",
+          "Name": "Teagan Kavan",
+          "Team": "Texas",
+          "Cl": "Jr.",
+          "Position": "SP/RP",
+          "App": "40",
+          "IP": "198.1",
+          "SO": "233",
+          "K/7": "8.2"
+        },
+        {
+          "Rank": "29",
+          "Name": "Peja Goold",
+          "Team": "Mississippi St.",
+          "Cl": "Sr.",
+          "Position": "SP/RP",
+          "App": "38",
+          "IP": "154.1",
+          "SO": "181",
           "K/7": "8.2"
         },
         {
@@ -28826,7 +27209,7 @@
     },
     "Innings Pitched": {
       "category": "Innings Pitched",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -31262,7 +29645,9 @@
           "Position": "SP/RP",
           "App": "31"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-05-29T06:59:48.310473+00:00"
     },
     "On Base Percentage": {
       "category": "On Base Percentage",
@@ -31277,7 +29662,7 @@
         "IP",
         "SV"
       ],
-      "total_rows": 282,
+      "total_rows": 200,
       "pages": 6,
       "rows": [
         {
@@ -31286,8 +29671,8 @@
           "Team": "Nebraska",
           "Cl": "Sr.",
           "Position": "SP/RP",
-          "App": "40",
-          "IP": "171.2",
+          "App": "41",
+          "IP": "181.2",
           "SV": "12"
         },
         {
@@ -31312,6 +29697,16 @@
         },
         {
           "Rank": "-",
+          "Name": "Karlyn Pickens",
+          "Team": "Tennessee",
+          "Cl": "Sr.",
+          "Position": "SP",
+          "App": "32",
+          "IP": "135.1",
+          "SV": "7"
+        },
+        {
+          "Rank": "-",
           "Name": "Hannah Meshnick",
           "Team": "Illinois St.",
           "Cl": "Sr.",
@@ -31331,23 +29726,13 @@
           "SV": "7"
         },
         {
-          "Rank": "6",
+          "Rank": "7",
           "Name": "Ainsley Lambert",
           "Team": "Fla. Atlantic",
           "Cl": "Sr.",
           "Position": "SP",
           "App": "29",
           "IP": "64.0",
-          "SV": "6"
-        },
-        {
-          "Rank": "-",
-          "Name": "Karlyn Pickens",
-          "Team": "Tennessee",
-          "Cl": "Sr.",
-          "Position": "SP",
-          "App": "31",
-          "IP": "132.1",
           "SV": "6"
         },
         {
@@ -31562,16 +29947,6 @@
         },
         {
           "Rank": "-",
-          "Name": "Robyn Herron",
-          "Team": "Arkansas",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "29",
-          "IP": "113.2",
-          "SV": "4"
-        },
-        {
-          "Rank": "-",
           "Name": "Claire Woods",
           "Team": "Delaware",
           "Cl": "Sr.",
@@ -31598,6 +29973,16 @@
           "Position": "SP/RP",
           "App": "30",
           "IP": "93.1",
+          "SV": "4"
+        },
+        {
+          "Rank": "-",
+          "Name": "Robyn Herron",
+          "Team": "Arkansas",
+          "Cl": "Sr.",
+          "Position": "SP/RP",
+          "App": "30",
+          "IP": "119.1",
           "SV": "4"
         },
         {
@@ -31686,8 +30071,8 @@
           "Team": "Alabama",
           "Cl": "Jr.",
           "Position": "SP",
-          "App": "33",
-          "IP": "156.2",
+          "App": "34",
+          "IP": "163.2",
           "SV": "4"
         },
         {
@@ -31812,16 +30197,6 @@
         },
         {
           "Rank": "-",
-          "Name": "Alyssa Faircloth",
-          "Team": "Mississippi St.",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "40",
-          "IP": "175.2",
-          "SV": "4"
-        },
-        {
-          "Rank": "-",
           "Name": "Ana Serafinko",
           "Team": "St. John's (NY)",
           "Cl": "Sr.",
@@ -31838,6 +30213,16 @@
           "Position": "SP/RP",
           "App": "41",
           "IP": "103.2",
+          "SV": "4"
+        },
+        {
+          "Rank": "-",
+          "Name": "Alyssa Faircloth",
+          "Team": "Mississippi St.",
+          "Cl": "Jr.",
+          "Position": "SP/RP",
+          "App": "41",
+          "IP": "177.0",
           "SV": "4"
         },
         {
@@ -31992,22 +30377,22 @@
         },
         {
           "Rank": "-",
-          "Name": "Payton Burnham",
-          "Team": "Arkansas",
-          "Cl": "So.",
-          "Position": "UT",
-          "App": "26",
-          "IP": "103.0",
-          "SV": "3"
-        },
-        {
-          "Rank": "-",
           "Name": "Kaitlyn Tso",
           "Team": "CSUN",
           "Cl": "Fr.",
           "Position": "SP",
           "App": "27",
           "IP": "102.1",
+          "SV": "3"
+        },
+        {
+          "Rank": "-",
+          "Name": "Payton Burnham",
+          "Team": "Arkansas",
+          "Cl": "So.",
+          "Position": "UT",
+          "App": "27",
+          "IP": "107.0",
           "SV": "3"
         },
         {
@@ -32412,22 +30797,22 @@
         },
         {
           "Rank": "-",
-          "Name": "Peja Goold",
-          "Team": "Mississippi St.",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "37",
-          "IP": "151.1",
-          "SV": "3"
-        },
-        {
-          "Rank": "-",
           "Name": "Genevieve Longsdorf",
           "Team": "Buffalo",
           "Cl": "So.",
           "Position": "SP/RP",
           "App": "38",
           "IP": "133.2",
+          "SV": "3"
+        },
+        {
+          "Rank": "-",
+          "Name": "Peja Goold",
+          "Team": "Mississippi St.",
+          "Cl": "Sr.",
+          "Position": "SP/RP",
+          "App": "38",
+          "IP": "154.1",
           "SV": "3"
         },
         {
@@ -32472,16 +30857,6 @@
         },
         {
           "Rank": "-",
-          "Name": "Teagan Kavan",
-          "Team": "Texas",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "39",
-          "IP": "195.1",
-          "SV": "3"
-        },
-        {
-          "Rank": "-",
           "Name": "Sydney McDermott",
           "Team": "Valparaiso",
           "Cl": "Jr.",
@@ -32498,6 +30873,16 @@
           "Position": "SP/RP",
           "App": "40",
           "IP": "145.0",
+          "SV": "3"
+        },
+        {
+          "Rank": "-",
+          "Name": "Teagan Kavan",
+          "Team": "Texas",
+          "Cl": "Jr.",
+          "Position": "SP/RP",
+          "App": "40",
+          "IP": "198.1",
           "SV": "3"
         },
         {
@@ -33279,826 +31664,6 @@
           "App": "29",
           "IP": "76.1",
           "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "MacKinley Portillo",
-          "Team": "Jacksonville St.",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "29",
-          "IP": "89.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Sydney Scapin",
-          "Team": "South Alabama",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "29",
-          "IP": "100.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Bethaney Noble",
-          "Team": "Louisiana",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "29",
-          "IP": "105.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Hayley Arnold",
-          "Team": "Stetson",
-          "Cl": "So.",
-          "Position": "SP",
-          "App": "29",
-          "IP": "106.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Callie Howard",
-          "Team": "UC San Diego",
-          "Cl": "Fr.",
-          "Position": "SP/RP",
-          "App": "29",
-          "IP": "108.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Macy Borowski",
-          "Team": "Brown",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "29",
-          "IP": "155.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Haley Crawford",
-          "Team": "Southeastern La.",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "30",
-          "IP": "54.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Ainsley Berlingeri",
-          "Team": "Nevada",
-          "Cl": "So.",
-          "Position": "SP",
-          "App": "30",
-          "IP": "77.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Berritt Herr",
-          "Team": "Wisconsin",
-          "Cl": "Fr.",
-          "Position": "SP",
-          "App": "30",
-          "IP": "92.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Madeline Haun",
-          "Team": "Saint Mary's (CA)",
-          "Cl": "Fr.",
-          "Position": "SP/RP",
-          "App": "30",
-          "IP": "106.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Madi Mangulis",
-          "Team": "South Dakota St.",
-          "Cl": "Sr.",
-          "Position": "SP",
-          "App": "30",
-          "IP": "107.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Brooke Beam",
-          "Team": "Lipscomb",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "App": "30",
-          "IP": "117.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Mackenzie Krafcik",
-          "Team": "Bowling Green",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "30",
-          "IP": "122.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Taylor Peacock",
-          "Team": "California",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "31",
-          "IP": "60.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kaitlin Ryan",
-          "Team": "Coastal Carolina",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "31",
-          "IP": "63.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Carsyn Cassady",
-          "Team": "Michigan St.",
-          "Cl": "So.",
-          "Position": "SP",
-          "App": "31",
-          "IP": "89.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Taylor Johnson",
-          "Team": "James Madison",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "31",
-          "IP": "92.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Erin Flynn",
-          "Team": "Detroit Mercy",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "31",
-          "IP": "96.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Ryleigh Owens",
-          "Team": "Lindenwood",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "31",
-          "IP": "97.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Abby Sabalaskey",
-          "Team": "Illinois",
-          "Cl": "Fr.",
-          "Position": "SP/RP",
-          "App": "31",
-          "IP": "105.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Abby Dunning",
-          "Team": "Clemson",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "31",
-          "IP": "106.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Taylor Jones",
-          "Team": "Charlotte",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "31",
-          "IP": "123.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Jayden Heavener",
-          "Team": "LSU",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "31",
-          "IP": "139.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Jenae Berry",
-          "Team": "Arizona",
-          "Cl": "So.",
-          "Position": "SP",
-          "App": "32",
-          "IP": "53.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Haley Ganino",
-          "Team": "Boston U.",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "App": "32",
-          "IP": "71.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kyra Kreuscher",
-          "Team": "Seton Hall",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "32",
-          "IP": "92.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Katelyn Flanders",
-          "Team": "Army West Point",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "32",
-          "IP": "108.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Gianna Mares",
-          "Team": "BYU",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "32",
-          "IP": "109.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Camille Hamilton",
-          "Team": "UNCW",
-          "Cl": "Fr.",
-          "Position": "UT",
-          "App": "32",
-          "IP": "113.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Avery Robinson",
-          "Team": "Presbyterian",
-          "Cl": "Jr.",
-          "Position": "UT",
-          "App": "32",
-          "IP": "117.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Emery Bales",
-          "Team": "Chattanooga",
-          "Cl": "Fr.",
-          "Position": "SP",
-          "App": "32",
-          "IP": "119.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Anna Kiel",
-          "Team": "Loyola Chicago",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "App": "32",
-          "IP": "119.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Eva Hurtado",
-          "Team": "Cal St. Fullerton",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "32",
-          "IP": "125.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Emmy Cardenas",
-          "Team": "Winthrop",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "32",
-          "IP": "125.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Abbey Lane",
-          "Team": "George Mason",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "32",
-          "IP": "139.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Brooke Bowling",
-          "Team": "Charlotte",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "33",
-          "IP": "97.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Sophia Ramuno",
-          "Team": "Washington",
-          "Cl": "Sr.",
-          "Position": "SP",
-          "App": "33",
-          "IP": "109.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Macy Walters",
-          "Team": "Akron",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "33",
-          "IP": "135.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Reagan Wick",
-          "Team": "Colorado St.",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "33",
-          "IP": "143.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Allie Stidham",
-          "Team": "Gardner-Webb",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "33",
-          "IP": "167.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Gracie Goewey",
-          "Team": "Siena",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "33",
-          "IP": "168.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Faith Jordan",
-          "Team": "San Diego St.",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "34",
-          "IP": "88.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Breanna Izzo",
-          "Team": "Army West Point",
-          "Cl": "Sr.",
-          "Position": "UT",
-          "App": "34",
-          "IP": "133.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Zoryana Hughes",
-          "Team": "Florida A&M",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "34",
-          "IP": "134.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Hailey Maestretti",
-          "Team": "Utah",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "34",
-          "IP": "149.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kate Ridgway",
-          "Team": "Evansville",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "34",
-          "IP": "150.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Emily Koranda",
-          "Team": "Missouri St.",
-          "Cl": "Fr.",
-          "Position": "UT",
-          "App": "34",
-          "IP": "160.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Sierra Maness",
-          "Team": "Clemson",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "34",
-          "IP": "161.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Maddia Groff",
-          "Team": "Omaha",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "34",
-          "IP": "170.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Maya Johnson",
-          "Team": "Belmont",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "34",
-          "IP": "215.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kaitlyn Molitoris",
-          "Team": "Robert Morris",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "35",
-          "IP": "107.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Tess Bumiller",
-          "Team": "Nevada",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "35",
-          "IP": "111.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "McKenna Guest",
-          "Team": "New Mexico",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "35",
-          "IP": "130.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Sydney Rainford",
-          "Team": "East Carolina",
-          "Cl": "Fr.",
-          "Position": "SP/RP",
-          "App": "35",
-          "IP": "131.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Katie McDonald",
-          "Team": "Toledo",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "35",
-          "IP": "135.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Tatyana Vega",
-          "Team": "UTEP",
-          "Cl": "Fr.",
-          "Position": "INF",
-          "App": "35",
-          "IP": "140.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Olivia DeCitise",
-          "Team": "UMass Lowell",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "35",
-          "IP": "169.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Maggie Chapin",
-          "Team": "Longwood",
-          "Cl": "Sr.",
-          "Position": "SP",
-          "App": "35",
-          "IP": "172.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Erica Houge",
-          "Team": "Western Ky.",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "35",
-          "IP": "176.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Avery Sapp",
-          "Team": "Iowa",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "36",
-          "IP": "80.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Hallie Burns",
-          "Team": "Southeastern La.",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "36",
-          "IP": "112.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Anneca Anderson",
-          "Team": "North Texas",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "36",
-          "IP": "164.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Brooklyn Shroyer",
-          "Team": "UNC Greensboro",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "36",
-          "IP": "175.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Jacy Harrelson",
-          "Team": "Jacksonville",
-          "Cl": "So.",
-          "Position": "UT",
-          "App": "36",
-          "IP": "188.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Caprice Bohmer",
-          "Team": "UConn",
-          "Cl": "Fr.",
-          "Position": "SP/RP",
-          "App": "37",
-          "IP": "129.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Maddie Taylor",
-          "Team": "McNeese",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "37",
-          "IP": "140.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kohana Poussan",
-          "Team": "Alabama St.",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "37",
-          "IP": "143.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Kayla Giardina",
-          "Team": "Southern Miss.",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "37",
-          "IP": "158.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Ella Harrison",
-          "Team": "Auburn",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "37",
-          "IP": "162.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Avery Stutts",
-          "Team": "Memphis",
-          "Cl": "Fr.",
-          "Position": "SP/RP",
-          "App": "38",
-          "IP": "115.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Josie Crossman",
-          "Team": "Delaware",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "38",
-          "IP": "145.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Lily Riley",
-          "Team": "Utah Valley",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "38",
-          "IP": "171.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Serena Rodriguez",
-          "Team": "Morgan St.",
-          "Cl": "Jr.",
-          "Position": "p",
-          "App": "39",
-          "IP": "115.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Bailey Murray",
-          "Team": "Oregon St.",
-          "Cl": "Fr.",
-          "Position": "SP/RP",
-          "App": "39",
-          "IP": "117.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Julia Bacoulis",
-          "Team": "FGCU",
-          "Cl": "Fr.",
-          "Position": "SP/RP",
-          "App": "39",
-          "IP": "122.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Nevaeh Brown",
-          "Team": "Houston",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "39",
-          "IP": "125.1",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "NiJaree Canady",
-          "Team": "Texas Tech",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "39",
-          "IP": "160.2",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Jazzy Francik",
-          "Team": "Florida St.",
-          "Cl": "So.",
-          "Position": "SP/RP",
-          "App": "40",
-          "IP": "154.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Trisha McCleskey",
-          "Team": "Cal St. Fullerton",
-          "Cl": "Jr.",
-          "Position": "SP/RP",
-          "App": "40",
-          "IP": "179.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Meika Lauppe",
-          "Team": "Arizona St.",
-          "Cl": "Jr.",
-          "Position": "SP",
-          "App": "41",
-          "IP": "121.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Mia Gonzalez",
-          "Team": "Bethune-Cookman",
-          "Cl": "Fr.",
-          "Position": "UT",
-          "App": "43",
-          "IP": "156.0",
-          "SV": "2"
-        },
-        {
-          "Rank": "-",
-          "Name": "Maddie Drerup",
-          "Team": "USC Upstate",
-          "Cl": "Sr.",
-          "Position": "SP/RP",
-          "App": "44",
-          "IP": "210.2",
-          "SV": "2"
         }
       ]
     },
@@ -34264,27 +31829,27 @@
       "rows": [
         {
           "Rank": "1",
-          "Team": "UCLA",
-          "G": "60",
-          "AB": "1620",
-          "H": "623",
-          "BA": ".385"
-        },
-        {
-          "Rank": "2",
           "Team": "Texas Tech",
-          "G": "64",
-          "AB": "1634",
-          "H": "628",
+          "G": "65",
+          "AB": "1655",
+          "H": "635",
           "BA": ".384"
         },
         {
-          "Rank": "3",
+          "Rank": "2",
           "Team": "Oklahoma",
           "G": "62",
           "AB": "1666",
           "H": "639",
           "BA": ".384"
+        },
+        {
+          "Rank": "3",
+          "Team": "UCLA",
+          "G": "61",
+          "AB": "1647",
+          "H": "629",
+          "BA": ".382"
         },
         {
           "Rank": "4",
@@ -34376,14 +31941,6 @@
         },
         {
           "Rank": "15",
-          "Team": "Arkansas",
-          "G": "58",
-          "AB": "1482",
-          "H": "511",
-          "BA": ".345"
-        },
-        {
-          "Rank": "16",
           "Team": "Nevada",
           "G": "59",
           "AB": "1686",
@@ -34391,15 +31948,15 @@
           "BA": ".343"
         },
         {
-          "Rank": "17",
-          "Team": "Texas",
-          "G": "58",
-          "AB": "1537",
-          "H": "525",
+          "Rank": "16",
+          "Team": "Arkansas",
+          "G": "59",
+          "AB": "1519",
+          "H": "519",
           "BA": ".342"
         },
         {
-          "Rank": "18",
+          "Rank": "17",
           "Team": "Texas A&M",
           "G": "57",
           "AB": "1481",
@@ -34407,12 +31964,20 @@
           "BA": ".340"
         },
         {
-          "Rank": "19",
+          "Rank": "18",
           "Team": "Arizona",
           "G": "55",
           "AB": "1405",
           "H": "478",
           "BA": ".340"
+        },
+        {
+          "Rank": "19",
+          "Team": "Texas",
+          "G": "59",
+          "AB": "1562",
+          "H": "530",
+          "BA": ".339"
         },
         {
           "Rank": "20",
@@ -34456,19 +32021,19 @@
         },
         {
           "Rank": "25",
-          "Team": "Nebraska",
-          "G": "57",
-          "AB": "1573",
-          "H": "526",
-          "BA": ".334"
-        },
-        {
-          "Rank": "26",
           "Team": "Ohio",
           "G": "58",
           "AB": "1572",
           "H": "525",
           "BA": ".334"
+        },
+        {
+          "Rank": "26",
+          "Team": "Nebraska",
+          "G": "58",
+          "AB": "1609",
+          "H": "534",
+          "BA": ".332"
         },
         {
           "Rank": "27",
@@ -34576,18 +32141,18 @@
         },
         {
           "Rank": "40",
+          "Team": "Alabama",
+          "G": "62",
+          "AB": "1568",
+          "H": "509",
+          "BA": ".325"
+        },
+        {
+          "Rank": "41",
           "Team": "UNI",
           "G": "53",
           "AB": "1483",
           "H": "481",
-          "BA": ".324"
-        },
-        {
-          "Rank": "41",
-          "Team": "Alabama",
-          "G": "61",
-          "AB": "1540",
-          "H": "499",
           "BA": ".324"
         },
         {
@@ -35464,14 +33029,6 @@
         },
         {
           "Rank": "151",
-          "Team": "Tennessee",
-          "G": "57",
-          "AB": "1415",
-          "H": "408",
-          "BA": ".288"
-        },
-        {
-          "Rank": "152",
           "Team": "UConn",
           "G": "60",
           "AB": "1554",
@@ -35479,7 +33036,7 @@
           "BA": ".288"
         },
         {
-          "Rank": "153",
+          "Rank": "152",
           "Team": "Southern Utah",
           "G": "51",
           "AB": "1339",
@@ -35487,11 +33044,19 @@
           "BA": ".288"
         },
         {
-          "Rank": "154",
+          "Rank": "153",
           "Team": "Northern Ky.",
           "G": "51",
           "AB": "1301",
           "H": "375",
+          "BA": ".288"
+        },
+        {
+          "Rank": "154",
+          "Team": "Tennessee",
+          "G": "58",
+          "AB": "1440",
+          "H": "415",
           "BA": ".288"
         },
         {
@@ -35928,14 +33493,6 @@
         },
         {
           "Rank": "209",
-          "Team": "Mississippi St.",
-          "G": "62",
-          "AB": "1577",
-          "H": "434",
-          "BA": ".275"
-        },
-        {
-          "Rank": "210",
           "Team": "Colorado St.",
           "G": "51",
           "AB": "1305",
@@ -35943,7 +33500,7 @@
           "BA": ".275"
         },
         {
-          "Rank": "211",
+          "Rank": "210",
           "Team": "Yale",
           "G": "45",
           "AB": "1167",
@@ -35951,7 +33508,7 @@
           "BA": ".275"
         },
         {
-          "Rank": "212",
+          "Rank": "211",
           "Team": "San Jose St.",
           "G": "48",
           "AB": "1244",
@@ -35959,7 +33516,7 @@
           "BA": ".275"
         },
         {
-          "Rank": "213",
+          "Rank": "212",
           "Team": "Boise St.",
           "G": "55",
           "AB": "1435",
@@ -35967,11 +33524,19 @@
           "BA": ".275"
         },
         {
-          "Rank": "214",
+          "Rank": "213",
           "Team": "Toledo",
           "G": "50",
           "AB": "1360",
           "H": "373",
+          "BA": ".274"
+        },
+        {
+          "Rank": "214",
+          "Team": "Furman",
+          "G": "53",
+          "AB": "1325",
+          "H": "363",
           "BA": ".274"
         },
         {
@@ -35984,10 +33549,10 @@
         },
         {
           "Rank": "216",
-          "Team": "Furman",
-          "G": "53",
-          "AB": "1326",
-          "H": "363",
+          "Team": "Mississippi St.",
+          "G": "63",
+          "AB": "1593",
+          "H": "436",
           "BA": ".274"
         },
         {
@@ -36732,9 +34297,9 @@
         {
           "Rank": "3",
           "Team": "Arkansas",
-          "G": "58",
+          "G": "59",
           "DP": "37",
-          "PG": ".64"
+          "PG": ".63"
         },
         {
           "Rank": "4",
@@ -37312,6 +34877,13 @@
         },
         {
           "Rank": "-",
+          "Team": "Nebraska",
+          "G": "58",
+          "DP": "22",
+          "PG": ".38"
+        },
+        {
+          "Rank": "-",
           "Team": "Oklahoma St.",
           "G": "58",
           "DP": "22",
@@ -37325,14 +34897,14 @@
           "PG": ".38"
         },
         {
-          "Rank": "88",
+          "Rank": "89",
           "Team": "UNI",
           "G": "53",
           "DP": "20",
           "PG": ".38"
         },
         {
-          "Rank": "89",
+          "Rank": "90",
           "Team": "Louisiana",
           "G": "56",
           "DP": "21",
@@ -37346,59 +34918,52 @@
           "PG": ".38"
         },
         {
-          "Rank": "91",
+          "Rank": "92",
           "Team": "South Dakota St.",
           "G": "59",
           "DP": "22",
           "PG": ".37"
         },
         {
-          "Rank": "92",
+          "Rank": "-",
+          "Team": "Texas",
+          "G": "59",
+          "DP": "22",
+          "PG": ".37"
+        },
+        {
+          "Rank": "94",
           "Team": "Lipscomb",
           "G": "51",
           "DP": "19",
           "PG": ".37"
         },
         {
-          "Rank": "93",
+          "Rank": "95",
           "Team": "NIU",
           "G": "43",
           "DP": "16",
           "PG": ".37"
         },
         {
-          "Rank": "94",
+          "Rank": "96",
           "Team": "Oklahoma",
           "G": "62",
           "DP": "23",
           "PG": ".37"
         },
         {
-          "Rank": "95",
+          "Rank": "97",
           "Team": "Wofford",
           "G": "54",
           "DP": "20",
           "PG": ".37"
         },
         {
-          "Rank": "96",
+          "Rank": "98",
           "Team": "Coastal Carolina",
           "G": "57",
           "DP": "21",
-          "PG": ".37"
-        },
-        {
-          "Rank": "-",
-          "Team": "Nebraska",
-          "G": "57",
-          "DP": "21",
-          "PG": ".37"
-        },
-        {
-          "Rank": "98",
-          "Team": "UCLA",
-          "G": "60",
-          "DP": "22",
           "PG": ".37"
         },
         {
@@ -37417,9 +34982,9 @@
         },
         {
           "Rank": "101",
-          "Team": "Texas",
-          "G": "58",
-          "DP": "21",
+          "Team": "UCLA",
+          "G": "61",
+          "DP": "22",
           "PG": ".36"
         },
         {
@@ -37823,13 +35388,20 @@
         },
         {
           "Rank": "159",
+          "Team": "Tennessee",
+          "G": "58",
+          "DP": "17",
+          "PG": ".29"
+        },
+        {
+          "Rank": "160",
           "Team": "Kentucky",
           "G": "55",
           "DP": "16",
           "PG": ".29"
         },
         {
-          "Rank": "160",
+          "Rank": "161",
           "Team": "FIU",
           "G": "52",
           "DP": "15",
@@ -37843,7 +35415,7 @@
           "PG": ".29"
         },
         {
-          "Rank": "162",
+          "Rank": "163",
           "Team": "Louisiana Tech",
           "G": "56",
           "DP": "16",
@@ -37864,7 +35436,7 @@
           "PG": ".29"
         },
         {
-          "Rank": "165",
+          "Rank": "166",
           "Team": "Portland St.",
           "G": "46",
           "DP": "13",
@@ -37885,15 +35457,8 @@
           "PG": ".28"
         },
         {
-          "Rank": "168",
+          "Rank": "169",
           "Team": "Southern Miss.",
-          "G": "57",
-          "DP": "16",
-          "PG": ".28"
-        },
-        {
-          "Rank": "-",
-          "Team": "Tennessee",
           "G": "57",
           "DP": "16",
           "PG": ".28"
@@ -38243,27 +35808,20 @@
         },
         {
           "Rank": "219",
-          "Team": "Mississippi St.",
-          "G": "62",
-          "DP": "15",
-          "PG": ".24"
-        },
-        {
-          "Rank": "-",
           "Team": "UNC Greensboro",
           "G": "62",
           "DP": "15",
           "PG": ".24"
         },
         {
-          "Rank": "221",
+          "Rank": "220",
           "Team": "South Dakota",
           "G": "58",
           "DP": "14",
           "PG": ".24"
         },
         {
-          "Rank": "222",
+          "Rank": "221",
           "Team": "Stanford",
           "G": "54",
           "DP": "13",
@@ -38277,10 +35835,17 @@
           "PG": ".24"
         },
         {
-          "Rank": "224",
+          "Rank": "223",
           "Team": "Northwestern",
           "G": "50",
           "DP": "12",
+          "PG": ".24"
+        },
+        {
+          "Rank": "224",
+          "Team": "Mississippi St.",
+          "G": "63",
+          "DP": "15",
           "PG": ".24"
         },
         {
@@ -38340,14 +35905,21 @@
           "PG": ".23"
         },
         {
-          "Rank": "233",
+          "Rank": "-",
+          "Team": "Texas Tech",
+          "G": "65",
+          "DP": "15",
+          "PG": ".23"
+        },
+        {
+          "Rank": "234",
           "Team": "Kansas City",
           "G": "48",
           "DP": "11",
           "PG": ".23"
         },
         {
-          "Rank": "234",
+          "Rank": "235",
           "Team": "Ohio St.",
           "G": "53",
           "DP": "12",
@@ -38361,14 +35933,14 @@
           "PG": ".23"
         },
         {
-          "Rank": "236",
+          "Rank": "237",
           "Team": "Oakland",
           "G": "49",
           "DP": "11",
           "PG": ".22"
         },
         {
-          "Rank": "237",
+          "Rank": "238",
           "Team": "Drexel",
           "G": "45",
           "DP": "10",
@@ -38386,13 +35958,6 @@
           "Team": "UAlbany",
           "G": "45",
           "DP": "10",
-          "PG": ".22"
-        },
-        {
-          "Rank": "240",
-          "Team": "Texas Tech",
-          "G": "64",
-          "DP": "14",
           "PG": ".22"
         },
         {
@@ -38439,27 +36004,27 @@
         },
         {
           "Rank": "247",
-          "Team": "Alabama",
-          "G": "61",
-          "DP": "13",
-          "PG": ".21"
-        },
-        {
-          "Rank": "-",
           "Team": "Jacksonville St.",
           "G": "61",
           "DP": "13",
           "PG": ".21"
         },
         {
-          "Rank": "249",
+          "Rank": "248",
           "Team": "North Ala.",
           "G": "52",
           "DP": "11",
           "PG": ".21"
         },
         {
-          "Rank": "250",
+          "Rank": "249",
+          "Team": "Alabama",
+          "G": "62",
+          "DP": "13",
+          "PG": ".21"
+        },
+        {
+          "Rank": "-",
           "Team": "Boston U.",
           "G": "62",
           "DP": "13",
@@ -38922,17 +36487,17 @@
         },
         {
           "Rank": "9",
-          "Team": "UCLA",
-          "G": "60",
-          "2B": "114",
-          "PG": "1.90"
-        },
-        {
-          "Rank": "10",
           "Team": "Florida",
           "G": "64",
           "2B": "120",
           "PG": "1.88"
+        },
+        {
+          "Rank": "10",
+          "Team": "UCLA",
+          "G": "61",
+          "2B": "114",
+          "PG": "1.87"
         },
         {
           "Rank": "11",
@@ -38964,16 +36529,16 @@
         },
         {
           "Rank": "15",
-          "Team": "UAlbany",
-          "G": "45",
-          "2B": "81",
+          "Team": "Texas Tech",
+          "G": "65",
+          "2B": "117",
           "PG": "1.80"
         },
         {
-          "Rank": "16",
-          "Team": "Texas Tech",
-          "G": "64",
-          "2B": "115",
+          "Rank": "-",
+          "Team": "UAlbany",
+          "G": "45",
+          "2B": "81",
           "PG": "1.80"
         },
         {
@@ -39075,32 +36640,32 @@
           "PG": "1.70"
         },
         {
-          "Rank": "-",
-          "Team": "Nebraska",
-          "G": "57",
-          "2B": "97",
-          "PG": "1.70"
-        },
-        {
-          "Rank": "32",
+          "Rank": "31",
           "Team": "St. Thomas (MN)",
           "G": "53",
           "2B": "90",
           "PG": "1.70"
         },
         {
-          "Rank": "33",
+          "Rank": "32",
           "Team": "NIU",
           "G": "43",
           "2B": "73",
           "PG": "1.70"
         },
         {
-          "Rank": "34",
+          "Rank": "33",
           "Team": "Miami (OH)",
           "G": "56",
           "2B": "95",
           "PG": "1.70"
+        },
+        {
+          "Rank": "34",
+          "Team": "Nebraska",
+          "G": "58",
+          "2B": "98",
+          "PG": "1.69"
         },
         {
           "Rank": "35",
@@ -39118,20 +36683,13 @@
         },
         {
           "Rank": "37",
-          "Team": "Arkansas",
-          "G": "58",
-          "2B": "97",
-          "PG": "1.67"
-        },
-        {
-          "Rank": "38",
           "Team": "Arizona St.",
           "G": "63",
           "2B": "105",
           "PG": "1.67"
         },
         {
-          "Rank": "39",
+          "Rank": "38",
           "Team": "Northern Ky.",
           "G": "51",
           "2B": "84",
@@ -39145,10 +36703,17 @@
           "PG": "1.65"
         },
         {
-          "Rank": "41",
+          "Rank": "40",
           "Team": "George Washington",
           "G": "45",
           "2B": "74",
+          "PG": "1.64"
+        },
+        {
+          "Rank": "41",
+          "Team": "Arkansas",
+          "G": "59",
+          "2B": "97",
           "PG": "1.64"
         },
         {
@@ -39349,6 +36914,13 @@
         },
         {
           "Rank": "70",
+          "Team": "Tennessee",
+          "G": "58",
+          "2B": "88",
+          "PG": "1.52"
+        },
+        {
+          "Rank": "71",
           "Team": "Rider",
           "G": "49",
           "2B": "74",
@@ -39362,17 +36934,10 @@
           "PG": "1.51"
         },
         {
-          "Rank": "72",
+          "Rank": "73",
           "Team": "Saint Joseph's",
           "G": "51",
           "2B": "77",
-          "PG": "1.51"
-        },
-        {
-          "Rank": "73",
-          "Team": "Tennessee",
-          "G": "57",
-          "2B": "86",
           "PG": "1.51"
         },
         {
@@ -39447,69 +37012,62 @@
         },
         {
           "Rank": "-",
-          "Team": "Mississippi St.",
-          "G": "62",
-          "2B": "92",
-          "PG": "1.48"
-        },
-        {
-          "Rank": "-",
           "Team": "Oklahoma",
           "G": "62",
           "2B": "92",
           "PG": "1.48"
         },
         {
-          "Rank": "86",
+          "Rank": "85",
           "Team": "North Texas",
           "G": "56",
           "2B": "83",
           "PG": "1.48"
         },
         {
-          "Rank": "87",
+          "Rank": "86",
           "Team": "Purdue",
           "G": "54",
           "2B": "80",
           "PG": "1.48"
         },
         {
-          "Rank": "88",
+          "Rank": "87",
           "Team": "Georgia Tech",
           "G": "61",
           "2B": "90",
           "PG": "1.48"
         },
         {
-          "Rank": "89",
+          "Rank": "88",
           "Team": "Oklahoma St.",
           "G": "58",
           "2B": "85",
           "PG": "1.47"
         },
         {
-          "Rank": "-",
-          "Team": "Texas",
-          "G": "58",
-          "2B": "85",
-          "PG": "1.47"
-        },
-        {
-          "Rank": "91",
+          "Rank": "89",
           "Team": "Clemson",
           "G": "56",
           "2B": "82",
           "PG": "1.46"
         },
         {
-          "Rank": "92",
+          "Rank": "90",
+          "Team": "Mississippi St.",
+          "G": "63",
+          "2B": "92",
+          "PG": "1.46"
+        },
+        {
+          "Rank": "91",
           "Team": "UC Santa Barbara",
           "G": "57",
           "2B": "83",
           "PG": "1.46"
         },
         {
-          "Rank": "93",
+          "Rank": "92",
           "Team": "Boise St.",
           "G": "55",
           "2B": "80",
@@ -39523,7 +37081,7 @@
           "PG": "1.45"
         },
         {
-          "Rank": "95",
+          "Rank": "94",
           "Team": "Utah Tech",
           "G": "53",
           "2B": "77",
@@ -39537,7 +37095,7 @@
           "PG": "1.45"
         },
         {
-          "Rank": "97",
+          "Rank": "96",
           "Team": "Quinnipiac",
           "G": "45",
           "2B": "65",
@@ -39558,17 +37116,24 @@
           "PG": "1.44"
         },
         {
-          "Rank": "100",
+          "Rank": "99",
           "Team": "Wichita St.",
           "G": "52",
           "2B": "75",
           "PG": "1.44"
         },
         {
-          "Rank": "101",
+          "Rank": "100",
           "Team": "Norfolk St.",
           "G": "43",
           "2B": "62",
+          "PG": "1.44"
+        },
+        {
+          "Rank": "101",
+          "Team": "Texas",
+          "G": "59",
+          "2B": "85",
           "PG": "1.44"
         },
         {
@@ -40119,55 +37684,48 @@
         },
         {
           "Rank": "180",
-          "Team": "Alabama",
-          "G": "61",
-          "2B": "76",
-          "PG": "1.25"
-        },
-        {
-          "Rank": "181",
           "Team": "Bowling Green",
           "G": "49",
           "2B": "61",
           "PG": "1.24"
         },
         {
-          "Rank": "182",
+          "Rank": "181",
           "Team": "Yale",
           "G": "45",
           "2B": "56",
           "PG": "1.24"
         },
         {
-          "Rank": "183",
+          "Rank": "182",
           "Team": "Austin Peay",
           "G": "54",
           "2B": "67",
           "PG": "1.24"
         },
         {
-          "Rank": "184",
+          "Rank": "183",
           "Team": "New Mexico",
           "G": "55",
           "2B": "68",
           "PG": "1.24"
         },
         {
-          "Rank": "185",
+          "Rank": "184",
           "Team": "Fairfield",
           "G": "51",
           "2B": "63",
           "PG": "1.24"
         },
         {
-          "Rank": "186",
+          "Rank": "185",
           "Team": "Siena",
           "G": "47",
           "2B": "58",
           "PG": "1.23"
         },
         {
-          "Rank": "187",
+          "Rank": "186",
           "Team": "Tarleton St.",
           "G": "61",
           "2B": "75",
@@ -40181,17 +37739,24 @@
           "PG": "1.23"
         },
         {
-          "Rank": "189",
+          "Rank": "188",
           "Team": "UMES",
           "G": "48",
           "2B": "59",
           "PG": "1.23"
         },
         {
-          "Rank": "190",
+          "Rank": "189",
           "Team": "Villanova",
           "G": "53",
           "2B": "65",
+          "PG": "1.23"
+        },
+        {
+          "Rank": "190",
+          "Team": "Alabama",
+          "G": "62",
+          "2B": "76",
           "PG": "1.23"
         },
         {
@@ -41012,20 +38577,20 @@
         {
           "Rank": "1",
           "Team": "Tennessee",
-          "G": "57",
-          "IP": "372.0",
-          "R": "97",
-          "ER": "72",
-          "ERA": "1.35"
+          "G": "58",
+          "IP": "379.0",
+          "R": "100",
+          "ER": "74",
+          "ERA": "1.37"
         },
         {
           "Rank": "2",
           "Team": "Alabama",
-          "G": "61",
-          "IP": "392.0",
-          "R": "97",
-          "ER": "83",
-          "ERA": "1.48"
+          "G": "62",
+          "IP": "399.0",
+          "R": "100",
+          "ER": "86",
+          "ERA": "1.51"
         },
         {
           "Rank": "3",
@@ -41039,11 +38604,11 @@
         {
           "Rank": "4",
           "Team": "Nebraska",
-          "G": "57",
-          "IP": "378.1",
-          "R": "120",
-          "ER": "98",
-          "ERA": "1.81"
+          "G": "58",
+          "IP": "388.1",
+          "R": "123",
+          "ER": "101",
+          "ERA": "1.82"
         },
         {
           "Rank": "5",
@@ -41057,11 +38622,11 @@
         {
           "Rank": "6",
           "Team": "Texas Tech",
-          "G": "64",
-          "IP": "375.2",
+          "G": "65",
+          "IP": "380.2",
           "R": "145",
           "ER": "114",
-          "ERA": "2.12"
+          "ERA": "2.10"
         },
         {
           "Rank": "7",
@@ -41075,11 +38640,11 @@
         {
           "Rank": "8",
           "Team": "Mississippi St.",
-          "G": "62",
-          "IP": "409.0",
-          "R": "148",
-          "ER": "134",
-          "ERA": "2.29"
+          "G": "63",
+          "IP": "413.1",
+          "R": "156",
+          "ER": "141",
+          "ERA": "2.39"
         },
         {
           "Rank": "9",
@@ -41111,20 +38676,20 @@
         {
           "Rank": "12",
           "Team": "Texas",
-          "G": "58",
-          "IP": "370.0",
-          "R": "157",
-          "ER": "131",
-          "ERA": "2.48"
+          "G": "59",
+          "IP": "377.0",
+          "R": "163",
+          "ER": "137",
+          "ERA": "2.54"
         },
         {
           "Rank": "13",
           "Team": "Arkansas",
-          "G": "58",
-          "IP": "353.0",
-          "R": "153",
-          "ER": "127",
-          "ERA": "2.52"
+          "G": "59",
+          "IP": "362.2",
+          "R": "158",
+          "ER": "132",
+          "ERA": "2.55"
         },
         {
           "Rank": "14",
@@ -42226,15 +39791,6 @@
         },
         {
           "Rank": "136",
-          "Team": "UCLA",
-          "G": "60",
-          "IP": "361.1",
-          "R": "258",
-          "ER": "223",
-          "ERA": "4.32"
-        },
-        {
-          "Rank": "137",
           "Team": "Penn St.",
           "G": "54",
           "IP": "344.0",
@@ -42243,7 +39799,7 @@
           "ERA": "4.33"
         },
         {
-          "Rank": "138",
+          "Rank": "137",
           "Team": "Western Caro.",
           "G": "58",
           "IP": "382.0",
@@ -42252,7 +39808,7 @@
           "ERA": "4.34"
         },
         {
-          "Rank": "139",
+          "Rank": "138",
           "Team": "N.C. A&T",
           "G": "53",
           "IP": "339.2",
@@ -42261,7 +39817,7 @@
           "ERA": "4.35"
         },
         {
-          "Rank": "140",
+          "Rank": "139",
           "Team": "Wagner",
           "G": "50",
           "IP": "312.0",
@@ -42270,12 +39826,21 @@
           "ERA": "4.35"
         },
         {
-          "Rank": "141",
+          "Rank": "140",
           "Team": "UAB",
           "G": "54",
           "IP": "352.0",
           "R": "257",
           "ER": "219",
+          "ERA": "4.36"
+        },
+        {
+          "Rank": "141",
+          "Team": "UCLA",
+          "G": "61",
+          "IP": "367.1",
+          "R": "264",
+          "ER": "229",
           "ERA": "4.36"
         },
         {
@@ -43783,11 +41348,11 @@
         {
           "Rank": "3",
           "Team": "Mississippi St.",
-          "G": "62",
-          "PO": "1227",
-          "A": "357",
-          "E": "27",
-          "PCT": ".983"
+          "G": "63",
+          "PO": "1240",
+          "A": "361",
+          "E": "29",
+          "PCT": ".982"
         },
         {
           "Rank": "4",
@@ -43810,10 +41375,10 @@
         {
           "Rank": "6",
           "Team": "Arkansas",
-          "G": "58",
-          "PO": "1059",
-          "A": "361",
-          "E": "29",
+          "G": "59",
+          "PO": "1088",
+          "A": "374",
+          "E": "30",
           "PCT": ".980"
         },
         {
@@ -43854,19 +41419,19 @@
         },
         {
           "Rank": "11",
-          "Team": "Tennessee",
-          "G": "57",
-          "PO": "1116",
-          "A": "409",
-          "E": "35",
-          "PCT": ".978"
+          "Team": "Alabama",
+          "G": "62",
+          "PO": "1197",
+          "A": "364",
+          "E": "36",
+          "PCT": ".977"
         },
         {
           "Rank": "12",
-          "Team": "Alabama",
-          "G": "61",
-          "PO": "1176",
-          "A": "360",
+          "Team": "Tennessee",
+          "G": "58",
+          "PO": "1137",
+          "A": "416",
           "E": "36",
           "PCT": ".977"
         },
@@ -43882,10 +41447,10 @@
         {
           "Rank": "14",
           "Team": "Nebraska",
-          "G": "57",
-          "PO": "1135",
-          "A": "392",
-          "E": "37",
+          "G": "58",
+          "PO": "1165",
+          "A": "401",
+          "E": "38",
           "PCT": ".976"
         },
         {
@@ -44061,6 +41626,24 @@
         },
         {
           "Rank": "34",
+          "Team": "Texas Tech",
+          "G": "65",
+          "PO": "1141",
+          "A": "308",
+          "E": "40",
+          "PCT": ".973"
+        },
+        {
+          "Rank": "35",
+          "Team": "Texas",
+          "G": "59",
+          "PO": "1131",
+          "A": "388",
+          "E": "42",
+          "PCT": ".973"
+        },
+        {
+          "Rank": "36",
           "Team": "Boston U.",
           "G": "62",
           "PO": "1162",
@@ -44069,16 +41652,7 @@
           "PCT": ".973"
         },
         {
-          "Rank": "35",
-          "Team": "Texas Tech",
-          "G": "64",
-          "PO": "1126",
-          "A": "303",
-          "E": "40",
-          "PCT": ".973"
-        },
-        {
-          "Rank": "36",
+          "Rank": "37",
           "Team": "Arizona",
           "G": "55",
           "PO": "993",
@@ -44087,7 +41661,7 @@
           "PCT": ".973"
         },
         {
-          "Rank": "37",
+          "Rank": "38",
           "Team": "Northwestern St.",
           "G": "53",
           "PO": "1012",
@@ -44096,7 +41670,7 @@
           "PCT": ".973"
         },
         {
-          "Rank": "38",
+          "Rank": "39",
           "Team": "Wofford",
           "G": "54",
           "PO": "1068",
@@ -44105,7 +41679,7 @@
           "PCT": ".973"
         },
         {
-          "Rank": "39",
+          "Rank": "40",
           "Team": "Toledo",
           "G": "50",
           "PO": "963",
@@ -44114,21 +41688,12 @@
           "PCT": ".973"
         },
         {
-          "Rank": "40",
+          "Rank": "41",
           "Team": "Hawaii",
           "G": "50",
           "PO": "981",
           "A": "332",
           "E": "37",
-          "PCT": ".973"
-        },
-        {
-          "Rank": "41",
-          "Team": "Texas",
-          "G": "58",
-          "PO": "1110",
-          "A": "377",
-          "E": "42",
           "PCT": ".973"
         },
         {
@@ -44178,20 +41743,20 @@
         },
         {
           "Rank": "47",
-          "Team": "UCLA",
-          "G": "60",
-          "PO": "1084",
-          "A": "417",
-          "E": "43",
-          "PCT": ".972"
-        },
-        {
-          "Rank": "48",
           "Team": "Southeastern La.",
           "G": "62",
           "PO": "1185",
           "A": "377",
           "E": "45",
+          "PCT": ".972"
+        },
+        {
+          "Rank": "48",
+          "Team": "UCLA",
+          "G": "61",
+          "PO": "1102",
+          "A": "422",
+          "E": "44",
           "PCT": ".972"
         },
         {
@@ -46879,13 +44444,6 @@
         },
         {
           "Rank": "53",
-          "Team": "Alabama",
-          "GS": "0",
-          "IP": "392.0",
-          "HB": "19"
-        },
-        {
-          "Rank": "-",
           "Team": "Charlotte",
           "GS": "0",
           "IP": "371.1",
@@ -46906,7 +44464,14 @@
           "HB": "19"
         },
         {
-          "Rank": "57",
+          "Rank": "56",
+          "Team": "Alabama",
+          "GS": "0",
+          "IP": "399.0",
+          "HB": "20"
+        },
+        {
+          "Rank": "-",
           "Team": "Florida A&M",
           "GS": "0",
           "IP": "343.1",
@@ -47019,13 +44584,6 @@
         },
         {
           "Rank": "-",
-          "Team": "Arkansas",
-          "GS": "0",
-          "IP": "353.0",
-          "HB": "22"
-        },
-        {
-          "Rank": "-",
           "Team": "Kentucky",
           "GS": "0",
           "IP": "350.2",
@@ -47081,7 +44639,14 @@
           "HB": "22"
         },
         {
-          "Rank": "82",
+          "Rank": "81",
+          "Team": "Arkansas",
+          "GS": "0",
+          "IP": "362.2",
+          "HB": "23"
+        },
+        {
+          "Rank": "-",
           "Team": "Brown",
           "GS": "0",
           "IP": "287.0",
@@ -47182,7 +44747,7 @@
           "Rank": "-",
           "Team": "Nebraska",
           "GS": "0",
-          "IP": "378.1",
+          "IP": "388.1",
           "HB": "24"
         },
         {
@@ -47546,7 +45111,7 @@
           "Rank": "-",
           "Team": "Texas Tech",
           "GS": "0",
-          "IP": "375.2",
+          "IP": "380.2",
           "HB": "28"
         },
         {
@@ -47621,20 +45186,13 @@
         },
         {
           "Rank": "-",
-          "Team": "Texas",
-          "GS": "0",
-          "IP": "370.0",
-          "HB": "29"
-        },
-        {
-          "Rank": "-",
           "Team": "Tulsa",
           "GS": "0",
           "IP": "352.0",
           "HB": "29"
         },
         {
-          "Rank": "161",
+          "Rank": "160",
           "Team": "Hofstra",
           "GS": "0",
           "IP": "348.1",
@@ -47659,6 +45217,13 @@
           "Team": "Southern Utah",
           "GS": "0",
           "IP": "320.2",
+          "HB": "30"
+        },
+        {
+          "Rank": "-",
+          "Team": "Texas",
+          "GS": "0",
+          "IP": "377.0",
           "HB": "30"
         },
         {
@@ -47838,13 +45403,6 @@
         },
         {
           "Rank": "-",
-          "Team": "Mississippi St.",
-          "GS": "1",
-          "IP": "409.0",
-          "HB": "33"
-        },
-        {
-          "Rank": "-",
           "Team": "North Carolina",
           "GS": "0",
           "IP": "327.1",
@@ -47879,7 +45437,7 @@
           "HB": "33"
         },
         {
-          "Rank": "196",
+          "Rank": "195",
           "Team": "Boston College",
           "GS": "0",
           "IP": "318.0",
@@ -47925,6 +45483,13 @@
           "Team": "Lehigh",
           "GS": "0",
           "IP": "352.1",
+          "HB": "34"
+        },
+        {
+          "Rank": "-",
+          "Team": "Mississippi St.",
+          "GS": "1",
+          "IP": "413.1",
           "HB": "34"
         },
         {
@@ -48022,7 +45587,7 @@
           "Rank": "-",
           "Team": "Tennessee",
           "GS": "0",
-          "IP": "372.0",
+          "IP": "379.0",
           "HB": "35"
         },
         {
@@ -48607,17 +46172,17 @@
           "HB": "55"
         },
         {
-          "Rank": "-",
-          "Team": "UCLA",
-          "GS": "0",
-          "IP": "361.1",
-          "HB": "55"
-        },
-        {
-          "Rank": "301",
+          "Rank": "300",
           "Team": "Detroit Mercy",
           "GS": "0",
           "IP": "296.1",
+          "HB": "56"
+        },
+        {
+          "Rank": "-",
+          "Team": "UCLA",
+          "GS": "0",
+          "IP": "367.1",
           "HB": "56"
         },
         {
@@ -48668,10 +46233,10 @@
           "HBP": "66"
         },
         {
-          "Rank": "3",
+          "Rank": "-",
           "Team": "UCLA",
-          "G": "60",
-          "HBP": "65"
+          "G": "61",
+          "HBP": "66"
         },
         {
           "Rank": "4",
@@ -48788,7 +46353,13 @@
           "HBP": "50"
         },
         {
-          "Rank": "23",
+          "Rank": "-",
+          "Team": "Tennessee",
+          "G": "58",
+          "HBP": "50"
+        },
+        {
+          "Rank": "24",
           "Team": "Ball St.",
           "G": "48",
           "HBP": "49"
@@ -48812,13 +46383,13 @@
           "HBP": "49"
         },
         {
-          "Rank": "-",
-          "Team": "Tennessee",
-          "G": "57",
-          "HBP": "49"
+          "Rank": "28",
+          "Team": "Alabama",
+          "G": "62",
+          "HBP": "48"
         },
         {
-          "Rank": "28",
+          "Rank": "-",
           "Team": "CSUN",
           "G": "46",
           "HBP": "48"
@@ -48836,13 +46407,7 @@
           "HBP": "48"
         },
         {
-          "Rank": "31",
-          "Team": "Alabama",
-          "G": "61",
-          "HBP": "47"
-        },
-        {
-          "Rank": "-",
+          "Rank": "32",
           "Team": "Jacksonville",
           "G": "55",
           "HBP": "47"
@@ -48878,7 +46443,13 @@
           "HBP": "46"
         },
         {
-          "Rank": "38",
+          "Rank": "-",
+          "Team": "Texas Tech",
+          "G": "65",
+          "HBP": "46"
+        },
+        {
+          "Rank": "39",
           "Team": "Kansas",
           "G": "57",
           "HBP": "45"
@@ -48887,12 +46458,6 @@
           "Rank": "-",
           "Team": "LSU",
           "G": "59",
-          "HBP": "45"
-        },
-        {
-          "Rank": "-",
-          "Team": "Texas Tech",
-          "G": "64",
           "HBP": "45"
         },
         {
@@ -49072,7 +46637,7 @@
         {
           "Rank": "70",
           "Team": "Arkansas",
-          "G": "58",
+          "G": "59",
           "HBP": "39"
         },
         {
@@ -49137,6 +46702,12 @@
         },
         {
           "Rank": "-",
+          "Team": "Nebraska",
+          "G": "58",
+          "HBP": "37"
+        },
+        {
+          "Rank": "-",
           "Team": "Robert Morris",
           "G": "49",
           "HBP": "37"
@@ -49154,7 +46725,7 @@
           "HBP": "37"
         },
         {
-          "Rank": "84",
+          "Rank": "85",
           "Team": "Binghamton",
           "G": "47",
           "HBP": "36"
@@ -49175,12 +46746,6 @@
           "Rank": "-",
           "Team": "Georgia Tech",
           "G": "61",
-          "HBP": "36"
-        },
-        {
-          "Rank": "-",
-          "Team": "Nebraska",
-          "G": "57",
           "HBP": "36"
         },
         {
@@ -49420,7 +46985,7 @@
         {
           "Rank": "-",
           "Team": "Mississippi St.",
-          "G": "62",
+          "G": "63",
           "HBP": "31"
         },
         {
@@ -49504,7 +47069,7 @@
         {
           "Rank": "-",
           "Team": "Texas",
-          "G": "58",
+          "G": "59",
           "HBP": "29"
         },
         {
@@ -50502,14 +48067,14 @@
         {
           "Rank": "2",
           "Team": "Texas Tech",
-          "G": "64",
-          "H": "628"
+          "G": "65",
+          "H": "635"
         },
         {
           "Rank": "3",
           "Team": "UCLA",
-          "G": "60",
-          "H": "623"
+          "G": "61",
+          "H": "629"
         },
         {
           "Rank": "4",
@@ -50580,18 +48145,18 @@
         {
           "Rank": "15",
           "Team": "Nebraska",
-          "G": "57",
-          "H": "526"
+          "G": "58",
+          "H": "534"
         },
         {
           "Rank": "16",
-          "Team": "Ohio",
-          "G": "58",
-          "H": "525"
+          "Team": "Texas",
+          "G": "59",
+          "H": "530"
         },
         {
-          "Rank": "-",
-          "Team": "Texas",
+          "Rank": "17",
+          "Team": "Ohio",
           "G": "58",
           "H": "525"
         },
@@ -50609,21 +48174,21 @@
         },
         {
           "Rank": "20",
+          "Team": "Arkansas",
+          "G": "59",
+          "H": "519"
+        },
+        {
+          "Rank": "21",
           "Team": "Miami (OH)",
           "G": "56",
           "H": "514"
         },
         {
-          "Rank": "21",
+          "Rank": "22",
           "Team": "UC Santa Barbara",
           "G": "57",
           "H": "513"
-        },
-        {
-          "Rank": "22",
-          "Team": "Arkansas",
-          "G": "58",
-          "H": "511"
         },
         {
           "Rank": "23",
@@ -50639,6 +48204,12 @@
         },
         {
           "Rank": "25",
+          "Team": "Alabama",
+          "G": "62",
+          "H": "509"
+        },
+        {
+          "Rank": "26",
           "Team": "Texas A&M",
           "G": "57",
           "H": "504"
@@ -50650,7 +48221,7 @@
           "H": "504"
         },
         {
-          "Rank": "27",
+          "Rank": "28",
           "Team": "Jacksonville St.",
           "G": "61",
           "H": "501"
@@ -50662,19 +48233,13 @@
           "H": "501"
         },
         {
-          "Rank": "29",
+          "Rank": "30",
           "Team": "McNeese",
           "G": "62",
           "H": "500"
         },
         {
-          "Rank": "30",
-          "Team": "Alabama",
-          "G": "61",
-          "H": "499"
-        },
-        {
-          "Rank": "-",
+          "Rank": "31",
           "Team": "Cal St. Fullerton",
           "G": "56",
           "H": "499"
@@ -51035,24 +48600,24 @@
         },
         {
           "Rank": "-",
+          "Team": "Mississippi St.",
+          "G": "63",
+          "H": "436"
+        },
+        {
+          "Rank": "-",
           "Team": "Samford",
           "G": "59",
           "H": "436"
         },
         {
-          "Rank": "92",
+          "Rank": "93",
           "Team": "Rutgers",
           "G": "54",
           "H": "435"
         },
         {
-          "Rank": "93",
-          "Team": "Mississippi St.",
-          "G": "62",
-          "H": "434"
-        },
-        {
-          "Rank": "-",
+          "Rank": "94",
           "Team": "UNCW",
           "G": "51",
           "H": "434"
@@ -51226,7 +48791,13 @@
           "H": "415"
         },
         {
-          "Rank": "123",
+          "Rank": "-",
+          "Team": "Tennessee",
+          "G": "58",
+          "H": "415"
+        },
+        {
+          "Rank": "124",
           "Team": "Hofstra",
           "G": "54",
           "H": "414"
@@ -51250,7 +48821,7 @@
           "H": "414"
         },
         {
-          "Rank": "127",
+          "Rank": "128",
           "Team": "New Mexico",
           "G": "55",
           "H": "412"
@@ -51268,7 +48839,7 @@
           "H": "412"
         },
         {
-          "Rank": "130",
+          "Rank": "131",
           "Team": "Ohio St.",
           "G": "53",
           "H": "411"
@@ -51286,13 +48857,13 @@
           "H": "411"
         },
         {
-          "Rank": "133",
+          "Rank": "134",
           "Team": "Utah St.",
           "G": "54",
           "H": "410"
         },
         {
-          "Rank": "134",
+          "Rank": "135",
           "Team": "Baylor",
           "G": "58",
           "H": "409"
@@ -51304,7 +48875,7 @@
           "H": "409"
         },
         {
-          "Rank": "136",
+          "Rank": "137",
           "Team": "Fla. Atlantic",
           "G": "54",
           "H": "408"
@@ -51319,12 +48890,6 @@
           "Rank": "-",
           "Team": "Southern U.",
           "G": "52",
-          "H": "408"
-        },
-        {
-          "Rank": "-",
-          "Team": "Tennessee",
-          "G": "57",
           "H": "408"
         },
         {
@@ -52336,18 +49901,18 @@
         {
           "Rank": "1",
           "Team": "Tennessee",
-          "G": "57",
-          "IP": "372.0",
-          "HA": "188",
-          "PG": "3.54"
+          "G": "58",
+          "IP": "379.0",
+          "HA": "193",
+          "PG": "3.56"
         },
         {
           "Rank": "2",
           "Team": "Alabama",
-          "G": "61",
-          "IP": "392.0",
-          "HA": "238",
-          "PG": "4.25"
+          "G": "62",
+          "IP": "399.0",
+          "HA": "244",
+          "PG": "4.28"
         },
         {
           "Rank": "3",
@@ -52360,18 +49925,18 @@
         {
           "Rank": "4",
           "Team": "Mississippi St.",
-          "G": "62",
-          "IP": "409.0",
-          "HA": "267",
-          "PG": "4.57"
+          "G": "63",
+          "IP": "413.1",
+          "HA": "274",
+          "PG": "4.64"
         },
         {
           "Rank": "5",
           "Team": "Texas Tech",
-          "G": "64",
-          "IP": "375.2",
-          "HA": "256",
-          "PG": "4.77"
+          "G": "65",
+          "IP": "380.2",
+          "HA": "258",
+          "PG": "4.74"
         },
         {
           "Rank": "6",
@@ -52384,10 +49949,10 @@
         {
           "Rank": "7",
           "Team": "Nebraska",
-          "G": "57",
-          "IP": "378.1",
-          "HA": "283",
-          "PG": "5.24"
+          "G": "58",
+          "IP": "388.1",
+          "HA": "291",
+          "PG": "5.25"
         },
         {
           "Rank": "8",
@@ -52408,10 +49973,10 @@
         {
           "Rank": "10",
           "Team": "Arkansas",
-          "G": "58",
-          "IP": "353.0",
-          "HA": "280",
-          "PG": "5.55"
+          "G": "59",
+          "IP": "362.2",
+          "HA": "288",
+          "PG": "5.56"
         },
         {
           "Rank": "11",
@@ -52456,10 +50021,10 @@
         {
           "Rank": "16",
           "Team": "Texas",
-          "G": "58",
-          "IP": "370.0",
-          "HA": "321",
-          "PG": "6.07"
+          "G": "59",
+          "IP": "377.0",
+          "HA": "328",
+          "PG": "6.09"
         },
         {
           "Rank": "17",
@@ -53127,14 +50692,6 @@
         },
         {
           "Rank": "100",
-          "Team": "UCLA",
-          "G": "60",
-          "IP": "361.1",
-          "HA": "394",
-          "PG": "7.63"
-        },
-        {
-          "Rank": "101",
           "Team": "Indiana St.",
           "G": "50",
           "IP": "315.1",
@@ -53142,7 +50699,7 @@
           "PG": "7.64"
         },
         {
-          "Rank": "102",
+          "Rank": "101",
           "Team": "FIU",
           "G": "52",
           "IP": "346.2",
@@ -53150,7 +50707,7 @@
           "PG": "7.65"
         },
         {
-          "Rank": "103",
+          "Rank": "102",
           "Team": "ETSU",
           "G": "52",
           "IP": "341.2",
@@ -53158,7 +50715,7 @@
           "PG": "7.66"
         },
         {
-          "Rank": "104",
+          "Rank": "103",
           "Team": "Columbia",
           "G": "45",
           "IP": "304.2",
@@ -53166,7 +50723,7 @@
           "PG": "7.67"
         },
         {
-          "Rank": "105",
+          "Rank": "104",
           "Team": "Samford",
           "G": "59",
           "IP": "370.1",
@@ -53174,7 +50731,7 @@
           "PG": "7.67"
         },
         {
-          "Rank": "106",
+          "Rank": "105",
           "Team": "Maryland",
           "G": "48",
           "IP": "311.2",
@@ -53182,12 +50739,20 @@
           "PG": "7.68"
         },
         {
-          "Rank": "107",
+          "Rank": "106",
           "Team": "Marshall",
           "G": "57",
           "IP": "377.0",
           "HA": "414",
           "PG": "7.69"
+        },
+        {
+          "Rank": "107",
+          "Team": "UCLA",
+          "G": "61",
+          "IP": "367.1",
+          "HA": "404",
+          "PG": "7.70"
         },
         {
           "Rank": "108",
@@ -54782,8 +52347,8 @@
         {
           "Rank": "1",
           "Team": "UCLA",
-          "G": "60",
-          "HR": "200"
+          "G": "61",
+          "HR": "202"
         },
         {
           "Rank": "2",
@@ -54794,8 +52359,8 @@
         {
           "Rank": "3",
           "Team": "Texas Tech",
-          "G": "64",
-          "HR": "136"
+          "G": "65",
+          "HR": "137"
         },
         {
           "Rank": "4",
@@ -54835,15 +52400,15 @@
         },
         {
           "Rank": "10",
-          "Team": "Arizona St.",
-          "G": "63",
+          "Team": "Alabama",
+          "G": "62",
           "HR": "99"
         },
         {
-          "Rank": "11",
-          "Team": "Alabama",
-          "G": "61",
-          "HR": "97"
+          "Rank": "-",
+          "Team": "Arizona St.",
+          "G": "63",
+          "HR": "99"
         },
         {
           "Rank": "12",
@@ -54858,10 +52423,10 @@
           "HR": "95"
         },
         {
-          "Rank": "14",
+          "Rank": "-",
           "Team": "Nebraska",
-          "G": "57",
-          "HR": "93"
+          "G": "58",
+          "HR": "95"
         },
         {
           "Rank": "15",
@@ -54876,10 +52441,10 @@
           "HR": "91"
         },
         {
-          "Rank": "17",
+          "Rank": "-",
           "Team": "Texas",
-          "G": "58",
-          "HR": "90"
+          "G": "59",
+          "HR": "91"
         },
         {
           "Rank": "18",
@@ -54932,11 +52497,11 @@
         {
           "Rank": "26",
           "Team": "Arkansas",
-          "G": "58",
-          "HR": "80"
+          "G": "59",
+          "HR": "81"
         },
         {
-          "Rank": "-",
+          "Rank": "27",
           "Team": "Georgia",
           "G": "61",
           "HR": "80"
@@ -55014,7 +52579,13 @@
           "HR": "74"
         },
         {
-          "Rank": "40",
+          "Rank": "-",
+          "Team": "Tennessee",
+          "G": "58",
+          "HR": "74"
+        },
+        {
+          "Rank": "41",
           "Team": "Florida St.",
           "G": "62",
           "HR": "73"
@@ -55023,12 +52594,6 @@
           "Rank": "-",
           "Team": "South Dakota St.",
           "G": "59",
-          "HR": "73"
-        },
-        {
-          "Rank": "-",
-          "Team": "Tennessee",
-          "G": "57",
           "HR": "73"
         },
         {
@@ -55112,7 +52677,7 @@
         {
           "Rank": "56",
           "Team": "Mississippi St.",
-          "G": "62",
+          "G": "63",
           "HR": "66"
         },
         {
@@ -56597,9 +54162,9 @@
         {
           "Rank": "1",
           "Team": "UCLA",
-          "G": "60",
-          "HR": "200",
-          "PG": "3.33"
+          "G": "61",
+          "HR": "202",
+          "PG": "3.31"
         },
         {
           "Rank": "2",
@@ -56618,9 +54183,9 @@
         {
           "Rank": "4",
           "Team": "Texas Tech",
-          "G": "64",
-          "HR": "136",
-          "PG": "2.12"
+          "G": "65",
+          "HR": "137",
+          "PG": "2.11"
         },
         {
           "Rank": "5",
@@ -56673,16 +54238,16 @@
         },
         {
           "Rank": "12",
-          "Team": "Wichita St.",
-          "G": "52",
-          "HR": "85",
-          "PG": "1.63"
+          "Team": "Nebraska",
+          "G": "58",
+          "HR": "95",
+          "PG": "1.64"
         },
         {
           "Rank": "13",
-          "Team": "Nebraska",
-          "G": "57",
-          "HR": "93",
+          "Team": "Wichita St.",
+          "G": "52",
+          "HR": "85",
           "PG": "1.63"
         },
         {
@@ -56695,9 +54260,9 @@
         {
           "Rank": "15",
           "Team": "Alabama",
-          "G": "61",
-          "HR": "97",
-          "PG": "1.59"
+          "G": "62",
+          "HR": "99",
+          "PG": "1.60"
         },
         {
           "Rank": "16",
@@ -56723,9 +54288,9 @@
         {
           "Rank": "19",
           "Team": "Texas",
-          "G": "58",
-          "HR": "90",
-          "PG": "1.55"
+          "G": "59",
+          "HR": "91",
+          "PG": "1.54"
         },
         {
           "Rank": "20",
@@ -56814,9 +54379,9 @@
         {
           "Rank": "32",
           "Team": "Arkansas",
-          "G": "58",
-          "HR": "80",
-          "PG": "1.38"
+          "G": "59",
+          "HR": "81",
+          "PG": "1.37"
         },
         {
           "Rank": "33",
@@ -56891,8 +54456,8 @@
         {
           "Rank": "43",
           "Team": "Tennessee",
-          "G": "57",
-          "HR": "73",
+          "G": "58",
+          "HR": "74",
           "PG": "1.28"
         },
         {
@@ -57093,23 +54658,23 @@
         },
         {
           "Rank": "72",
-          "Team": "Mississippi St.",
-          "G": "62",
-          "HR": "66",
-          "PG": "1.06"
-        },
-        {
-          "Rank": "73",
           "Team": "Clemson",
           "G": "56",
           "HR": "59",
           "PG": "1.05"
         },
         {
-          "Rank": "74",
+          "Rank": "73",
           "Team": "Charlotte",
           "G": "58",
           "HR": "61",
+          "PG": "1.05"
+        },
+        {
+          "Rank": "74",
+          "Team": "Mississippi St.",
+          "G": "63",
+          "HR": "66",
           "PG": "1.05"
         },
         {
@@ -58739,9 +56304,9 @@
         {
           "Rank": "1",
           "Team": "UCLA",
-          "G": "60",
-          "RBI": "623",
-          "PG": "10.38"
+          "G": "61",
+          "RBI": "626",
+          "PG": "10.26"
         },
         {
           "Rank": "2",
@@ -58753,9 +56318,9 @@
         {
           "Rank": "3",
           "Team": "Texas Tech",
-          "G": "64",
-          "RBI": "559",
-          "PG": "8.73"
+          "G": "65",
+          "RBI": "566",
+          "PG": "8.71"
         },
         {
           "Rank": "4",
@@ -58802,9 +56367,9 @@
         {
           "Rank": "10",
           "Team": "Arkansas",
-          "G": "58",
-          "RBI": "410",
-          "PG": "7.07"
+          "G": "59",
+          "RBI": "413",
+          "PG": "7.00"
         },
         {
           "Rank": "11",
@@ -58850,31 +56415,31 @@
         },
         {
           "Rank": "17",
-          "Team": "Texas",
-          "G": "58",
-          "RBI": "385",
-          "PG": "6.64"
-        },
-        {
-          "Rank": "18",
           "Team": "Arizona",
           "G": "55",
           "RBI": "365",
           "PG": "6.64"
         },
         {
-          "Rank": "19",
+          "Rank": "18",
           "Team": "Florida St.",
           "G": "62",
           "RBI": "411",
           "PG": "6.63"
         },
         {
-          "Rank": "20",
+          "Rank": "19",
           "Team": "Nebraska",
-          "G": "57",
-          "RBI": "376",
-          "PG": "6.60"
+          "G": "58",
+          "RBI": "381",
+          "PG": "6.57"
+        },
+        {
+          "Rank": "20",
+          "Team": "Texas",
+          "G": "59",
+          "RBI": "387",
+          "PG": "6.56"
         },
         {
           "Rank": "21",
@@ -58956,8 +56521,8 @@
         {
           "Rank": "32",
           "Team": "Alabama",
-          "G": "61",
-          "RBI": "372",
+          "G": "62",
+          "RBI": "378",
           "PG": "6.10"
         },
         {
@@ -59425,8 +56990,8 @@
         {
           "Rank": "99",
           "Team": "Tennessee",
-          "G": "57",
-          "RBI": "286",
+          "G": "58",
+          "RBI": "291",
           "PG": "5.02"
         },
         {
@@ -59886,52 +57451,52 @@
         },
         {
           "Rank": "165",
-          "Team": "Mississippi St.",
-          "G": "62",
-          "RBI": "269",
-          "PG": "4.34"
-        },
-        {
-          "Rank": "166",
           "Team": "St. John's (NY)",
           "G": "55",
           "RBI": "238",
           "PG": "4.33"
         },
         {
-          "Rank": "167",
+          "Rank": "166",
           "Team": "Murray St.",
           "G": "52",
           "RBI": "225",
           "PG": "4.33"
         },
         {
-          "Rank": "168",
+          "Rank": "167",
           "Team": "Georgia St.",
           "G": "56",
           "RBI": "242",
           "PG": "4.32"
         },
         {
-          "Rank": "169",
+          "Rank": "168",
           "Team": "UMass Lowell",
           "G": "54",
           "RBI": "232",
           "PG": "4.30"
         },
         {
-          "Rank": "170",
+          "Rank": "169",
           "Team": "Chattanooga",
           "G": "55",
           "RBI": "236",
           "PG": "4.29"
         },
         {
-          "Rank": "171",
+          "Rank": "170",
           "Team": "UMBC",
           "G": "18",
           "RBI": "77",
           "PG": "4.28"
+        },
+        {
+          "Rank": "171",
+          "Team": "Mississippi St.",
+          "G": "63",
+          "RBI": "269",
+          "PG": "4.27"
         },
         {
           "Rank": "172",
@@ -61235,7 +58800,7 @@
         {
           "Rank": "-",
           "Team": "Nebraska",
-          "G": "57",
+          "G": "58",
           "3B": "14"
         },
         {
@@ -61259,7 +58824,7 @@
         {
           "Rank": "-",
           "Team": "Texas Tech",
-          "G": "64",
+          "G": "65",
           "3B": "14"
         },
         {
@@ -61703,7 +59268,7 @@
         {
           "Rank": "136",
           "Team": "Alabama",
-          "G": "61",
+          "G": "62",
           "3B": "9"
         },
         {
@@ -61847,7 +59412,7 @@
         {
           "Rank": "-",
           "Team": "UCLA",
-          "G": "60",
+          "G": "61",
           "3B": "9"
         },
         {
@@ -61985,7 +59550,7 @@
         {
           "Rank": "-",
           "Team": "Texas",
-          "G": "58",
+          "G": "59",
           "3B": "8"
         },
         {
@@ -62297,7 +59862,7 @@
         {
           "Rank": "-",
           "Team": "Arkansas",
-          "G": "58",
+          "G": "59",
           "3B": "5"
         },
         {
@@ -62549,7 +60114,7 @@
         {
           "Rank": "-",
           "Team": "Tennessee",
-          "G": "57",
+          "G": "58",
           "3B": "4"
         },
         {
@@ -62663,7 +60228,7 @@
         {
           "Rank": "-",
           "Team": "Mississippi St.",
-          "G": "62",
+          "G": "63",
           "3B": "2"
         },
         {
@@ -62755,38 +60320,38 @@
         {
           "Rank": "2",
           "Team": "Nebraska",
-          "G": "57",
-          "IP": "378.1",
-          "SO": "486",
-          "BB": "94",
-          "K/BB": "5.17"
+          "G": "58",
+          "IP": "388.1",
+          "SO": "495",
+          "BB": "95",
+          "K/BB": "5.21"
         },
         {
           "Rank": "3",
           "Team": "Texas Tech",
-          "G": "64",
-          "IP": "375.2",
-          "SO": "457",
-          "BB": "103",
-          "K/BB": "4.44"
+          "G": "65",
+          "IP": "380.2",
+          "SO": "460",
+          "BB": "104",
+          "K/BB": "4.42"
         },
         {
           "Rank": "4",
           "Team": "Alabama",
-          "G": "61",
-          "IP": "392.0",
-          "SO": "453",
+          "G": "62",
+          "IP": "399.0",
+          "SO": "462",
           "BB": "105",
-          "K/BB": "4.31"
+          "K/BB": "4.40"
         },
         {
           "Rank": "5",
           "Team": "Mississippi St.",
-          "G": "62",
-          "IP": "409.0",
-          "SO": "516",
-          "BB": "139",
-          "K/BB": "3.71"
+          "G": "63",
+          "IP": "413.1",
+          "SO": "519",
+          "BB": "141",
+          "K/BB": "3.68"
         },
         {
           "Rank": "6",
@@ -62800,11 +60365,11 @@
         {
           "Rank": "7",
           "Team": "Tennessee",
-          "G": "57",
-          "IP": "372.0",
-          "SO": "460",
-          "BB": "130",
-          "K/BB": "3.54"
+          "G": "58",
+          "IP": "379.0",
+          "SO": "463",
+          "BB": "132",
+          "K/BB": "3.51"
         },
         {
           "Rank": "8",
@@ -62818,11 +60383,11 @@
         {
           "Rank": "9",
           "Team": "Texas",
-          "G": "58",
-          "IP": "370.0",
-          "SO": "367",
-          "BB": "118",
-          "K/BB": "3.11"
+          "G": "59",
+          "IP": "377.0",
+          "SO": "372",
+          "BB": "120",
+          "K/BB": "3.10"
         },
         {
           "Rank": "10",
@@ -62853,21 +60418,21 @@
         },
         {
           "Rank": "13",
-          "Team": "Arkansas",
-          "G": "58",
-          "IP": "353.0",
-          "SO": "342",
-          "BB": "129",
-          "K/BB": "2.65"
-        },
-        {
-          "Rank": "14",
           "Team": "Oklahoma",
           "G": "62",
           "IP": "369.0",
           "SO": "310",
           "BB": "117",
           "K/BB": "2.65"
+        },
+        {
+          "Rank": "14",
+          "Team": "Arkansas",
+          "G": "59",
+          "IP": "362.2",
+          "SO": "344",
+          "BB": "131",
+          "K/BB": "2.63"
         },
         {
           "Rank": "15",
@@ -63565,11 +61130,11 @@
         {
           "Rank": "92",
           "Team": "UCLA",
-          "G": "60",
-          "IP": "361.1",
-          "SO": "271",
-          "BB": "171",
-          "K/BB": "1.58"
+          "G": "61",
+          "IP": "367.1",
+          "SO": "276",
+          "BB": "173",
+          "K/BB": "1.60"
         },
         {
           "Rank": "93",
