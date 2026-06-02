@@ -2,18 +2,18 @@
   "metadata": {
     "sport": "NCAA Division I Softball",
     "season": "Current (2025-26)",
-    "scraped": "2026-06-01T08:41:09.954752+00:00",
+    "scraped": "2026-06-02T08:01:07.420422+00:00",
     "source": "https://www.ncaa.com/stats/softball/d1/current",
     "categories_total": 74,
-    "categories_ok": 31,
-    "categories_stale": 0,
+    "categories_ok": 0,
+    "categories_stale": 31,
     "categories_fetch_error": 30,
     "degraded": true
   },
   "individual": {
     "Assists": {
       "category": "Assists",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -1412,11 +1412,13 @@
           "G": "56",
           "A": "105"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Assists Per Game": {
       "category": "Assists Per Game",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -2930,11 +2932,13 @@
           "A": "111",
           "PG": "1.98"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Batting Average": {
       "category": "Batting Average",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -4599,11 +4603,13 @@
           "H": "54",
           "BA": ".394"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Caught Stealing By": {
       "category": "Caught Stealing By",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -6155,11 +6161,13 @@
           "G": "54",
           "CSB": "8"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Complete Games": {
       "category": "Complete Games",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -9079,11 +9087,13 @@
           "App": "30",
           "CG": "6"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Doubles": {
       "category": "Doubles",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -11013,11 +11023,13 @@
           "G": "61",
           "2B": "14"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Doubles Per Game": {
       "category": "Doubles Per Game",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -12531,11 +12543,13 @@
           "2B": "13",
           "PG": ".28"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Earned Run Average": {
       "category": "Earned Run Average",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -14351,11 +14365,13 @@
           "ER": "33",
           "ERA": "3.03"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Games Started": {
       "category": "Games Started",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -17302,11 +17318,13 @@
           "App": "30",
           "GS": "18"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Hit Batters": {
       "category": "Hit Batters",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -18920,11 +18938,13 @@
           "IP": "95.0",
           "HB": "5"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Hit By Pitch": {
       "category": "Hit By Pitch",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -21700,11 +21720,13 @@
           "G": "44",
           "HBP": "7"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Hit by Pitch per Game": {
       "category": "Hit by Pitch per Game",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -23258,7 +23280,9 @@
           "HBP": "9",
           "PG": ".17"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Hits": {
       "category": "Hits",
@@ -23268,7 +23292,7 @@
     },
     "Hits Allowed Per Seven Innings": {
       "category": "Hits Allowed Per Seven Innings",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -24812,11 +24836,13 @@
           "SH": "7",
           "PG": ".14"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Home Runs": {
       "category": "Home Runs",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -27160,11 +27186,13 @@
           "G": "42",
           "HR": "12"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Home Runs Per Game": {
       "category": "Home Runs Per Game",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -28829,11 +28857,13 @@
           "SO": "137",
           "K/7": "6.0"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Innings Pitched": {
       "category": "Innings Pitched",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -31277,11 +31307,13 @@
           "Position": "SP/RP",
           "App": "31"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "On Base Percentage": {
       "category": "On Base Percentage",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Name",
@@ -34115,7 +34147,9 @@
           "IP": "210.2",
           "SV": "2"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Pitching Appearances": {
       "category": "Pitching Appearances",
@@ -34265,7 +34299,7 @@
   "team": {
     "Batting Average": {
       "category": "Batting Average",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -36709,7 +36743,9 @@
           "H": "221",
           "BA": ".215"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Double Plays": {
       "category": "Double Plays",
@@ -36719,7 +36755,7 @@
     },
     "Double Plays per Game": {
       "category": "Double Plays per Game",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -38858,7 +38894,9 @@
           "DP": "3",
           "PG": ".07"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Doubles": {
       "category": "Doubles",
@@ -38868,7 +38906,7 @@
     },
     "Doubles per Game": {
       "category": "Doubles per Game",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -41007,11 +41045,13 @@
           "2B": "19",
           "PG": ".49"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Earned Run Average": {
       "category": "Earned Run Average",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -43760,11 +43800,13 @@
           "ER": "359",
           "ERA": "11.91"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Fielding Percentage": {
       "category": "Fielding Percentage",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -46513,11 +46555,13 @@
           "E": "103",
           "PCT": ".919"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Hit Batters": {
       "category": "Hit Batters",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -48656,11 +48700,13 @@
           "IP": "425.0",
           "HB": "60"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Hit By Pitch": {
       "category": "Hit By Pitch",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -50494,11 +50540,13 @@
           "G": "43",
           "HBP": "6"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Hits": {
       "category": "Hits",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -52332,11 +52380,13 @@
           "G": "18",
           "H": "120"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Hits Allowed Per Seven Innings": {
       "category": "Hits Allowed Per Seven Innings",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -54780,11 +54830,13 @@
           "HA": "489",
           "PG": "16.22"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Home Runs": {
       "category": "Home Runs",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -56594,11 +56646,13 @@
           "G": "47",
           "HR": "5"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Home Runs per game": {
       "category": "Home Runs per game",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -58730,7 +58784,9 @@
           "HR": "3",
           "PG": ".06"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "On Base Percentage": {
       "category": "On Base Percentage",
@@ -58740,7 +58796,7 @@
     },
     "RBIs Per Game": {
       "category": "RBIs Per Game",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -60879,7 +60935,9 @@
           "RBI": "108",
           "PG": "2.04"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Runs Batted In": {
       "category": "Runs Batted In",
@@ -60895,7 +60953,7 @@
     },
     "Shutouts": {
       "category": "Shutouts",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -62729,7 +62787,9 @@
           "G": "18",
           "3B": "1"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Slugging Percentage": {
       "category": "Slugging Percentage",
@@ -62745,7 +62805,7 @@
     },
     "Strikeout-to-Walk Ratio": {
       "category": "Strikeout-to-Walk Ratio",
-      "status": "ok",
+      "status": "stale",
       "headers": [
         "Rank",
         "Team",
@@ -65494,7 +65554,9 @@
           "BB": "258",
           "K/BB": ".36"
         }
-      ]
+      ],
+      "fetch_status": "no_data",
+      "last_ok_scraped": "2026-06-01T08:41:09.954752+00:00"
     },
     "Team Strikeouts Per Seven Innings": {
       "category": "Team Strikeouts Per Seven Innings",
