@@ -12,14 +12,44 @@ on:
   schedule:
     # 03:00 UTC = ~22:00 ET, ~21:00 CT. NCAA publishes stats overnight,
     # by 03:00 UTC the prior day's games are usually settled.
-    - cron: '0 3 * * *'
+    #
+    # Months restricted to Feb–Jun (2-6): college softball is a spring
+    # sport, so there's nothing to scrape the rest of the year. The
+    # season-gate job below trims the tail (after mid-June) precisely.
+    - cron: '0 3 * 2-6 *'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # Spring-season gate. College softball runs early February through
+  # mid-June; outside that window we skip the scrape entirely so nothing
+  # commits to main and Vercel stays paused through the off-season. This
+  # turns itself back on next February — no manual re-enable needed.
+  # A manual workflow_dispatch run bypasses the gate (see scrape.if).
+  season-gate:
+    runs-on: ubuntu-latest
+    outputs:
+      in_season: ${{ steps.check.outputs.in_season }}
+    steps:
+      - id: check
+        name: Check spring-season window
+        run: |
+          MONTH=$(date -u +%-m)
+          DAY=$(date -u +%-d)
+          IN_SEASON=false
+          if [ "$MONTH" -ge 2 ] && [ "$MONTH" -le 5 ]; then
+            IN_SEASON=true
+          elif [ "$MONTH" -eq 6 ] && [ "$DAY" -le 15 ]; then
+            IN_SEASON=true
+          fi
+          echo "in_season=$IN_SEASON" >> "$GITHUB_OUTPUT"
+          echo "Date $(date -u +%Y-%m-%d) -> in_season=$IN_SEASON"
+
   scrape:
+    needs: season-gate
+    if: needs.season-gate.outputs.in_season == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:

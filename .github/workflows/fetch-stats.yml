@@ -2,7 +2,10 @@ name: Weekly D1 Softball Stats
 
 on:
   schedule:
-    - cron: '0 5 * * 6'
+    # Saturdays, restricted to Feb–Jun (2-6) — college softball is a
+    # spring sport. The season-gate job below trims the tail after
+    # mid-June precisely.
+    - cron: '0 5 * 2-6 6'
   workflow_dispatch:
 
 permissions:
@@ -10,7 +13,32 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Spring-season gate. College softball runs early February through
+  # mid-June; outside that window we skip the fetch entirely so no PR is
+  # opened and nothing reaches main. Re-enables itself next February —
+  # no manual step. A manual workflow_dispatch run bypasses the gate.
+  season-gate:
+    runs-on: ubuntu-latest
+    outputs:
+      in_season: ${{ steps.check.outputs.in_season }}
+    steps:
+      - id: check
+        name: Check spring-season window
+        run: |
+          MONTH=$(date -u +%-m)
+          DAY=$(date -u +%-d)
+          IN_SEASON=false
+          if [ "$MONTH" -ge 2 ] && [ "$MONTH" -le 5 ]; then
+            IN_SEASON=true
+          elif [ "$MONTH" -eq 6 ] && [ "$DAY" -le 15 ]; then
+            IN_SEASON=true
+          fi
+          echo "in_season=$IN_SEASON" >> "$GITHUB_OUTPUT"
+          echo "Date $(date -u +%Y-%m-%d) -> in_season=$IN_SEASON"
+
   fetch-and-pr:
+    needs: season-gate
+    if: needs.season-gate.outputs.in_season == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
