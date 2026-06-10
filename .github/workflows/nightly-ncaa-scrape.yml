@@ -36,6 +36,16 @@ jobs:
       - id: check
         name: Check spring-season window
         run: |
+          # One-time pause requested June 2026: skip the remaining June
+          # nights and stay quiet until the 2027 season opens in February.
+          # The normal season window below takes over again after that, so
+          # this block can be deleted any time after 2027-02-01.
+          if [ "$(date -u +%Y%m%d)" -lt 20270201 ]; then
+            echo "in_season=false" >> "$GITHUB_OUTPUT"
+            echo "Paused until 2027-02-01 (one-time pause)."
+            exit 0
+          fi
+
           MONTH=$(date -u +%-m)
           DAY=$(date -u +%-d)
           IN_SEASON=false
